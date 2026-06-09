@@ -43,3 +43,11 @@ next-env.d.ts
 # Claude Code
 CLAUDE.md
 .claude/
+
+# Scraper
+scraper/node_modules/
+scraper/package-lock.json
+scraper/.env
+
+# IDE
+.vscode/
