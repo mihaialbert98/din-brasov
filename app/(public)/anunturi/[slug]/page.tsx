@@ -1,11 +1,13 @@
 import { notFound } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { eq, and, count } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { listings } from "@/lib/db/schema";
+import { listings, listingFavourites } from "@/lib/db/schema";
 import { formatDate } from "@/lib/utils";
 import { RevealPhoneButton } from "@/components/marketplace/RevealPhoneButton";
 import { ContactSellerButton } from "@/components/marketplace/ContactSellerButton";
 import { ReportButton } from "@/components/marketplace/ReportButton";
+import FavouriteButton from "@/components/anunturi/FavouriteButton";
+import { auth } from "@/lib/auth";
 import type { Metadata } from "next";
 
 type Props = { params: Promise<{ slug: string }> };
@@ -31,12 +33,21 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function AnuntPage({ params }: Props) {
   const { slug } = await params;
-  const listing = await getListing(slug);
+  const [listing, session] = await Promise.all([getListing(slug), auth()]);
 
   if (!listing || listing.status === "removed") notFound();
 
   const images: string[] = listing.imagesJson ? JSON.parse(listing.imagesJson) : [];
   const isSuspended = listing.status === "suspended";
+  const isOwner = !!session?.user?.id && session.user.id === listing.sellerId;
+
+  const favouriteCount = isOwner
+    ? await db
+        .select({ value: count() })
+        .from(listingFavourites)
+        .where(and(eq(listingFavourites.listingId, listing.id)))
+        .then((r) => r[0]?.value ?? 0)
+    : 0;
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
@@ -127,8 +138,17 @@ export default async function AnuntPage({ params }: Props) {
         )}
       </div>
 
-      <div className="flex justify-end">
-        <ReportButton listingId={listing.id} />
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        {listing.status === "active" && (
+          <FavouriteButton
+            listingId={listing.id}
+            favouriteCount={favouriteCount}
+            isOwner={isOwner}
+          />
+        )}
+        <div className="ml-auto">
+          <ReportButton listingId={listing.id} />
+        </div>
       </div>
     </div>
   );

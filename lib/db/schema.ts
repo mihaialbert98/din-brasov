@@ -3,6 +3,7 @@ import {
   index,
   integer,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   customType,
@@ -338,6 +339,21 @@ export const cookieConsentLog = pgTable("cookie_consent_log", {
   expiresAt: timestamp("expires_at", { mode: "date" }).notNull(), // 13 months from consent
 });
 
+// ─── Listing favourites ───────────────────────────────────────────────────────
+
+export const listingFavourites = pgTable(
+  "listing_favourites",
+  {
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    listingId: text("listing_id").notNull().references(() => listings.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.listingId] }),
+    index("listing_favourites_listing_idx").on(t.listingId),
+  ]
+);
+
 // ─── Scraper sync jobs ────────────────────────────────────────────────────────
 
 export const syncJobs = pgTable("sync_jobs", {
@@ -371,3 +387,4 @@ export type Conversation = typeof conversations.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export type PhoneReveal = typeof phoneReveals.$inferSelect;
 export type ListingReport = typeof listingReports.$inferSelect;
+export type ListingFavourite = typeof listingFavourites.$inferSelect;

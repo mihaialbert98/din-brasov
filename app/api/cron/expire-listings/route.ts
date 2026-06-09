@@ -5,16 +5,16 @@
  *
  * Actions:
  * 1. Soft-expire active listings past their expiry date
- * 2. NULL contact data (phone/email) on newly expired listings immediately —
- *    user consent was scoped to the listing being active (GDPR Art. 5(1)(e))
+ * 2. Hard-delete expired listings past the 30-day renewal grace period (+ Uploadthing images)
  * 3. Hard-delete users past the 30-day deletion grace period (Law 190/2018 + Art. 17)
+ * 4. Delete draft news items older than 3 days
  */
 
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { listings, newsItems } from "@/lib/db/schema";
 import { lt, eq, and } from "drizzle-orm";
-import { hardDeleteExpiredUsers, nullContactDataOnExpiredListings } from "@/lib/gdpr";
+import { hardDeleteExpiredUsers, hardDeleteExpiredListings } from "@/lib/gdpr";
 
 function verifyCron(req: Request) {
   const auth = req.headers.get("authorization");
@@ -35,8 +35,8 @@ export async function GET(req: Request) {
     .where(and(eq(listings.status, "active"), lt(listings.expiresAt, now)))
     .returning({ id: listings.id });
 
-  // 2. Null contact data on all expired listings (GDPR Art. 5(1)(e) storage limitation)
-  await nullContactDataOnExpiredListings();
+  // 2. Hard-delete expired listings past the 30-day grace period (includes Uploadthing image cleanup)
+  const deletedListings = await hardDeleteExpiredListings();
 
   // 3. Hard-delete users past the 30-day deletion grace period
   const deletedUsers = await hardDeleteExpiredUsers();
@@ -51,7 +51,7 @@ export async function GET(req: Request) {
   return NextResponse.json({
     ok: true,
     expiredListings: expired.length,
-    contactDataNulled: expired.length,
+    deletedListings,
     deletedUsers,
     deletedDraftNews: deletedDrafts.length,
   });

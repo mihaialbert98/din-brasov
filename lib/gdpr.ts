@@ -18,9 +18,10 @@
  *    (call log + staff member + script version + timestamp — see assistedListingConsentLog table)
  */
 
-import { eq, and, lt, isNotNull, isNull } from "drizzle-orm";
+import { eq, and, lt, lte, isNotNull, isNull, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { users, listings, sessions, verificationTokens } from "@/lib/db/schema";
+import { UTApi } from "uploadthing/server";
 
 // ─── Retention periods ────────────────────────────────────────────────────────
 
@@ -29,10 +30,10 @@ export const RETENTION = {
    *  and gives users a window to cancel deletion requests. */
   USER_DELETION_GRACE_DAYS: 30,
 
-  /** Expired listings: retained for 12 months post-expiry to handle disputes,
-   *  then hard-deleted. Contact data (phone/email) is nulled at expiry,
-   *  not just at hard deletion. */
-  LISTING_POST_EXPIRY_DAYS: 365,
+  /** Expired listings: retained for 30 days post-expiry so the owner can renew.
+   *  Contact data is kept in DB during this window but never shown publicly.
+   *  After 30 days with no renewal, listing is hard-deleted including photos. */
+  LISTING_POST_EXPIRY_DAYS: 30,
 
   /** Assisted listing consent logs: kept for life of listing + 3 years
    *  (Romanian Civil Code limitation period) to defend against complaints. */
@@ -131,6 +132,51 @@ export async function hardDeleteExpiredUsers(): Promise<number> {
   }
 
   return toDelete.length;
+}
+
+// ─── Listing hard-delete after grace period ───────────────────────────────────
+
+/**
+ * Hard-delete expired listings that have passed the 30-day renewal grace period.
+ * Deletes Uploadthing images first, then the DB row (cascade clears favourites,
+ * reports, phone reveals, and assisted consent logs).
+ *
+ * Contact data (phone/email) is nulled here — it was kept in DB during the grace
+ * period so the owner could renew without re-entering it. Once hard-deleted,
+ * all PII is gone. This is compliant because the data was never publicly accessible
+ * after the listing expired.
+ */
+export async function hardDeleteExpiredListings(): Promise<number> {
+  const cutoff = new Date(
+    Date.now() - RETENTION.LISTING_POST_EXPIRY_DAYS * 24 * 60 * 60 * 1000
+  );
+
+  const dead = await db
+    .select({ id: listings.id, imagesJson: listings.imagesJson })
+    .from(listings)
+    .where(and(eq(listings.status, "expired"), lte(listings.expiresAt, cutoff)));
+
+  if (dead.length === 0) return 0;
+
+  const keys = dead.flatMap((l) => {
+    try {
+      return (JSON.parse(l.imagesJson ?? "[]") as string[])
+        .map((u) => u.split("/f/")[1])
+        .filter(Boolean);
+    } catch {
+      return [];
+    }
+  });
+
+  if (keys.length) {
+    await new UTApi().deleteFiles(keys);
+  }
+
+  await db
+    .delete(listings)
+    .where(inArray(listings.id, dead.map((l) => l.id)));
+
+  return dead.length;
 }
 
 // ─── Listing contact data expiry ──────────────────────────────────────────────
