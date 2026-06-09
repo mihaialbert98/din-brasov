@@ -1,0 +1,23 @@
+{
+  "name": "din-brasov-scraper",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
+    "drizzle-orm": "^0.45.2",
+    "express": "^4.21.2",
+    "playwright": "1.50.0",
+    "robots-parser": "^3.0.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.1",
+    "@types/node": "^20",
+    "tsx": "^4.22.4",
+    "typescript": "^5"
+  }
+}

@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+:root {
+  /* Extracted from the Din Brașov logo */
+  --color-primary: #1a1a1a;          /* near-black — navbar, footer, strong UI */
+  --color-primary-light: #2a2a2a;
+  --color-terracotta: #c84b1e;       /* logo circle — hero backgrounds, accents */
+  --color-terracotta-light: #d9603a;
+  --color-cream: #e8d9c5;            /* logo silhouette — warm surfaces */
+  --color-sky: #6bb5d4;              /* logo ring — links, highlights */
+  --color-sky-dark: #4a9ab8;
+  --color-accent: #c84b1e;           /* CTA buttons — terracotta */
+  --color-accent-light: #d9603a;
+  --color-background: #faf7f4;       /* warm off-white, matches logo cream tone */
+  --color-surface: #ffffff;
+  --color-text: #1a1a1a;
+  --color-text-muted: #6b6b6b;
+}
+
+@theme inline {
+  --color-primary: var(--color-primary);
+  --color-terracotta: var(--color-terracotta);
+  --color-sky: var(--color-sky);
+  --color-accent: var(--color-accent);
+  --color-background: var(--color-background);
+  --color-surface: var(--color-surface);
+  --color-cream: var(--color-cream);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+/* Minimum 44px tap target for all interactive elements */
+button,
+[role="button"] {
+  min-height: 44px;
+}
+
+/* Always-visible focus ring in sky blue */
+:focus-visible {
+  outline: 3px solid var(--color-sky);
+  outline-offset: 2px;
+}

@@ -1,0 +1,32 @@
+type Props = {
+  categories: string[];
+  active: string | undefined;
+  basePath: string;
+  paramName?: string;
+};
+
+export default function CategoryFilter({ categories, active, basePath, paramName = "categorie" }: Props) {
+  return (
+    <div className="flex flex-wrap gap-2 mb-8">
+      <a
+        href={basePath}
+        className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
+          !active ? "bg-[#1a4731] text-white border-[#1a4731]" : "border-gray-300 hover:border-[#1a4731]"
+        }`}
+      >
+        Toate
+      </a>
+      {categories.map((cat) => (
+        <a
+          key={cat}
+          href={`${basePath}?${paramName}=${encodeURIComponent(cat)}`}
+          className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
+            active === cat ? "bg-[#1a4731] text-white border-[#1a4731]" : "border-gray-300 hover:border-[#1a4731]"
+          }`}
+        >
+          {cat}
+        </a>
+      ))}
+    </div>
+  );
+}
