@@ -1,17 +1,65 @@
 import { db } from "@/lib/db";
 import { newsItems } from "@/lib/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, count } from "drizzle-orm";
 import Link from "next/link";
-import { formatDate } from "@/lib/utils";
 import type { Metadata } from "next";
+import ScrapePanel from "@/components/admin/ScrapePanel";
+import PublishedNewsTable from "@/components/admin/PublishedNewsTable";
+import Pagination from "@/components/ui/Pagination";
 
 export const metadata: Metadata = { title: "Admin — Știri" };
 
-export default async function AdminStiriPage() {
-  const [drafts, published] = await Promise.all([
-    db.select().from(newsItems).where(eq(newsItems.status, "draft")).orderBy(desc(newsItems.createdAt)),
-    db.select().from(newsItems).where(eq(newsItems.status, "published")).orderBy(desc(newsItems.publishedAt)).limit(10),
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+const DRAFTS_PER_PAGE = 12;
+const PUBLISHED_PER_PAGE = 20;
+
+function daysUntilExpiry(createdAt: Date | null): number {
+  if (!createdAt) return 0;
+  const expiresAt = new Date(createdAt).getTime() + 3 * 24 * 60 * 60 * 1000;
+  return Math.max(0, Math.ceil((expiresAt - Date.now()) / (24 * 60 * 60 * 1000)));
+}
+
+function buildHref(params: Record<string, string | undefined>, key: string, page: number) {
+  const next = { ...params, [key]: String(page) };
+  const qs = Object.entries(next)
+    .filter(([, v]) => v !== undefined && v !== "1")
+    .map(([k, v]) => `${k}=${encodeURIComponent(v!)}`)
+    .join("&");
+  return `/admin/stiri${qs ? `?${qs}` : ""}`;
+}
+
+interface Props {
+  searchParams: Promise<{ since?: string; dp?: string; pp?: string }>;
+}
+
+export default async function AdminStiriPage({ searchParams }: Props) {
+  const params = await searchParams;
+  const since = params.since;
+  const sinceDate = since ? new Date(since) : null;
+  const draftPage = Math.max(1, parseInt(params.dp ?? "1"));
+  const pubPage = Math.max(1, parseInt(params.pp ?? "1"));
+
+  const [[{ draftTotal }], [{ pubTotal }], drafts, published] = await Promise.all([
+    db.select({ draftTotal: count() }).from(newsItems).where(eq(newsItems.status, "draft")),
+    db.select({ pubTotal: count() }).from(newsItems).where(eq(newsItems.status, "published")),
+    db.select().from(newsItems).where(eq(newsItems.status, "draft"))
+      .orderBy(desc(newsItems.createdAt))
+      .limit(DRAFTS_PER_PAGE)
+      .offset((draftPage - 1) * DRAFTS_PER_PAGE),
+    db.select().from(newsItems).where(eq(newsItems.status, "published"))
+      .orderBy(desc(newsItems.publishedAt))
+      .limit(PUBLISHED_PER_PAGE)
+      .offset((pubPage - 1) * PUBLISHED_PER_PAGE),
   ]);
+
+  const draftTotalPages = Math.ceil(draftTotal / DRAFTS_PER_PAGE);
+  const pubTotalPages = Math.ceil(pubTotal / PUBLISHED_PER_PAGE);
+
+  const hasOldItems = published.some(
+    (i) => i.publishedAt != null && new Date(i.publishedAt).getTime() < Date.now() - THIRTY_DAYS_MS
+  );
+
+  const currentParams = { since, dp: params.dp, pp: params.pp };
 
   return (
     <div className="space-y-8">
@@ -25,91 +73,83 @@ export default async function AdminStiriPage() {
         </Link>
       </div>
 
+      <ScrapePanel />
+
       {/* Draft queue */}
       <section>
         <h2 className="text-lg font-semibold text-gray-700 mb-3">
-          În așteptare ({drafts.length})
+          În așteptare ({draftTotal})
         </h2>
-        {drafts.length === 0 ? (
+        {draftTotal === 0 ? (
           <p className="text-gray-400 text-sm">Nu există știri de revizuit.</p>
         ) : (
-          <div className="space-y-4">
-            {drafts.map((item) => (
-              <div key={item.id} className="bg-white rounded-xl p-5 shadow-sm flex flex-col gap-3">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    {item.imageUrl && (
-                      <img src={item.imageUrl} alt="" className="w-full h-32 object-cover rounded-lg mb-2" />
-                    )}
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-semibold text-[#c84b1e] uppercase">{item.sourceName}</span>
-                      {item.category && <span className="text-xs text-gray-400">· {item.category}</span>}
-                      <span className="text-xs text-gray-400">· {item.scrapedAt ? formatDate(item.scrapedAt, { day: "numeric", month: "short" }) : "manual"}</span>
-                    </div>
-                    <h2 className="font-semibold text-gray-900">{item.title}</h2>
-                    <p className="text-sm text-gray-600 mt-1 line-clamp-2">{item.excerpt}</p>
-                  </div>
+          <>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {drafts.map((item) => {
+                const days = daysUntilExpiry(item.createdAt);
+                const isNew = sinceDate !== null &&
+                  (item.scrapedAt ?? item.createdAt) !== null &&
+                  new Date(item.scrapedAt ?? item.createdAt!).getTime() >= sinceDate.getTime();
+
+                return (
                   <Link
-                    href={item.sourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-[#c84b1e] hover:underline whitespace-nowrap flex-shrink-0"
+                    key={item.id}
+                    href={`/admin/stiri/${item.id}`}
+                    className="relative bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow flex flex-col overflow-hidden"
                   >
-                    Sursă →
+                    {isNew && (
+                      <span className="absolute top-2 right-2 z-10 bg-green-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                        Nou
+                      </span>
+                    )}
+                    {item.imageUrl && (
+                      <img src={item.imageUrl} alt="" className="w-full h-32 object-cover" />
+                    )}
+                    <div className="p-4 flex flex-col gap-2 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-[#c84b1e] uppercase">{item.sourceName}</span>
+                        {item.category && <span className="text-xs text-gray-400">· {item.category}</span>}
+                      </div>
+                      <h2 className="font-semibold text-gray-900 text-sm line-clamp-3">{item.title}</h2>
+                      <p className="text-xs text-gray-500 line-clamp-2">{item.excerpt}</p>
+                      <div className="mt-auto pt-2 flex items-center justify-between">
+                        <span className={`text-xs font-medium ${days <= 1 ? "text-red-500" : "text-gray-400"}`}>
+                          Expiră în {days} {days === 1 ? "zi" : "zile"}
+                        </span>
+                        <span className="text-xs text-[#c84b1e] font-medium">Revizuiește →</span>
+                      </div>
+                    </div>
                   </Link>
-                </div>
-                <div className="flex gap-3">
-                  <form action={`/api/news/${item.id}/approve`} method="POST">
-                    <button type="submit" className="bg-[#1a1a1a] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors">
-                      ✓ Publică
-                    </button>
-                  </form>
-                  <form action={`/api/news/${item.id}/reject`} method="POST">
-                    <button type="submit" className="border border-red-300 text-red-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors">
-                      ✗ Respinge
-                    </button>
-                  </form>
-                </div>
-              </div>
-            ))}
-          </div>
+                );
+              })}
+            </div>
+            <Pagination
+              currentPage={draftPage}
+              totalPages={draftTotalPages}
+              buildHref={(p) => buildHref(currentParams, "dp", p)}
+            />
+          </>
         )}
       </section>
 
-      {/* Recently published */}
-      {published.length > 0 && (
-        <section>
-          <h2 className="text-lg font-semibold text-gray-700 mb-3">Publicate recent</h2>
-          <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="text-left p-3 font-semibold text-gray-600">Titlu</th>
-                  <th className="text-left p-3 font-semibold text-gray-600">Sursă</th>
-                  <th className="text-left p-3 font-semibold text-gray-600">Categorie</th>
-                  <th className="text-left p-3 font-semibold text-gray-600">Data</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {published.map((item) => (
-                  <tr key={item.id} className="hover:bg-gray-50">
-                    <td className="p-3">
-                      <Link href={`/stiri/${item.slug}`} className="font-medium hover:underline text-gray-900" target="_blank">
-                        {item.title}
-                      </Link>
-                    </td>
-                    <td className="p-3 text-gray-500">{item.sourceName}</td>
-                    <td className="p-3 text-gray-500">{item.category ?? "—"}</td>
-                    <td className="p-3 text-gray-400">
-                      {item.publishedAt ? formatDate(item.publishedAt, { day: "numeric", month: "short" }) : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+      {/* Published news */}
+      <section>
+        <h2 className="text-lg font-semibold text-gray-700 mb-3">
+          Publicate ({pubTotal})
+        </h2>
+        {pubTotal === 0 ? (
+          <p className="text-gray-400 text-sm">Nu există știri publicate.</p>
+        ) : (
+          <>
+            <PublishedNewsTable items={published} hasOldItems={hasOldItems} />
+            <Pagination
+              currentPage={pubPage}
+              totalPages={pubTotalPages}
+              buildHref={(p) => buildHref(currentParams, "pp", p)}
+            />
+          </>
+        )}
+      </section>
     </div>
   );
 }

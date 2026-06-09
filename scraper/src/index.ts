@@ -18,10 +18,14 @@ app.post("/scrape", async (req, res) => {
   if (!verifySecret(req, res)) return;
 
   const jobId: string | undefined = req.body?.jobId;
+  const requestedSources: string[] | undefined = req.body?.sources;
+
   const results: { source: string; count: number; error?: string }[] = [];
 
   for (const Source of scraperSources) {
     const scraper = new Source();
+    // If sources filter provided, only run requested scrapers
+    if (requestedSources && !requestedSources.includes(scraper.key)) continue;
     try {
       const items = await scraper.scrape();
       const inserted = await insertNewsItems(items);

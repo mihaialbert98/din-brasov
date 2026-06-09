@@ -3,12 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --env-file=.env src/index.ts",
     "start": "node dist/index.js",
     "build": "tsc"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
+    "cheerio": "^1.0.0",
     "drizzle-orm": "^0.45.2",
     "express": "^4.21.2",
     "playwright": "1.50.0",

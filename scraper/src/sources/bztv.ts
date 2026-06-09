@@ -4,6 +4,7 @@ import robotsParser from "robots-parser";
 import { BaseScraper, type ScrapedItem } from "./base-scraper.js";
 
 export class BztvScraper extends BaseScraper {
+  readonly key = "bzt";
   readonly sourceName = "BZT.ro";
   readonly baseUrl = "https://www.bzt.ro";
 

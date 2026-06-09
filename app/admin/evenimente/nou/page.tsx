@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useUploadThing } from "@/lib/uploadthing-client";
+import ImageField from "@/components/admin/ImageField";
 
 const CATEGORIES = ["Cultură", "Sport", "Muzică", "Food", "Business", "Educație", "Altele"];
 
@@ -11,34 +11,8 @@ export default function NouEvenimentPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState("");
   const [isFree, setIsFree] = useState(true);
-
-  const { startUpload, isUploading } = useUploadThing("eventImage", {
-    onClientUploadComplete: (res) => {
-      if (res?.[0]?.url) setImageUrl(res[0].url);
-    },
-    onUploadError: () => {
-      setError("Eroare la încărcarea imaginii. Încearcă din nou.");
-    },
-  });
-
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      setError("Doar imagini JPG, PNG sau WebP sunt acceptate.");
-      return;
-    }
-    if (file.size > 4 * 1024 * 1024) {
-      setError("Imaginea nu poate depăși 4MB.");
-      return;
-    }
-    setError(null);
-    setImagePreview(URL.createObjectURL(file));
-    await startUpload([file]);
-  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -62,7 +36,7 @@ export default function NouEvenimentPage() {
         isFree,
         price: isFree ? undefined : (form.get("price") as string) || undefined,
         currency: "RON",
-        imageUrl: imageUrl ?? undefined,
+        imageUrl: imageUrl || undefined,
       }),
     });
 
@@ -187,50 +161,12 @@ export default function NouEvenimentPage() {
           />
         </div>
 
-        {/* Image upload */}
-        <div className="flex flex-col gap-2">
-          <label className="font-medium text-gray-700">Imagine</label>
-          {imagePreview ? (
-            <div className="relative">
-              <img src={imagePreview} alt="Preview" className="w-full h-48 object-cover rounded-lg" />
-              {isUploading && (
-                <div className="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center">
-                  <p className="text-white font-medium">Se încarcă...</p>
-                </div>
-              )}
-              {!isUploading && imageUrl && (
-                <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded">
-                  ✓ Încărcat
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => { setImagePreview(null); setImageUrl(null); }}
-                className="absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded hover:bg-black/70 transition-colors"
-              >
-                Elimină
-              </button>
-            </div>
-          ) : (
-            <label
-              htmlFor="image-upload"
-              className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-[#c84b1e] transition-colors"
-            >
-              <p className="text-gray-500 mb-1">Apasă pentru a încărca o imagine</p>
-              <p className="text-xs text-gray-400">JPG, PNG, WebP · max 4MB</p>
-              <input
-                id="image-upload" type="file" accept="image/jpeg,image/png,image/webp"
-                className="hidden" onChange={handleFileChange}
-              />
-            </label>
-          )}
-        </div>
-
-        {error && (
-          <div role="alert" className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-            ⚠️ {error}
-          </div>
-        )}
+        <ImageField
+          endpoint="eventImage"
+          value={imageUrl}
+          onChange={setImageUrl}
+          onError={(msg) => setError(msg)}
+        />
 
         <div className="flex gap-3 pt-2">
           <Link
@@ -241,10 +177,10 @@ export default function NouEvenimentPage() {
           </Link>
           <button
             type="submit"
-            disabled={loading || isUploading}
+            disabled={loading}
             className="flex-1 bg-[#c84b1e] text-white font-semibold py-3 rounded-lg hover:bg-[#d9603a] transition-colors disabled:opacity-60"
           >
-            {loading ? "Se salvează..." : isUploading ? "Se încarcă imaginea..." : "Publică evenimentul"}
+            {loading ? "Se salvează..." : "Publică evenimentul"}
           </button>
         </div>
       </form>

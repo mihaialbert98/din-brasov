@@ -123,6 +123,30 @@ export const events = pgTable(
   ]
 );
 
+// ─── Experiences ─────────────────────────────────────────────────────────────
+
+export const experiences = pgTable(
+  "experiences",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    title: text("title").notNull(),
+    description: text("description").notNull(),
+    slug: text("slug").notNull().unique(),
+    category: text("category"), // Aventura | Sport | Cultura | Gastronomie | Natura | Altele
+    imageUrl: text("image_url"),
+    externalUrl: text("external_url").notNull(),
+    organizerId: text("organizer_id").references(() => users.id),
+    status: text("status").notNull().default("draft"), // draft | published | rejected
+    searchVector: tsvector("search_vector"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("experiences_search_idx").on(t.searchVector),
+    index("experiences_status_idx").on(t.status),
+  ]
+);
+
 // ─── Places / Local businesses ────────────────────────────────────────────────
 
 export const places = pgTable(
@@ -337,6 +361,8 @@ export type Place = typeof places.$inferSelect;
 export type NewPlace = typeof places.$inferInsert;
 export type Listing = typeof listings.$inferSelect;
 export type NewListing = typeof listings.$inferInsert;
+export type Experience = typeof experiences.$inferSelect;
+export type NewExperience = typeof experiences.$inferInsert;
 export type AdminAuditLog = typeof adminAuditLog.$inferSelect;
 export type SyncJob = typeof syncJobs.$inferSelect;
 export type AssistedConsentLog = typeof assistedConsentLog.$inferSelect;

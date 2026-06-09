@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { newsItems, adminAuditLog } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
-export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   const role = (session?.user as any)?.role;
   if (role !== "admin" && role !== "moderator") {
@@ -12,7 +12,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   }
 
   const { id } = await params;
-  await db.update(newsItems).set({ status: "published", reviewedBy: session!.user!.id!, updatedAt: new Date() }).where(eq(newsItems.id, id));
+  await db.update(newsItems).set({ status: "published", publishedAt: new Date(), reviewedBy: session!.user!.id!, updatedAt: new Date() }).where(eq(newsItems.id, id));
 
   await db.insert(adminAuditLog).values({
     adminId: session!.user!.id!,
@@ -21,5 +21,5 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     entityId: id,
   });
 
-  return NextResponse.redirect(new URL("/admin/stiri", process.env.NEXTAUTH_URL ?? "http://localhost:3000"));
+  return NextResponse.redirect(new URL("/admin/stiri", req.url));
 }

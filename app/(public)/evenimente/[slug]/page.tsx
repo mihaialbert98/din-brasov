@@ -46,9 +46,9 @@ export default async function EvenimentPage({ params }: Props) {
             href={ev.externalUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[#d4820a] font-medium hover:underline"
+            className="inline-flex items-center gap-2 bg-[#c84b1e] text-white font-semibold px-5 py-2.5 rounded-xl hover:bg-[#d9603a] transition-colors mt-2"
           >
-            🔗 Mai multe detalii
+            Mergi la eveniment →
           </a>
         )}
       </div>

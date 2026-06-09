@@ -64,6 +64,7 @@ export async function Navbar() {
           {[
             { href: "/stiri", label: "Știri" },
             { href: "/evenimente", label: "Evenimente" },
+            { href: "/experiente", label: "Experiențe" },
             { href: "/localuri", label: "Localuri" },
             { href: "/anunturi", label: "Anunțuri" },
           ].map((item) => (

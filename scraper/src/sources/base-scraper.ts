@@ -11,6 +11,7 @@ export interface ScrapedItem {
 }
 
 export abstract class BaseScraper {
+  abstract readonly key: string; // used for source filtering
   abstract readonly sourceName: string;
   abstract readonly baseUrl: string;
 

@@ -1,7 +1,10 @@
 import type { BaseScraper } from "./base-scraper.js";
-import { BztvScraper } from "./bztv.js";
+import { BizBrasovScraper } from "./bizbrasov.js";
+import { BrasovNetScraper } from "./brasovnet.js";
+import { MyTexScraper } from "./mytex.js";
 
-// Register all scraper sources here
 export const scraperSources: (new () => BaseScraper)[] = [
-  BztvScraper,
+  BizBrasovScraper,
+  BrasovNetScraper,
+  MyTexScraper,
 ];
