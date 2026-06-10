@@ -57,12 +57,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const valid = await bcrypt.compare(password, user.password);
         if (!valid) return null;
 
+        if (user.bannedUntil && user.bannedUntil > new Date()) {
+          const until = user.bannedUntil.toLocaleDateString("ro-RO");
+          throw new Error(`Contul tău este suspendat până la ${until}. Poți contesta prin Mesaje > Suport.`);
+        }
+
         return {
           id: user.id,
           email: user.email,
           name: user.name,
           image: user.image,
           role: user.role,
+          bannedUntil: user.bannedUntil ?? null,
         };
       },
     }),
@@ -75,12 +81,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       if (token.id && !user) {
         const [dbUser] = await db
-          .select({ role: users.role, deletedAt: users.deletedAt })
+          .select({ role: users.role, deletedAt: users.deletedAt, bannedUntil: users.bannedUntil })
           .from(users)
           .where(eq(users.id, token.id as string))
           .limit(1);
         if (dbUser) {
           token.role = dbUser.role;
+          token.bannedUntil = dbUser.bannedUntil?.toISOString() ?? null;
           if (dbUser.deletedAt) return {};
         }
       }

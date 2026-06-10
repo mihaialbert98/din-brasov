@@ -31,6 +31,7 @@ export const users = pgTable("users", {
   marketingConsentAt: timestamp("marketing_consent_at", { mode: "date" }), // separate consent per purpose
   deletionRequestedAt: timestamp("deletion_requested_at", { mode: "date" }),
   deletedAt: timestamp("deleted_at", { mode: "date" }),
+  bannedUntil: timestamp("banned_until", { mode: "date" }),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
@@ -354,6 +355,63 @@ export const listingFavourites = pgTable(
   ]
 );
 
+// ─── User reports ─────────────────────────────────────────────────────────────
+
+export const userReports = pgTable(
+  "user_reports",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    reportedUserId: text("reported_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    reporterId: text("reporter_id").references(() => users.id, { onDelete: "set null" }),
+    listingId: text("listing_id").references(() => listings.id, { onDelete: "set null" }),
+    conversationId: text("conversation_id").references(() => conversations.id, { onDelete: "set null" }),
+    reason: text("reason").notNull(),
+    status: text("status").notNull().default("pending"), // pending | reviewed | dismissed
+    reviewedBy: text("reviewed_by").references(() => users.id),
+    reviewedAt: timestamp("reviewed_at", { mode: "date" }),
+    reviewNote: text("review_note"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("user_reports_reported_idx").on(t.reportedUserId),
+    index("user_reports_status_idx").on(t.status),
+  ]
+);
+
+// ─── Support conversations ────────────────────────────────────────────────────
+
+export const supportConversations = pgTable(
+  "support_conversations",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    assignedTo: text("assigned_to").references(() => users.id),
+    status: text("status").notNull().default("open"), // open | closed
+    subject: text("subject").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("support_conversations_user_idx").on(t.userId),
+    index("support_conversations_assigned_idx").on(t.assignedTo),
+    index("support_conversations_status_idx").on(t.status),
+  ]
+);
+
+export const supportMessages = pgTable(
+  "support_messages",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    conversationId: text("conversation_id").notNull().references(() => supportConversations.id, { onDelete: "cascade" }),
+    senderId: text("sender_id").notNull().references(() => users.id),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("support_messages_conv_idx").on(t.conversationId),
+  ]
+);
+
 // ─── Scraper sync jobs ────────────────────────────────────────────────────────
 
 export const syncJobs = pgTable("sync_jobs", {
@@ -388,3 +446,6 @@ export type Message = typeof messages.$inferSelect;
 export type PhoneReveal = typeof phoneReveals.$inferSelect;
 export type ListingReport = typeof listingReports.$inferSelect;
 export type ListingFavourite = typeof listingFavourites.$inferSelect;
+export type UserReport = typeof userReports.$inferSelect;
+export type SupportConversation = typeof supportConversations.$inferSelect;
+export type SupportMessage = typeof supportMessages.$inferSelect;

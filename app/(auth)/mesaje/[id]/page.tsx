@@ -6,6 +6,7 @@ import { eq, and, asc, ne } from "drizzle-orm";
 import Link from "next/link";
 import { ConversationInput } from "./ConversationInput";
 import MessageList from "./MessageList";
+import { ReportUserButton } from "@/components/anunturi/ReportUserButton";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Conversație" };
@@ -69,6 +70,11 @@ export default async function ConversationPage({ params }: Props) {
             </Link>
           )}
         </div>
+        <ReportUserButton
+          reportedUserId={otherPartyId}
+          reportedUserName={other?.name ?? undefined}
+          conversationId={id}
+        />
       </div>
 
       {/* Messages — polls every 3s for new messages */}

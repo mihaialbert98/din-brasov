@@ -23,6 +23,8 @@ export async function GET(
 
   const { id } = await params;
   const userId = session.user.id;
+  const role = (session.user as any).role ?? "user";
+  const isMod = role === "moderator" || role === "admin";
 
   const [conv] = await db
     .select()
@@ -30,7 +32,7 @@ export async function GET(
     .where(eq(conversations.id, id))
     .limit(1);
 
-  if (!conv || (conv.buyerId !== userId && conv.sellerId !== userId)) {
+  if (!conv || (!isMod && conv.buyerId !== userId && conv.sellerId !== userId)) {
     return NextResponse.json({ error: "Conversație negăsită." }, { status: 404 });
   }
 
@@ -44,10 +46,9 @@ export async function GET(
     })
     .from(messages)
     .where(
-      and(
-        eq(messages.conversationId, id),
-        ne(messages.status, "flagged") // never show flagged messages to participants
-      )
+      isMod
+        ? eq(messages.conversationId, id) // admins see all messages including flagged
+        : and(eq(messages.conversationId, id), ne(messages.status, "flagged"))
     )
     .orderBy(asc(messages.createdAt));
 

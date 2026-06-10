@@ -7,6 +7,7 @@ import { RevealPhoneButton } from "@/components/marketplace/RevealPhoneButton";
 import { ContactSellerButton } from "@/components/marketplace/ContactSellerButton";
 import { ReportButton } from "@/components/marketplace/ReportButton";
 import FavouriteButton from "@/components/anunturi/FavouriteButton";
+import { ReportUserButton } from "@/components/anunturi/ReportUserButton";
 import { auth } from "@/lib/auth";
 import type { Metadata } from "next";
 
@@ -146,8 +147,14 @@ export default async function AnuntPage({ params }: Props) {
             isOwner={isOwner}
           />
         )}
-        <div className="ml-auto">
+        <div className="ml-auto flex flex-col items-end gap-2">
           <ReportButton listingId={listing.id} />
+          {listing.sellerId && !isOwner && (
+            <ReportUserButton
+              reportedUserId={listing.sellerId}
+              listingId={listing.id}
+            />
+          )}
         </div>
       </div>
     </div>
