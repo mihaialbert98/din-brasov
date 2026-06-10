@@ -70,34 +70,30 @@ export async function POST(
 
   const hasUrl = detectUrls(parsed.data.body);
 
-  // Atomic: find-or-create conversation + insert message in one transaction
-  const conversationId = await db.transaction(async (tx) => {
-    const [existing] = await tx
-      .select({ id: conversations.id })
-      .from(conversations)
-      .where(and(eq(conversations.listingId, id), eq(conversations.buyerId, session.user!.id!)))
-      .limit(1);
+  // Find-or-create conversation (neon-http doesn't support transactions)
+  const [existing] = await db
+    .select({ id: conversations.id })
+    .from(conversations)
+    .where(and(eq(conversations.listingId, id), eq(conversations.buyerId, session.user!.id!)))
+    .limit(1);
 
-    let convId: string;
-    if (existing) {
-      convId = existing.id;
-    } else {
-      const [created] = await tx
-        .insert(conversations)
-        .values({ listingId: id, buyerId: session.user!.id!, sellerId: listing.sellerId! })
-        .returning({ id: conversations.id });
-      convId = created.id;
-    }
+  let conversationId: string;
+  if (existing) {
+    conversationId = existing.id;
+  } else {
+    const [created] = await db
+      .insert(conversations)
+      .values({ listingId: id, buyerId: session.user!.id!, sellerId: listing.sellerId! })
+      .returning({ id: conversations.id });
+    conversationId = created.id;
+  }
 
-    await tx.insert(messages).values({
-      conversationId: convId,
-      senderId: session.user!.id!,
-      body: parsed.data.body,
-      hasUrl,
-      status: hasUrl ? "flagged" : "delivered",
-    });
-
-    return convId;
+  await db.insert(messages).values({
+    conversationId,
+    senderId: session.user!.id!,
+    body: parsed.data.body,
+    hasUrl,
+    status: hasUrl ? "flagged" : "delivered",
   });
 
   return NextResponse.json({ ok: true, conversationId });

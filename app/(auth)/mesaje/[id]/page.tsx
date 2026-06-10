@@ -5,6 +5,7 @@ import { conversations, messages, listings, users } from "@/lib/db/schema";
 import { eq, and, asc, ne } from "drizzle-orm";
 import Link from "next/link";
 import { ConversationInput } from "./ConversationInput";
+import MessageList from "./MessageList";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Conversație" };
@@ -38,8 +39,14 @@ export default async function ConversationPage({ params }: Props) {
     .where(eq(users.id, otherPartyId))
     .limit(1);
 
-  const msgs = await db
-    .select()
+  const initialMessages = await db
+    .select({
+      id: messages.id,
+      body: messages.body,
+      senderId: messages.senderId,
+      createdAt: messages.createdAt,
+      status: messages.status,
+    })
     .from(messages)
     .where(and(eq(messages.conversationId, id), ne(messages.status, "flagged")))
     .orderBy(asc(messages.createdAt));
@@ -64,41 +71,12 @@ export default async function ConversationPage({ params }: Props) {
         </div>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto space-y-3 mb-4 bg-white rounded-2xl shadow-sm border border-[#e8d9c5] p-4">
-        {msgs.length === 0 ? (
-          <p className="text-center text-gray-400 py-10 text-sm">
-            Niciun mesaj încă. Fii primul care scrie!
-          </p>
-        ) : (
-          msgs.map((msg) => {
-            const isMine = msg.senderId === userId;
-            return (
-              <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                    isMine
-                      ? "bg-[#c84b1e] text-white rounded-tr-sm"
-                      : "bg-gray-100 text-gray-800 rounded-tl-sm"
-                  }`}
-                >
-                  <p className="whitespace-pre-wrap">{msg.body}</p>
-                  <p className={`text-xs mt-1 ${isMine ? "text-white/60" : "text-gray-400"}`}>
-                    {msg.createdAt
-                      ? new Intl.DateTimeFormat("ro-RO", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          day: "numeric",
-                          month: "short",
-                        }).format(new Date(msg.createdAt))
-                      : ""}
-                  </p>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
+      {/* Messages — polls every 3s for new messages */}
+      <MessageList
+        conversationId={id}
+        currentUserId={userId}
+        initialMessages={initialMessages}
+      />
 
       {/* Input */}
       {conv.status === "blocked" ? (

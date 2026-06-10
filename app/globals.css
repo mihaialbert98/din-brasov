@@ -45,6 +45,14 @@ button,
   min-height: 44px;
 }
 
+/* Ensure form fields always show text visibly */
+input,
+textarea,
+select {
+  color: var(--color-text);
+  background-color: #ffffff;
+}
+
 /* Always-visible focus ring in sky blue */
 :focus-visible {
   outline: 3px solid var(--color-sky);

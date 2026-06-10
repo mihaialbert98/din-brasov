@@ -29,8 +29,18 @@ export function ContactSellerButton({
     setOpen(true);
   }
 
+  function containsUrl(text: string) {
+    return /(https?:\/\/|t\.me\/|wa\.me\/|bit\.ly|tinyurl|goo\.gl)/i.test(text);
+  }
+
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
+
+    if (containsUrl(body)) {
+      setError("Mesajele nu pot conține linkuri. Te rugăm să nu incluzi adrese web.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -112,6 +122,7 @@ export function ContactSellerButton({
                     rows={5}
                     placeholder="Bună ziua, sunt interesat de anunțul dvs..."
                     className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:border-[#c84b1e] focus:ring-1 focus:ring-[#c84b1e] resize-y"
+                    style={{ color: "#1a1a1a", backgroundColor: "#ffffff", colorScheme: "light" }}
                   />
                   <p className="text-xs text-gray-400 mt-1 text-right">{body.length}/2000</p>
                 </div>

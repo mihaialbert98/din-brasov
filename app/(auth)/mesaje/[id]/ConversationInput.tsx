@@ -1,18 +1,26 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { useRouter } from "next/navigation";
 
 export function ConversationInput({ conversationId }: { conversationId: string }) {
   const [body, setBody] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
   const formLoadedAt = useRef(Date.now());
+
+  function containsUrl(text: string) {
+    return /(https?:\/\/|t\.me\/|wa\.me\/|bit\.ly|tinyurl|goo\.gl)/i.test(text);
+  }
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
     if (!body.trim()) return;
+
+    if (containsUrl(body)) {
+      setError("Mesajele nu pot conține linkuri. Te rugăm să nu incluzi adrese web.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -36,7 +44,8 @@ export function ConversationInput({ conversationId }: { conversationId: string }
 
     setBody("");
     formLoadedAt.current = Date.now();
-    router.refresh();
+    // Immediately refresh the message list without a full page reload
+    (window as any).__refreshMessages?.();
   }
 
   return (
@@ -54,6 +63,7 @@ export function ConversationInput({ conversationId }: { conversationId: string }
           placeholder="Scrie un mesaj... (Enter pentru trimite)"
           rows={2}
           maxLength={2000}
+          style={{ color: "#111", backgroundColor: "#fff" }}
           className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:border-[#c84b1e] focus:ring-1 focus:ring-[#c84b1e] resize-none"
           aria-label="Mesaj nou"
         />

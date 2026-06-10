@@ -116,6 +116,7 @@ export default async function ProfilPage() {
             {myListings.map((l) => {
               const favCount = favCountMap[l.id] ?? 0;
               const canRenew = l.status === "expired" && isWithinGracePeriod(l.expiresAt);
+              const canEdit = l.status === "active";
               return (
                 <li key={l.id} className="py-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div className="flex-1 min-w-0">
@@ -146,12 +147,23 @@ export default async function ProfilPage() {
                       )}
                     </div>
                   </div>
-                  {canRenew && (
-                    <div className="flex gap-2 flex-shrink-0">
-                      <RenewButton listingId={l.id} />
-                      <DeleteOwnListingButton listingId={l.id} title={l.title} />
-                    </div>
-                  )}
+                  <div className="flex gap-2 flex-shrink-0 items-center flex-wrap">
+                    {canEdit && (
+                      <Link
+                        href={`/anunturi/${l.slug}/editeaza`}
+                        className="text-sm px-3 py-1.5 border border-gray-300 text-gray-600 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                      >
+                        Editează
+                      </Link>
+                    )}
+                    {canEdit && <DeleteOwnListingButton listingId={l.id} title={l.title} />}
+                    {canRenew && (
+                      <>
+                        <RenewButton listingId={l.id} />
+                        <DeleteOwnListingButton listingId={l.id} title={l.title} />
+                      </>
+                    )}
+                  </div>
                 </li>
               );
             })}
