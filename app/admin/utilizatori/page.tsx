@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { formatDate } from "@/lib/utils";
 import Link from "next/link";
 import { OpenSupportButton } from "@/components/admin/OpenSupportButton";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Admin — Utilizatori" };
@@ -15,13 +16,6 @@ const ROLE_LABELS: Record<string, string> = {
   staff: "Asistent",
   moderator: "Moderator",
   admin: "Administrator",
-};
-
-const ROLE_COLORS: Record<string, string> = {
-  user: "bg-gray-100 text-gray-700",
-  staff: "bg-blue-100 text-blue-700",
-  moderator: "bg-purple-100 text-purple-700",
-  admin: "bg-red-100 text-red-700",
 };
 
 export default async function UtilizatoriPage() {
@@ -179,9 +173,7 @@ export default async function UtilizatoriPage() {
                     </td>
                     <td className="p-3 text-gray-500 text-xs">{u.email}</td>
                     <td className="p-3">
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ROLE_COLORS[u.role] ?? "bg-gray-100 text-gray-700"}`}>
-                        {ROLE_LABELS[u.role] ?? u.role}
-                      </span>
+                      <StatusBadge status={u.role} label={ROLE_LABELS[u.role] ?? u.role} />
                     </td>
                     <td className="p-3 text-gray-400 text-xs">
                       {u.createdAt ? formatDate(u.createdAt, { day: "numeric", month: "short", year: "numeric" }) : "—"}

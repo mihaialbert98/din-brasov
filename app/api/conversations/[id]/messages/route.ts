@@ -3,7 +3,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { conversations, messages, users } from "@/lib/db/schema";
-import { eq, and, asc, ne } from "drizzle-orm";
+import { eq, and, asc, ne, isNull } from "drizzle-orm";
 import { detectUrls, checkMessageLimit } from "@/lib/rate-limit";
 
 const sendSchema = z.object({
@@ -51,6 +51,20 @@ export async function GET(
         : and(eq(messages.conversationId, id), ne(messages.status, "flagged"))
     )
     .orderBy(asc(messages.createdAt));
+
+  // Mark messages from the other party as read
+  if (!isMod) {
+    await db
+      .update(messages)
+      .set({ readAt: new Date() })
+      .where(
+        and(
+          eq(messages.conversationId, id),
+          ne(messages.senderId, userId),
+          isNull(messages.readAt)
+        )
+      );
+  }
 
   return NextResponse.json({ data: msgs, conversation: conv });
 }

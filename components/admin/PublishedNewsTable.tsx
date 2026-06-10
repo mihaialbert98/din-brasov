@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { formatDate } from "@/lib/utils";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import type { NewsItem } from "@/lib/db/schema";
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
@@ -213,31 +214,15 @@ export default function PublishedNewsTable({ items, hasOldItems }: Props) {
         </table>
       </div>
 
-      {/* Confirmation modal */}
       {confirmMode && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-4">
-            <h3 className="text-base font-bold text-gray-900">{confirmTitle}</h3>
-            <p className="text-sm text-gray-500">{confirmDesc}</p>
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            <div className="flex gap-3 pt-1">
-              <button
-                onClick={cancel}
-                disabled={isPending}
-                className="flex-1 border border-gray-200 text-gray-700 font-semibold px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition-colors disabled:opacity-50"
-              >
-                Anulează
-              </button>
-              <button
-                onClick={handleConfirm}
-                disabled={isPending}
-                className="flex-1 bg-red-600 text-white font-semibold px-4 py-2 rounded-lg text-sm hover:bg-red-700 transition-colors disabled:opacity-50"
-              >
-                {isPending ? "Se șterge..." : "Șterge"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmModal
+          title={confirmTitle}
+          description={confirmDesc}
+          loading={isPending}
+          error={error}
+          onConfirm={handleConfirm}
+          onCancel={cancel}
+        />
       )}
     </>
   );

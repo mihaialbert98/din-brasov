@@ -4,6 +4,7 @@ import { eq, desc, count, and, ne, inArray } from "drizzle-orm";
 import Link from "next/link";
 import { formatDate } from "@/lib/utils";
 import { auth } from "@/lib/auth";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Admin — Anunțuri" };
@@ -11,13 +12,6 @@ export const metadata: Metadata = { title: "Admin — Anunțuri" };
 const STATUS_LABELS: Record<string, string> = {
   active: "Activ", suspended: "Suspendat", sold: "Vândut",
   expired: "Expirat", removed: "Șters",
-};
-const STATUS_COLORS: Record<string, string> = {
-  active: "bg-green-100 text-green-700",
-  suspended: "bg-red-100 text-red-700",
-  sold: "bg-blue-100 text-blue-700",
-  expired: "bg-gray-100 text-gray-500",
-  removed: "bg-gray-100 text-gray-400",
 };
 
 export default async function AdminAnunturiPage({
@@ -175,9 +169,7 @@ export default async function AdminAnunturiPage({
                     {l.price ? `${l.price} ${l.currency}` : "—"}
                   </td>
                   <td className="p-3">
-                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLORS[l.status] ?? "bg-gray-100 text-gray-500"}`}>
-                      {STATUS_LABELS[l.status] ?? l.status}
-                    </span>
+                    <StatusBadge status={l.status} label={STATUS_LABELS[l.status] ?? l.status} />
                   </td>
                   <td className="p-3">
                     {(reportMap[l.id] ?? 0) > 0 ? (

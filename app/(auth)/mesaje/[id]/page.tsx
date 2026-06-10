@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { conversations, messages, listings, users } from "@/lib/db/schema";
-import { eq, and, asc, ne } from "drizzle-orm";
+import { eq, and, asc, ne, isNull } from "drizzle-orm";
 import Link from "next/link";
 import { ConversationInput } from "./ConversationInput";
 import MessageList from "./MessageList";
@@ -51,6 +51,18 @@ export default async function ConversationPage({ params }: Props) {
     .from(messages)
     .where(and(eq(messages.conversationId, id), ne(messages.status, "flagged")))
     .orderBy(asc(messages.createdAt));
+
+  // Mark messages from the other party as read on page load
+  await db
+    .update(messages)
+    .set({ readAt: new Date() })
+    .where(
+      and(
+        eq(messages.conversationId, id),
+        ne(messages.senderId, userId),
+        isNull(messages.readAt)
+      )
+    );
 
   return (
     <div className="w-full max-w-2xl flex flex-col h-[calc(100vh-120px)]">
