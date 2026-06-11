@@ -32,6 +32,7 @@ export const users = pgTable("users", {
   deletionRequestedAt: timestamp("deletion_requested_at", { mode: "date" }),
   deletedAt: timestamp("deleted_at", { mode: "date" }),
   bannedUntil: timestamp("banned_until", { mode: "date" }),
+  freeListingsUsed: integer("free_listings_used").notNull().default(0),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
@@ -199,6 +200,8 @@ export const listings = pgTable(
     contactEmail: text("contact_email"),
     status: text("status").notNull().default("active"), // active | sold | expired | removed | suspended
     expiresAt: timestamp("expires_at", { mode: "date" }),
+    isBoosted: boolean("is_boosted").notNull().default(false),
+    boostedUntil: timestamp("boosted_until", { mode: "date" }),
     isAssisted: boolean("is_assisted").default(false),
     staffOperatorId: text("staff_operator_id").references(() => users.id),
     staffConsentTicked: boolean("staff_consent_ticked").default(false),
@@ -412,6 +415,58 @@ export const supportMessages = pgTable(
   ]
 );
 
+// ─── Payments (Netopia) ───────────────────────────────────────────────────────
+
+export const payments = pgTable(
+  "payments",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    listingId: text("listing_id").references(() => listings.id, { onDelete: "set null" }),
+    netopiaOrderId: text("netopia_order_id").notNull().unique(),
+    amount: integer("amount").notNull(), // in bani (RON × 100)
+    currency: text("currency").notNull().default("RON"),
+    type: text("type").notNull(), // listing_creation | boost
+    status: text("status").notNull().default("pending"), // pending | confirmed | failed
+    // For listing_creation: pending listing data stored here until payment confirmed
+    pendingListingJson: text("pending_listing_json"),
+    // Boost duration in days (7 or 14)
+    boostDays: integer("boost_days"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    confirmedAt: timestamp("confirmed_at", { mode: "date" }),
+  },
+  (t) => [
+    index("payments_user_idx").on(t.userId),
+    index("payments_listing_idx").on(t.listingId),
+    index("payments_status_idx").on(t.status),
+    index("payments_order_idx").on(t.netopiaOrderId),
+  ]
+);
+
+// ─── Sponsors ─────────────────────────────────────────────────────────────────
+
+export const sponsors = pgTable("sponsors", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text("name").notNull(),
+  logoUrl: text("logo_url"),
+  websiteUrl: text("website_url"),
+  tagline: text("tagline"),
+  slotLocation: text("slot_location").notNull(), // homepage | events | anunturi
+  activeUntil: timestamp("active_until", { mode: "date" }),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+export const sponsorLeads = pgTable("sponsor_leads", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  companyName: text("company_name").notNull(),
+  contactName: text("contact_name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone"),
+  preferredSlot: text("preferred_slot"), // homepage | events | anunturi
+  message: text("message"),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
 // ─── Scraper sync jobs ────────────────────────────────────────────────────────
 
 export const syncJobs = pgTable("sync_jobs", {
@@ -449,3 +504,6 @@ export type ListingFavourite = typeof listingFavourites.$inferSelect;
 export type UserReport = typeof userReports.$inferSelect;
 export type SupportConversation = typeof supportConversations.$inferSelect;
 export type SupportMessage = typeof supportMessages.$inferSelect;
+export type Payment = typeof payments.$inferSelect;
+export type Sponsor = typeof sponsors.$inferSelect;
+export type SponsorLead = typeof sponsorLeads.$inferSelect;

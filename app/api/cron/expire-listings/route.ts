@@ -13,7 +13,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { listings, newsItems } from "@/lib/db/schema";
-import { lt, eq, and } from "drizzle-orm";
+import { lt, eq, and, isNotNull } from "drizzle-orm";
 import { hardDeleteExpiredUsers, hardDeleteExpiredListings } from "@/lib/gdpr";
 
 function verifyCron(req: Request) {
@@ -41,7 +41,13 @@ export async function GET(req: Request) {
   // 3. Hard-delete users past the 30-day deletion grace period
   const deletedUsers = await hardDeleteExpiredUsers();
 
-  // 4. Delete draft news items older than 3 days (not reviewed in time)
+  // 4. Reset expired boosts
+  await db
+    .update(listings)
+    .set({ isBoosted: false, boostedUntil: null })
+    .where(and(eq(listings.isBoosted, true), isNotNull(listings.boostedUntil), lt(listings.boostedUntil, now)));
+
+  // 5. Delete draft news items older than 3 days (not reviewed in time)
   const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
   const deletedDrafts = await db
     .delete(newsItems)

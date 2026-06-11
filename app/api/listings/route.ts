@@ -2,8 +2,14 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { listings } from "@/lib/db/schema";
+import { listings, users, payments } from "@/lib/db/schema";
 import { slugifyWithDate } from "@/lib/slugify";
+import { startNetopiaPayment } from "@/lib/netopia";
+import { eq } from "drizzle-orm";
+
+const FREE_LISTING_QUOTA = 2;
+// Prices in RON
+const LISTING_CREATION_PRICE = 9;
 
 const schema = z.object({
   title: z.string().min(3).max(200),
@@ -29,6 +35,63 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Date invalide." }, { status: 400 });
   }
 
+  const userId = session.user.id;
+
+  // Check free listing quota
+  const [user] = await db
+    .select({ freeListingsUsed: users.freeListingsUsed, name: users.name, email: users.email })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  if (!user) {
+    return NextResponse.json({ error: "Utilizator negăsit." }, { status: 404 });
+  }
+
+  const needsPayment = user.freeListingsUsed >= FREE_LISTING_QUOTA;
+
+  if (needsPayment) {
+    // Store the pending listing data in a payment record and redirect to Netopia
+    const orderId = crypto.randomUUID();
+    const pendingData = parsed.data;
+
+    await db.insert(payments).values({
+      userId,
+      netopiaOrderId: orderId,
+      amount: LISTING_CREATION_PRICE * 100, // store in bani
+      currency: "RON",
+      type: "listing_creation",
+      status: "pending",
+      pendingListingJson: JSON.stringify(pendingData),
+    });
+
+    const baseUrl = process.env.NETOPIA_BASE_URL ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+
+    let paymentUrl: string;
+    try {
+      const result = await startNetopiaPayment({
+        orderId,
+        amount: LISTING_CREATION_PRICE,
+        description: `Publicare anunț: ${parsed.data.title.slice(0, 80)}`,
+        userEmail: user.email,
+        userName: user.name ?? "Utilizator",
+        returnUrl: `${baseUrl}/api/netopia/return`,
+      });
+      paymentUrl = result.paymentUrl;
+    } catch (err: any) {
+      // Clean up the payment record on failure
+      await db.delete(payments).where(eq(payments.netopiaOrderId, orderId));
+      console.error("Netopia error:", err?.message, err?.response?.data ?? err);
+      return NextResponse.json({
+        error: "Eroare la inițierea plății. Încearcă din nou.",
+        detail: err?.message ?? String(err),
+      }, { status: 502 });
+    }
+
+    return NextResponse.json({ needsPayment: true, paymentUrl }, { status: 202 });
+  }
+
+  // Free path — create listing directly
   const slug = slugifyWithDate(parsed.data.title);
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
@@ -45,11 +108,17 @@ export async function POST(req: Request) {
       location: parsed.data.location || null,
       contactPhone: parsed.data.contactPhone || null,
       contactEmail: parsed.data.contactEmail || null,
-      sellerId: session.user.id,
+      sellerId: userId,
       status: "active",
       expiresAt,
     })
     .returning({ id: listings.id, slug: listings.slug });
+
+  // Increment the used counter
+  await db
+    .update(users)
+    .set({ freeListingsUsed: user.freeListingsUsed + 1 })
+    .where(eq(users.id, userId));
 
   return NextResponse.json({ ok: true, slug: listing.slug }, { status: 201 });
 }

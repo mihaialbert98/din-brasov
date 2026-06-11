@@ -8,10 +8,11 @@ import { ContactSellerButton } from "@/components/marketplace/ContactSellerButto
 import { ReportButton } from "@/components/marketplace/ReportButton";
 import FavouriteButton from "@/components/anunturi/FavouriteButton";
 import { ReportUserButton } from "@/components/anunturi/ReportUserButton";
+import { BoostButton } from "@/components/marketplace/BoostButton";
 import { auth } from "@/lib/auth";
 import type { Metadata } from "next";
 
-type Props = { params: Promise<{ slug: string }> };
+type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ payment?: string }> };
 
 async function getListing(slug: string) {
   const [item] = await db
@@ -32,8 +33,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function AnuntPage({ params }: Props) {
-  const { slug } = await params;
+export default async function AnuntPage({ params, searchParams }: Props) {
+  const [{ slug }, sp] = await Promise.all([params, searchParams]);
+  const paymentStatus = sp?.payment;
   const [listing, session] = await Promise.all([getListing(slug), auth()]);
 
   if (!listing || listing.status === "removed") notFound();
@@ -52,6 +54,16 @@ export default async function AnuntPage({ params }: Props) {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
+      {paymentStatus === "success" && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6 text-green-800 text-sm">
+          ✅ Plată finalizată cu succes! Anunțul tău este acum activ.
+        </div>
+      )}
+      {paymentStatus === "pending" && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 text-amber-800 text-sm">
+          ⏳ Plata este în curs de procesare. Anunțul va apărea în câteva momente.
+        </div>
+      )}
       {isSuspended && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 text-red-700 text-sm">
           ⚠️ Acest anunț a fost suspendat temporar pentru verificare.
@@ -138,6 +150,17 @@ export default async function AnuntPage({ params }: Props) {
           <p>Expiră: {formatDate(listing.expiresAt)}</p>
         )}
       </div>
+
+      {/* Owner boost widget */}
+      {isOwner && listing.status === "active" && (
+        <div className="mb-6">
+          <BoostButton
+            listingId={listing.id}
+            isBoosted={listing.isBoosted ?? false}
+            boostedUntil={listing.boostedUntil}
+          />
+        </div>
+      )}
 
       <div className="flex items-center justify-between gap-3 flex-wrap">
         {listing.status === "active" && (

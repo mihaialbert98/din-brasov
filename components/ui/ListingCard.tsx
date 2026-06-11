@@ -10,6 +10,7 @@ type Props = {
     location: string | null;
     imagesJson: string | null;
     isAssisted: boolean | null;
+    isBoosted?: boolean | null;
   };
   compact?: boolean;
 };
@@ -51,11 +52,18 @@ export default function ListingCard({ listing, compact = false }: Props) {
         </div>
       )}
       <div className="p-4 flex flex-col gap-2 flex-1">
-        {listing.isAssisted && (
-          <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full self-start">
-            Anunț Asistat
-          </span>
-        )}
+        <div className="flex gap-1.5 flex-wrap">
+          {listing.isBoosted && (
+            <span className="text-xs bg-[#c84b1e] text-white px-2 py-0.5 rounded-full font-medium">
+              ⚡ Promovat
+            </span>
+          )}
+          {listing.isAssisted && (
+            <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+              Anunț Asistat
+            </span>
+          )}
+        </div>
         <h2 className="font-semibold text-gray-900 line-clamp-2">{listing.title}</h2>
         {listing.price ? (
           <p className="text-xl font-bold text-[#1a4731]">

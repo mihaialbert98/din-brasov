@@ -1,4 +1,4 @@
-import { sql, and, eq } from "drizzle-orm";
+import { sql, and, eq, count } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { newsItems, events, listings, places } from "@/lib/db/schema";
 
@@ -74,13 +74,31 @@ export async function searchEvents(
     .offset((page - 1) * PAGE_SIZE);
 }
 
+export type ListingSort = "newest" | "oldest" | "price_asc" | "price_desc";
+
+function listingsSortClause(sort: ListingSort) {
+  // Boosted always pinned first, then apply the user-chosen sort
+  switch (sort) {
+    case "oldest":
+      return sql`${listings.isBoosted} DESC, ${listings.boostedUntil} DESC NULLS LAST, ${listings.createdAt} ASC`;
+    case "price_asc":
+      return sql`${listings.isBoosted} DESC, ${listings.boostedUntil} DESC NULLS LAST, CAST(NULLIF(REGEXP_REPLACE(${listings.price}, '[^0-9.]', '', 'g'), '') AS NUMERIC) ASC NULLS LAST`;
+    case "price_desc":
+      return sql`${listings.isBoosted} DESC, ${listings.boostedUntil} DESC NULLS LAST, CAST(NULLIF(REGEXP_REPLACE(${listings.price}, '[^0-9.]', '', 'g'), '') AS NUMERIC) DESC NULLS LAST`;
+    case "newest":
+    default:
+      return sql`${listings.isBoosted} DESC, ${listings.boostedUntil} DESC NULLS LAST, ${listings.createdAt} DESC`;
+  }
+}
+
 export async function searchListings(
   query: string,
   {
     page = 1,
     category,
     condition,
-  }: { page?: number; category?: string; condition?: string } = {}
+    sort = "newest",
+  }: { page?: number; category?: string; condition?: string; sort?: ListingSort } = {}
 ) {
   const conditions = [eq(listings.status, "active")];
   if (category) conditions.push(eq(listings.category, category));
@@ -89,26 +107,34 @@ export async function searchListings(
     conditions.push(sql`${listings.searchVector} @@ ${searchQuery(query)}`);
   }
 
-  // Never return contact info in list — only in single-item endpoint
-  return db
-    .select({
-      id: listings.id,
-      title: listings.title,
-      slug: listings.slug,
-      price: listings.price,
-      currency: listings.currency,
-      category: listings.category,
-      condition: listings.condition,
-      imagesJson: listings.imagesJson,
-      location: listings.location,
-      isAssisted: listings.isAssisted,
-      createdAt: listings.createdAt,
-    })
-    .from(listings)
-    .where(and(...conditions))
-    .orderBy(sql`${listings.createdAt} DESC`)
-    .limit(PAGE_SIZE)
-    .offset((page - 1) * PAGE_SIZE);
+  const [rows, [{ total }]] = await Promise.all([
+    // Never return contact info in list — only in single-item endpoint
+    db
+      .select({
+        id: listings.id,
+        title: listings.title,
+        slug: listings.slug,
+        price: listings.price,
+        currency: listings.currency,
+        category: listings.category,
+        condition: listings.condition,
+        imagesJson: listings.imagesJson,
+        location: listings.location,
+        isAssisted: listings.isAssisted,
+        isBoosted: listings.isBoosted,
+        boostedUntil: listings.boostedUntil,
+        createdAt: listings.createdAt,
+      })
+      .from(listings)
+      .where(and(...conditions))
+      .orderBy(listingsSortClause(sort))
+      .limit(PAGE_SIZE)
+      .offset((page - 1) * PAGE_SIZE),
+
+    db.select({ total: count() }).from(listings).where(and(...conditions)),
+  ]);
+
+  return { listings: rows, total, pageSize: PAGE_SIZE };
 }
 
 export async function searchPlaces(

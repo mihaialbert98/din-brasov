@@ -10,7 +10,7 @@ export default async function HomePage() {
     searchNews("", { page: 1 }).catch(() => []),
     searchEvents("", { page: 1 }).catch(() => []),
     searchPlaces("", { page: 1 }).catch(() => []),
-    searchListings("", { page: 1 }).catch(() => []),
+    searchListings("", { page: 1 }).then((r) => r.listings).catch(() => []),
   ]);
 
   return (

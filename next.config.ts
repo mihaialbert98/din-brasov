@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ["automated-caviar-ground.ngrok-free.dev"],
   images: {
     remotePatterns: [
       {
