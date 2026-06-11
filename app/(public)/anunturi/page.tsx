@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import CategoryFilter from "@/components/ui/CategoryFilter";
 import ListingCard from "@/components/ui/ListingCard";
 import Pagination from "@/components/ui/Pagination";
+import SortSelect from "@/components/ui/SortSelect";
 
 export const metadata: Metadata = {
   title: "Anunțuri",
@@ -53,21 +54,22 @@ export default async function AnunturiPage({
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-10">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold font-serif text-[#1a4731]">Anunțuri</h1>
+      <div className="flex items-center justify-between mb-8 gap-3">
+        <h1 className="text-2xl sm:text-3xl font-bold font-serif text-[#1a4731]">Anunțuri</h1>
         {session ? (
           <Link
             href="/anunturi/nou"
-            className="bg-[#d4820a] text-white font-semibold px-5 py-3 rounded-lg hover:bg-[#e8a020] transition-colors"
+            className="bg-[#d4820a] text-white font-semibold px-4 sm:px-5 py-2.5 sm:py-3 rounded-lg hover:bg-[#e8a020] transition-colors text-sm sm:text-base whitespace-nowrap"
           >
             + Adaugă anunț
           </Link>
         ) : (
           <Link
             href="/intra"
-            className="border border-[#d4820a] text-[#d4820a] font-semibold px-5 py-3 rounded-lg hover:bg-amber-50 transition-colors"
+            className="border border-[#d4820a] text-[#d4820a] font-semibold px-4 sm:px-5 py-2.5 sm:py-3 rounded-lg hover:bg-amber-50 transition-colors text-sm sm:text-base whitespace-nowrap"
           >
-            Intră în cont pentru a posta
+            <span className="hidden sm:inline">Intră în cont pentru a posta</span>
+            <span className="sm:hidden">Intră în cont</span>
           </Link>
         )}
       </div>
@@ -88,28 +90,15 @@ export default async function AnunturiPage({
         </p>
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-500 hidden sm:inline">Sortare:</span>
-          <div className="flex gap-1 flex-wrap justify-end">
-            {SORT_OPTIONS.map((opt) => {
-              const sp = new URLSearchParams();
-              if (q) sp.set("q", q);
-              if (category) sp.set("categorie", category);
-              if (opt.value !== "newest") sp.set("sortare", opt.value);
-              const href = `/anunturi${sp.toString() ? `?${sp.toString()}` : ""}`;
-              return (
-                <Link
-                  key={opt.value}
-                  href={href}
-                  className={`text-xs px-3 py-1.5 rounded-lg border transition-colors whitespace-nowrap ${
-                    sort === opt.value
-                      ? "bg-[#1a1a1a] text-white border-[#1a1a1a]"
-                      : "bg-white text-gray-600 border-gray-300 hover:border-gray-400"
-                  }`}
-                >
-                  {opt.label}
-                </Link>
-              );
-            })}
-          </div>
+          <SortSelect
+            options={SORT_OPTIONS}
+            value={sort}
+            basePath="/anunturi"
+            extraParams={{
+              ...(q ? { q } : {}),
+              ...(category ? { categorie: category } : {}),
+            }}
+          />
         </div>
       </div>
 

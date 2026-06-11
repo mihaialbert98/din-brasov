@@ -17,8 +17,8 @@ export default async function HomePage() {
     <div>
       {/* Hero */}
       <section className="relative bg-[#1a1a1a] text-white overflow-hidden" aria-label="Introducere">
-        <div className="absolute right-0 top-0 w-[480px] h-[480px] rounded-full bg-[#c84b1e] opacity-20 translate-x-1/3 -translate-y-1/3 pointer-events-none" aria-hidden />
-        <div className="absolute right-16 top-8 w-[380px] h-[380px] rounded-full border-2 border-[#6bb5d4] opacity-15 translate-x-1/3 -translate-y-1/3 pointer-events-none" aria-hidden />
+        <div className="absolute right-0 top-0 w-[320px] sm:w-[480px] h-[320px] sm:h-[480px] rounded-full bg-[#c84b1e] opacity-20 translate-x-1/3 -translate-y-1/3 pointer-events-none" aria-hidden />
+        <div className="absolute right-8 sm:right-16 top-4 sm:top-8 w-[240px] sm:w-[380px] h-[240px] sm:h-[380px] rounded-full border-2 border-[#6bb5d4] opacity-15 translate-x-1/3 -translate-y-1/3 pointer-events-none" aria-hidden />
 
         <div className="relative max-w-5xl mx-auto px-4 py-20 flex flex-col md:flex-row items-center gap-10">
           <div className="flex-1 text-center md:text-left">
@@ -34,10 +34,10 @@ export default async function HomePage() {
               </svg>
               @din_brasov
             </a>
-            <h1 className="text-5xl md:text-6xl font-bold mb-4 leading-tight">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold mb-4 leading-tight">
               Din <span className="text-[#c84b1e]">Brașov</span>
             </h1>
-            <p className="text-xl text-gray-300 mb-10 max-w-md">
+            <p className="text-lg sm:text-xl text-gray-300 mb-10 max-w-md">
               Tot ce se întâmplă în Brașov — știri, evenimente, localuri și anunțuri.
             </p>
             <div className="flex flex-wrap justify-center md:justify-start gap-3">
@@ -69,7 +69,7 @@ export default async function HomePage() {
           <div>
             <h2 className="text-xl font-bold text-[#1a1a1a] mb-1">Nu știi să folosești internetul?</h2>
             <p className="text-gray-700 text-lg mb-2">Sună-ne și noi publicăm anunțul în locul tău, gratuit.</p>
-            <a href="tel:+40770936013" className="text-3xl font-bold text-[#c84b1e] hover:underline" aria-label="Sună pentru ajutor cu anunțul">
+            <a href="tel:+40770936013" className="text-xl sm:text-3xl font-bold text-[#c84b1e] hover:underline" aria-label="Sună pentru ajutor cu anunțul">
               0770 936 013
             </a>
           </div>
@@ -90,7 +90,7 @@ export default async function HomePage() {
           {latestNews.length === 0 ? (
             <p className="text-gray-500">Nu există știri momentan.</p>
           ) : (
-            <div className="grid md:grid-cols-3 gap-6">
+            <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
               {latestNews.slice(0, 3).map((item) => (
                 <NewsCard key={item.id} item={item} compact />
               ))}
@@ -111,7 +111,7 @@ export default async function HomePage() {
           {upcomingEvents.length === 0 ? (
             <p className="text-gray-500">Nu există evenimente programate.</p>
           ) : (
-            <div className="grid md:grid-cols-3 gap-6">
+            <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
               {upcomingEvents.slice(0, 3).map((ev) => (
                 <EventCard key={ev.id} event={ev} compact />
               ))}
@@ -132,7 +132,7 @@ export default async function HomePage() {
           {recentPlaces.length === 0 ? (
             <p className="text-gray-500">Nu există localuri adăugate recent.</p>
           ) : (
-            <div className="grid md:grid-cols-3 gap-6">
+            <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
               {recentPlaces.slice(0, 3).map((place) => (
                 <PlaceCard key={place.id} place={place} compact />
               ))}
@@ -153,7 +153,7 @@ export default async function HomePage() {
           {recentListings.length === 0 ? (
             <p className="text-gray-500">Nu există anunțuri momentan.</p>
           ) : (
-            <div className="grid md:grid-cols-3 gap-6">
+            <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
               {recentListings.slice(0, 3).map((listing) => (
                 <ListingCard key={listing.id} listing={listing} compact />
               ))}

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { conversations, messages } from "@/lib/db/schema";
 import { eq, or, and, ne, isNull } from "drizzle-orm";
+import MobileMenu from "./MobileMenu";
 
 async function getUnreadCount(userId: string): Promise<number> {
   try {
@@ -38,8 +39,16 @@ export async function Navbar() {
   const isStaff = role === "admin" || role === "moderator" || role === "staff";
   const unreadCount = session?.user?.id ? await getUnreadCount(session.user.id) : 0;
 
+  const navItems = [
+    { href: "/stiri", label: "Știri" },
+    { href: "/evenimente", label: "Evenimente" },
+    { href: "/experiente", label: "Experiențe" },
+    { href: "/localuri", label: "Localuri" },
+    { href: "/anunturi", label: "Anunțuri" },
+  ];
+
   return (
-    <header className="bg-[#1a1a1a] text-white sticky top-0 z-50 shadow-md">
+    <header className="bg-[#1a1a1a] text-white sticky top-0 z-50 shadow-md relative">
       <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
         {/* Logo + wordmark */}
         <Link
@@ -61,13 +70,7 @@ export async function Navbar() {
 
         {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-1" aria-label="Navigare principală">
-          {[
-            { href: "/stiri", label: "Știri" },
-            { href: "/evenimente", label: "Evenimente" },
-            { href: "/experiente", label: "Experiențe" },
-            { href: "/localuri", label: "Localuri" },
-            { href: "/anunturi", label: "Anunțuri" },
-          ].map((item) => (
+          {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
@@ -79,6 +82,15 @@ export async function Navbar() {
         </nav>
 
         <div className="flex items-center gap-2">
+          {/* Mobile hamburger */}
+          <MobileMenu
+            items={navItems}
+            isStaff={isStaff}
+            role={role}
+            userName={session?.user?.name ?? undefined}
+            isLoggedIn={!!session}
+            unreadCount={unreadCount}
+          />
           {session ? (
             <>
               {/* Inbox with unread badge */}

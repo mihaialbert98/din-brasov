@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import { searchPlaces } from "@/lib/search";
 import PlaceCard from "@/components/ui/PlaceCard";
+import CategoryFilter from "@/components/ui/CategoryFilter";
 import { db } from "@/lib/db";
 import { places } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Localuri",
@@ -31,27 +31,12 @@ export default async function LocaluriPage({
       <p className="text-gray-500 mb-6">Restaurante, cafenele, magazine și alte localuri recomandate</p>
 
       {categories.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-8">
-          <Link
-            href="/localuri"
-            className={`text-sm px-4 py-1.5 rounded-full border transition-colors ${
-              !params.categorie ? "bg-[#c84b1e] text-white border-[#c84b1e]" : "border-gray-300 text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            Toate
-          </Link>
-          {categories.map((cat) => (
-            <Link
-              key={cat}
-              href={`/localuri?categorie=${encodeURIComponent(cat)}`}
-              className={`text-sm px-4 py-1.5 rounded-full border transition-colors ${
-                params.categorie === cat ? "bg-[#c84b1e] text-white border-[#c84b1e]" : "border-gray-300 text-gray-600 hover:bg-gray-50"
-              }`}
-            >
-              {cat}
-            </Link>
-          ))}
-        </div>
+        <CategoryFilter
+          categories={categories}
+          active={params.categorie}
+          basePath="/localuri"
+          activeColor="terracotta"
+        />
       )}
 
       {items.length === 0 ? (
@@ -59,7 +44,7 @@ export default async function LocaluriPage({
           {params.categorie ? `Nu există localuri în categoria „${params.categorie}".` : "Nu există localuri adăugate."}
         </p>
       ) : (
-        <div className="grid md:grid-cols-3 gap-6">
+        <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
           {items.map((place) => (
             <PlaceCard key={place.id} place={place} />
           ))}

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { experiences } from "@/lib/db/schema";
 import { eq, desc } from "drizzle-orm";
 import Link from "next/link";
+import CategoryFilter from "@/components/ui/CategoryFilter";
 
 export const metadata: Metadata = {
   title: "Experiențe în Brașov",
@@ -43,33 +44,18 @@ export default async function ExperientePage({
       <p className="text-gray-500 mb-8">Activități și aventuri pe care le poți trăi în Brașov</p>
 
       {categories.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-8">
-          <Link
-            href="/experiente"
-            className={`text-sm px-4 py-1.5 rounded-full border transition-colors ${
-              !params.categorie ? "bg-[#c84b1e] text-white border-[#c84b1e]" : "border-gray-300 text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            Toate
-          </Link>
-          {categories.map((cat) => (
-            <Link
-              key={cat}
-              href={`/experiente?categorie=${encodeURIComponent(cat)}`}
-              className={`text-sm px-4 py-1.5 rounded-full border transition-colors ${
-                params.categorie === cat ? "bg-[#c84b1e] text-white border-[#c84b1e]" : "border-gray-300 text-gray-600 hover:bg-gray-50"
-              }`}
-            >
-              {cat}
-            </Link>
-          ))}
-        </div>
+        <CategoryFilter
+          categories={categories}
+          active={params.categorie}
+          basePath="/experiente"
+          activeColor="terracotta"
+        />
       )}
 
       {filtered.length === 0 ? (
         <p className="text-gray-500 text-center py-20">Nu există experiențe disponibile momentan.</p>
       ) : (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtered.map((exp) => (
             <Link
               key={exp.id}

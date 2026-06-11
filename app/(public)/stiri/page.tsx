@@ -31,7 +31,7 @@ export default async function StiriPage({
       {items.length === 0 ? (
         <p className="text-gray-500 text-center py-20">Nu am găsit știri.</p>
       ) : (
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid sm:grid-cols-2 gap-6">
           {items.map((item) => (
             <NewsCard key={item.id} item={item} />
           ))}
