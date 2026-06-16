@@ -22,6 +22,10 @@ const credentialsSchema = z.object({
   password: z.string().min(8),
 });
 
+// Google sign-in is optional — only enabled when both creds are configured.
+export const googleAuthEnabled =
+  !!process.env.AUTH_GOOGLE_ID && !!process.env.AUTH_GOOGLE_SECRET;
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: DrizzleAdapter(makeAuthDb(), {
     usersTable: users,
@@ -35,10 +39,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     error: "/intra",
   },
   providers: [
-    Google({
-      clientId: process.env.AUTH_GOOGLE_ID!,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET!,
-    }),
+    ...(googleAuthEnabled
+      ? [
+          Google({
+            clientId: process.env.AUTH_GOOGLE_ID!,
+            clientSecret: process.env.AUTH_GOOGLE_SECRET!,
+          }),
+        ]
+      : []),
     Credentials({
       async authorize(credentials) {
         const parsed = credentialsSchema.safeParse(credentials);

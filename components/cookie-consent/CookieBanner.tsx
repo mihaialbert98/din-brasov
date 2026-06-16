@@ -144,7 +144,7 @@ export function CookieBanner() {
         </div>
 
         <p className="text-gray-500 text-xs mt-3">
-          Operatorul date: Din Brașov SRL · DPO: dpo@dinbrasov.ro ·{" "}
+          Operatorul date: Din Brașov SRL · DPO: dpo@dinbrasov.com ·{" "}
           <a href="https://www.dataprotection.ro" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-300">
             ANSPDCP
           </a>

@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { listings, users, payments } from "@/lib/db/schema";
 import { slugifyWithDate } from "@/lib/slugify";
 import { startNetopiaPayment } from "@/lib/netopia";
+import { PAYMENTS_ENABLED } from "@/lib/payments";
 import { eq } from "drizzle-orm";
 
 const FREE_LISTING_QUOTA = 2;
@@ -49,6 +50,13 @@ export async function POST(req: Request) {
   }
 
   const needsPayment = user.freeListingsUsed >= FREE_LISTING_QUOTA;
+
+  if (needsPayment && !PAYMENTS_ENABLED) {
+    return NextResponse.json(
+      { error: "Ai atins limita de 2 anunțuri. Plata pentru anunțuri suplimentare va fi disponibilă în curând." },
+      { status: 403 }
+    );
+  }
 
   if (needsPayment) {
     // Store the pending listing data in a payment record and redirect to Netopia
