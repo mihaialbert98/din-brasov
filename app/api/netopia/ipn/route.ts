@@ -3,12 +3,34 @@
 // Must respond with { errorCode: 0 } on success.
 
 import { NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { db } from "@/lib/db";
 import { payments, listings, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { slugifyWithDate } from "@/lib/slugify";
 
+// Expected prices (in minor units — RON * 100) per product. A confirmed IPN must
+// match the price for its type, so a forged/replayed confirm can't grant a
+// mismatched or unpaid product.
+const BOOST_PRICES_MINOR: Record<number, number> = { 7: 900, 14: 1500 };
+const LISTING_CREATION_MINOR = 900;
+
+function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
+}
+
 export async function POST(req: Request) {
+  // IPN authenticity: the notify URL we registered with Netopia carries a secret.
+  // Reject any callback that doesn't present it (blocks forged IPNs).
+  const ipnSecret = process.env.NETOPIA_IPN_SECRET ?? process.env.CRON_SECRET ?? "";
+  const presentedKey = new URL(req.url).searchParams.get("key") ?? "";
+  if (!ipnSecret || !safeEqual(presentedKey, ipnSecret)) {
+    return NextResponse.json({ errorCode: 1 }, { status: 401 });
+  }
+
   let body: string;
   try {
     body = await req.text();
@@ -58,6 +80,22 @@ export async function POST(req: Request) {
   }
 
   if (!isConfirmed) {
+    await db
+      .update(payments)
+      .set({ status: "failed" })
+      .where(eq(payments.netopiaOrderId, orderId));
+    return NextResponse.json({ errorCode: 0 });
+  }
+
+  // Validate the stored amount matches the expected price for this product type.
+  // (paymentRow.amount is what WE computed server-side at checkout, in minor units.)
+  const expectedMinor =
+    paymentRow.type === "boost"
+      ? BOOST_PRICES_MINOR[paymentRow.boostDays ?? 7]
+      : LISTING_CREATION_MINOR;
+
+  if (!expectedMinor || paymentRow.amount !== expectedMinor) {
+    console.error("IPN amount mismatch:", { orderId, got: paymentRow.amount, expected: expectedMinor });
     await db
       .update(payments)
       .set({ status: "failed" })

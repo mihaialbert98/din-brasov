@@ -19,6 +19,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     { href: "/admin/anunturi", label: "Anunțuri" },
     { href: "/admin/anunturi/nou-asistat", label: "Anunț Asistat" },
     { href: "/admin/suport", label: "Suport" },
+    { href: "/admin/newsletter", label: "Newsletter" },
     { href: "/admin/utilizatori", label: "Utilizatori" },
   ];
 
@@ -31,6 +32,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     { href: "/admin/anunturi", label: "Anunțuri" },
     { href: "/admin/anunturi/nou-asistat", label: "Anunț Asistat" },
     { href: "/admin/suport", label: "Suport" },
+    { href: "/admin/newsletter", label: "Newsletter" },
     { href: "/admin/utilizatori", label: "Utilizatori" },
   ];
 

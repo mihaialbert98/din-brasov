@@ -1,17 +1,18 @@
 import { db } from "@/lib/db";
-import { newsItems, listings, events, places, users } from "@/lib/db/schema";
+import { newsItems, listings, events, places, users, newsletterSubscribers } from "@/lib/db/schema";
 import { eq, count } from "drizzle-orm";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Admin Dashboard" };
 
 export default async function AdminPage() {
-  const [newsCount, listingsCount, eventsCount, placesCount, usersCount] = await Promise.all([
+  const [newsCount, listingsCount, eventsCount, placesCount, usersCount, subscribersCount] = await Promise.all([
     db.select({ c: count() }).from(newsItems).where(eq(newsItems.status, "draft")),
     db.select({ c: count() }).from(listings).where(eq(listings.status, "active")),
     db.select({ c: count() }).from(events).where(eq(events.status, "draft")),
     db.select({ c: count() }).from(places).where(eq(places.status, "draft")),
     db.select({ c: count() }).from(users),
+    db.select({ c: count() }).from(newsletterSubscribers).where(eq(newsletterSubscribers.status, "active")),
   ]);
 
   const cards = [
@@ -20,6 +21,7 @@ export default async function AdminPage() {
     { label: "Evenimente în așteptare", value: eventsCount[0]?.c ?? 0, href: "/admin/evenimente", color: "bg-purple-50 text-purple-700" },
     { label: "Localuri în așteptare", value: placesCount[0]?.c ?? 0, href: "/admin/localuri", color: "bg-green-50 text-green-700" },
     { label: "Utilizatori totali", value: usersCount[0]?.c ?? 0, href: "/admin/utilizatori", color: "bg-gray-50 text-gray-700" },
+    { label: "Abonați newsletter", value: subscribersCount[0]?.c ?? 0, href: "/admin/newsletter", color: "bg-pink-50 text-pink-700" },
   ];
 
   return (

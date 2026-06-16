@@ -32,6 +32,9 @@ export default function ContNouPage() {
         name: form.get("name"),
         email: form.get("email"),
         password,
+        wantsNews: form.get("wantsNews") === "on",
+        wantsEvents: form.get("wantsEvents") === "on",
+        wantsPlaces: form.get("wantsPlaces") === "on",
       }),
     });
 
@@ -101,6 +104,22 @@ export default function ContNouPage() {
             className="border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:border-[#c84b1e] focus:ring-1 focus:ring-[#c84b1e]"
           />
         </div>
+
+        <fieldset className="border-t border-gray-100 pt-4">
+          <legend className="font-medium text-gray-700 mb-2 text-sm">Vreau să primesc pe email (opțional):</legend>
+          <div className="flex flex-col gap-2">
+            {[
+              { name: "wantsNews", label: "Știri" },
+              { name: "wantsEvents", label: "Evenimente" },
+              { name: "wantsPlaces", label: "Localuri noi" },
+            ].map((c) => (
+              <label key={c.name} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                <input type="checkbox" name={c.name} className="w-4 h-4 accent-[#c84b1e]" />
+                {c.label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
 
         <p className="text-xs text-gray-500">
           Prin înregistrare, ești de acord cu{" "}

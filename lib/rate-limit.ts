@@ -1,6 +1,6 @@
 import { createHash } from "crypto";
 import { db } from "@/lib/db";
-import { phoneReveals, messages } from "@/lib/db/schema";
+import { phoneReveals, messages, newsletterSubscribers } from "@/lib/db/schema";
 import { eq, and, gt, count } from "drizzle-orm";
 
 export function hashIp(ip: string): string {
@@ -56,6 +56,19 @@ export async function checkMessageLimit(
     };
   }
   return { allowed: true };
+}
+
+/**
+ * Max 5 newsletter subscribe attempts per IP per hour.
+ * Prevents email-bombing arbitrary addresses via the verification email.
+ */
+export async function checkNewsletterSubscribeLimit(ipHash: string): Promise<boolean> {
+  const since = new Date(Date.now() - 60 * 60 * 1000);
+  const [row] = await db
+    .select({ c: count() })
+    .from(newsletterSubscribers)
+    .where(and(eq(newsletterSubscribers.ipHash, ipHash), gt(newsletterSubscribers.consentGivenAt, since)));
+  return (row?.c ?? 0) < 5;
 }
 
 /** URL detection — scam messages almost always contain links */
