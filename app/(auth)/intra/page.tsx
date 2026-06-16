@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Metadata } from "next";
 
+const googleEnabled = process.env.NEXT_PUBLIC_GOOGLE_AUTH_ENABLED === "true";
+
 export default function IntraPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -82,13 +84,15 @@ export default function IntraPage() {
           {loading ? "Se procesează..." : "Intră în cont"}
         </button>
 
-        <button
-          type="button"
-          onClick={() => signIn("google", { callbackUrl: "/" })}
-          className="w-full border border-gray-300 text-gray-700 font-medium py-3 rounded-lg hover:bg-gray-50 transition-colors"
-        >
-          Continuă cu Google
-        </button>
+        {googleEnabled && (
+          <button
+            type="button"
+            onClick={() => signIn("google", { callbackUrl: "/" })}
+            className="w-full border border-gray-300 text-gray-700 font-medium py-3 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Continuă cu Google
+          </button>
+        )}
       </form>
 
       <p className="text-center text-gray-600 mt-6">

@@ -1,6 +1,6 @@
 import { Resend } from "resend";
 
-const FROM = "Din Brașov <noreply@dinbrasov.ro>";
+const FROM = "Din Brașov <noreply@dinbrasov.com>";
 
 function getResend() {
   if (!process.env.RESEND_API_KEY) return null;
@@ -66,6 +66,6 @@ export async function sendAccountDeletionConfirmationEmail(to: string) {
     from: FROM,
     to,
     subject: "Cerere de ștergere cont înregistrată",
-    html: `<p>Cererea ta de ștergere a contului a fost înregistrată. Contul tău va fi șters definitiv în 30 de zile.</p><p>Dacă te-ai răzgândit, contactează-ne la contact@dinbrasov.ro.</p>`,
+    html: `<p>Cererea ta de ștergere a contului a fost înregistrată. Contul tău va fi șters definitiv în 30 de zile.</p><p>Dacă te-ai răzgândit, contactează-ne la contact@dinbrasov.com.</p>`,
   });
 }
