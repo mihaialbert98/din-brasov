@@ -14,16 +14,25 @@ const CONDITIONS = [
 const FREE_QUOTA = 2;
 const LISTING_PRICE_RON = 9;
 
-export function NouAnuntForm({ freeListingsUsed }: { freeListingsUsed: number }) {
+export function NouAnuntForm({
+  freeListingsUsed,
+  paymentsEnabled,
+}: {
+  freeListingsUsed: number;
+  paymentsEnabled: boolean;
+}) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const freeRemaining = Math.max(0, FREE_QUOTA - freeListingsUsed);
   const isFree = freeRemaining > 0;
+  // Quota reached and payments aren't live yet → block the 3rd listing.
+  const blocked = !isFree && !paymentsEnabled;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (blocked) return; // server also enforces this
     setError(null);
     setLoading(true);
 
@@ -74,14 +83,21 @@ export function NouAnuntForm({ freeListingsUsed }: { freeListingsUsed: number })
       <div className={`rounded-xl px-4 py-3 mb-6 text-sm flex items-center gap-3 ${
         isFree
           ? "bg-green-50 border border-green-200 text-green-800"
+          : blocked
+          ? "bg-red-50 border border-red-200 text-red-800"
           : "bg-amber-50 border border-amber-200 text-amber-800"
       }`}>
-        <span className="text-lg">{isFree ? "🎉" : "💳"}</span>
+        <span className="text-lg">{isFree ? "🎉" : blocked ? "🔒" : "💳"}</span>
         <div>
           {isFree ? (
             <span>
               Ai <strong>{freeRemaining}</strong> {freeRemaining === 1 ? "anunț gratuit rămas" : "anunțuri gratuite rămase"}.
               {" "}Primele {FREE_QUOTA} anunțuri sunt gratuite.
+            </span>
+          ) : blocked ? (
+            <span>
+              Ai atins limita de <strong>{FREE_QUOTA} anunțuri</strong>. Plata pentru anunțuri
+              suplimentare va fi disponibilă în curând.
             </span>
           ) : (
             <span>
@@ -190,10 +206,12 @@ export function NouAnuntForm({ freeListingsUsed }: { freeListingsUsed: number })
           </Link>
           <button
             type="submit"
-            disabled={loading}
-            className="flex-1 bg-[#c84b1e] text-white font-semibold py-3 rounded-lg hover:bg-[#d9603a] transition-colors disabled:opacity-60"
+            disabled={loading || blocked}
+            className="flex-1 bg-[#c84b1e] text-white font-semibold py-3 rounded-lg hover:bg-[#d9603a] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {loading
+            {blocked
+              ? "Limită atinsă"
+              : loading
               ? (isFree ? "Se publică..." : "Redirecționare la plată...")
               : (isFree ? "Publică anunțul" : `Plătește ${LISTING_PRICE_RON} RON și publică`)}
           </button>

@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { NouAnuntForm } from "./NouAnuntForm";
+import { PAYMENTS_ENABLED } from "@/lib/payments";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Adaugă anunț" };
@@ -18,5 +19,5 @@ export default async function NouAnuntPage() {
     .where(eq(users.id, session.user.id))
     .limit(1);
 
-  return <NouAnuntForm freeListingsUsed={user?.freeListingsUsed ?? 0} />;
+  return <NouAnuntForm freeListingsUsed={user?.freeListingsUsed ?? 0} paymentsEnabled={PAYMENTS_ENABLED} />;
 }

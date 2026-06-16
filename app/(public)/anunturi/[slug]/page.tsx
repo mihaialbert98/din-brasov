@@ -9,6 +9,7 @@ import { ReportButton } from "@/components/marketplace/ReportButton";
 import FavouriteButton from "@/components/anunturi/FavouriteButton";
 import { ReportUserButton } from "@/components/anunturi/ReportUserButton";
 import { BoostButton } from "@/components/marketplace/BoostButton";
+import { PAYMENTS_ENABLED } from "@/lib/payments";
 import { auth } from "@/lib/auth";
 import type { Metadata } from "next";
 
@@ -158,6 +159,7 @@ export default async function AnuntPage({ params, searchParams }: Props) {
             listingId={listing.id}
             isBoosted={listing.isBoosted ?? false}
             boostedUntil={listing.boostedUntil}
+            paymentsEnabled={PAYMENTS_ENABLED}
           />
         </div>
       )}

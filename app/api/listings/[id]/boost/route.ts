@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { listings, users, payments } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { startNetopiaPayment } from "@/lib/netopia";
+import { PAYMENTS_ENABLED } from "@/lib/payments";
 
 // Prices in RON per boost duration
 const BOOST_PRICES: Record<number, number> = { 7: 9, 14: 15 };
@@ -20,6 +21,13 @@ export async function POST(
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Neautorizat." }, { status: 401 });
+  }
+
+  if (!PAYMENTS_ENABLED) {
+    return NextResponse.json(
+      { error: "Promovarea anunțurilor va fi disponibilă în curând." },
+      { status: 403 }
+    );
   }
 
   const { id } = await params;

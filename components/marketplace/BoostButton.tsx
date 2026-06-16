@@ -6,9 +6,10 @@ interface Props {
   listingId: string;
   isBoosted: boolean;
   boostedUntil?: Date | null;
+  paymentsEnabled: boolean;
 }
 
-export function BoostButton({ listingId, isBoosted, boostedUntil }: Props) {
+export function BoostButton({ listingId, isBoosted, boostedUntil, paymentsEnabled }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [days, setDays] = useState<7 | 14>(7);
@@ -54,6 +55,15 @@ export function BoostButton({ listingId, isBoosted, boostedUntil }: Props) {
           ✓ Anunț promovat până pe{" "}
           {boostedActiveUntil.toLocaleDateString("ro-RO", { day: "numeric", month: "long", year: "numeric" })}
         </p>
+      ) : !paymentsEnabled ? (
+        <>
+          <p className="text-xs text-amber-700">
+            Anunțul tău apare în fruntea categoriei și pe pagina principală.
+          </p>
+          <p className="text-sm text-amber-800 bg-white border border-amber-200 rounded-lg px-3 py-2">
+            🔒 Promovarea va fi disponibilă în curând.
+          </p>
+        </>
       ) : (
         <>
           <p className="text-xs text-amber-700">
