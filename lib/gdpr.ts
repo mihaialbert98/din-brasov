@@ -20,7 +20,7 @@
 
 import { eq, and, lt, lte, isNotNull, isNull, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { users, listings, sessions, verificationTokens } from "@/lib/db/schema";
+import { users, listings, sessions, verificationTokens, newsletterSubscribers } from "@/lib/db/schema";
 import { UTApi } from "uploadthing/server";
 
 // ─── Retention periods ────────────────────────────────────────────────────────
@@ -78,6 +78,12 @@ export async function requestUserDeletion(userId: string): Promise<void> {
   await db
     .delete(verificationTokens)
     .where(eq(verificationTokens.identifier, userId));
+
+  // 5. Unsubscribe from the newsletter (withdrawal of consent on erasure)
+  await db
+    .update(newsletterSubscribers)
+    .set({ status: "unsubscribed", unsubscribedAt: now })
+    .where(eq(newsletterSubscribers.userId, userId));
 }
 
 /**

@@ -343,6 +343,28 @@ export const cookieConsentLog = pgTable("cookie_consent_log", {
   expiresAt: timestamp("expires_at", { mode: "date" }).notNull(), // 13 months from consent
 });
 
+// ─── Newsletter subscribers ───────────────────────────────────────────────────
+// GDPR-compliant: boxes default to false (consent = affirmative action, CJEU Planet49).
+// Anonymous subscribers go through double opt-in (status: pending → active on verify).
+// Account-based subscribers are pre-verified by their account.
+
+export const newsletterSubscribers = pgTable("newsletter_subscribers", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  email: text("email").notNull().unique(),
+  userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
+  wantsNews: boolean("wants_news").notNull().default(false),
+  wantsEvents: boolean("wants_events").notNull().default(false),
+  wantsPlaces: boolean("wants_places").notNull().default(false),
+  status: text("status").notNull().default("pending"), // pending | active | unsubscribed
+  verificationToken: text("verification_token"), // also serves as the unsubscribe token
+  verifiedAt: timestamp("verified_at", { mode: "date" }),
+  unsubscribedAt: timestamp("unsubscribed_at", { mode: "date" }),
+  consentGivenAt: timestamp("consent_given_at", { mode: "date" }).notNull().defaultNow(),
+  ipHash: text("ip_hash"), // hashed IP — data minimisation (Art. 5(1)(c))
+  bannerVersion: text("banner_version"),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
 // ─── Listing favourites ───────────────────────────────────────────────────────
 
 export const listingFavourites = pgTable(
@@ -496,6 +518,7 @@ export type AdminAuditLog = typeof adminAuditLog.$inferSelect;
 export type SyncJob = typeof syncJobs.$inferSelect;
 export type AssistedConsentLog = typeof assistedConsentLog.$inferSelect;
 export type CookieConsentLog = typeof cookieConsentLog.$inferSelect;
+export type NewsletterSubscriber = typeof newsletterSubscribers.$inferSelect;
 export type Conversation = typeof conversations.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export type PhoneReveal = typeof phoneReveals.$inferSelect;

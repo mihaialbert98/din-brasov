@@ -24,7 +24,11 @@ export async function startNetopiaPayment(opts: StartPaymentOptions): Promise<{ 
   const [firstName, ...rest] = (opts.userName || "Utilizator Anonim").split(" ");
   const lastName = rest.join(" ") || "—";
 
-  const notifyUrl = `${baseUrl}/api/netopia/ipn`;
+  // IPN authenticity: the notify URL carries a shared secret only our server knows.
+  // Netopia calls this exact URL back, so a forged IPN to /api/netopia/ipn without
+  // the correct ?key=... is rejected. (Defense-in-depth alongside amount validation.)
+  const ipnSecret = process.env.NETOPIA_IPN_SECRET ?? process.env.CRON_SECRET ?? "";
+  const notifyUrl = `${baseUrl}/api/netopia/ipn${ipnSecret ? `?key=${ipnSecret}` : ""}`;
   const returnUrl = opts.returnUrl ?? `${baseUrl}/api/netopia/return`;
 
   const netopia = new Netopia({
