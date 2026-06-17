@@ -7,6 +7,7 @@ import { formatDate } from "@/lib/utils";
 import type { Metadata } from "next";
 import NewsEditForm from "./NewsEditForm";
 import NewsDeleteButton from "@/components/admin/NewsDeleteButton";
+import { guessNewsCategory } from "@/lib/categorize-news";
 
 export const metadata: Metadata = { title: "Admin — Revizuire știre" };
 
@@ -83,7 +84,9 @@ export default async function NewsDetailPage({ params }: Props) {
             title: item.title,
             excerpt: item.excerpt,
             sourceName: item.sourceName,
-            category: item.category,
+            // Pre-fill a guessed category when none was stored, so reviewing a
+            // scraped draft yields a real category by default (never NULL).
+            category: item.category ?? guessNewsCategory(item.title, item.excerpt, item.sourceName),
             imageUrl: item.imageUrl,
           }}
         />
