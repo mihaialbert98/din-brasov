@@ -1,5 +1,6 @@
 import { neon } from "@neondatabase/serverless";
 import type { ScrapedItem } from "./sources/base-scraper.js";
+import { guessNewsCategory } from "./categorize.js";
 
 function getSql() {
   return neon(process.env.DATABASE_URL!);
@@ -24,7 +25,7 @@ export async function insertNewsItems(items: ScrapedItem[]): Promise<number> {
           INSERT INTO news_items
             (id, title, excerpt, source_url, source_name, author, published_at, image_url, category, slug, status, scraped_at, created_at, updated_at)
           VALUES
-            (gen_random_uuid(), ${item.title}, ${item.excerpt.slice(0, 300)}, ${item.sourceUrl}, ${item.sourceName}, ${item.author ?? null}, ${item.publishedAt ?? null}, ${item.imageUrl ?? null}, ${item.category ?? null}, ${slug}, 'draft', NOW(), NOW(), NOW())
+            (gen_random_uuid(), ${item.title}, ${item.excerpt.slice(0, 300)}, ${item.sourceUrl}, ${item.sourceName}, ${item.author ?? null}, ${item.publishedAt ?? null}, ${item.imageUrl ?? null}, ${item.category ?? guessNewsCategory(item.title, item.excerpt, item.sourceName)}, ${slug}, 'draft', NOW(), NOW(), NOW())
           ON CONFLICT (source_url) DO NOTHING
           RETURNING id
         `;
