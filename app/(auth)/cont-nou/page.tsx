@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { signIn } from "next-auth/react";
 
 export default function ContNouPage() {
   const router = useRouter();
@@ -46,14 +45,8 @@ export default function ContNouPage() {
       return;
     }
 
-    // Auto sign-in after registration
-    await signIn("credentials", {
-      email: form.get("email"),
-      password,
-      redirect: false,
-    });
-    router.push("/");
-    router.refresh();
+    // No auto sign-in — the account must be confirmed via the email link first.
+    router.push("/intra?needsConfirm=1");
   }
 
   return (

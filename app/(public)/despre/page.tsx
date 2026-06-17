@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SUPPORT_EMAIL, DPO_EMAIL } from "@/lib/contact";
 
 export const metadata: Metadata = {
   title: "Despre noi · GDPR · Cookies",
@@ -57,12 +58,12 @@ export default function DesprePage() {
             <p>
               Operatorul datelor cu caracter personal este <strong>Din Brașov</strong>, cu sediul
               în Brașov, România. Ne poți contacta la{" "}
-              <a href="mailto:contact@dinbrasov.com" className="text-[#c84b1e] hover:underline">
-                contact@dinbrasov.com
+              <a href={`mailto:${SUPPORT_EMAIL}`} className="text-[#c84b1e] hover:underline">
+                {SUPPORT_EMAIL}
               </a>{" "}
               sau la adresa de e-mail a responsabilului cu protecția datelor (DPO):{" "}
-              <a href="mailto:dpo@dinbrasov.com" className="text-[#c84b1e] hover:underline">
-                dpo@dinbrasov.com
+              <a href={`mailto:${DPO_EMAIL}`} className="text-[#c84b1e] hover:underline">
+                {DPO_EMAIL}
               </a>
               .
             </p>
@@ -171,8 +172,8 @@ export default function DesprePage() {
               Nu colectăm în mod intenționat date de la copii sub 16 ani fără consimțământ
               parental. Dacă descoperi că un minor a creat un cont fără acordul părintelui,
               te rugăm să ne contactezi la{" "}
-              <a href="mailto:dpo@dinbrasov.com" className="text-[#c84b1e] hover:underline">
-                dpo@dinbrasov.com
+              <a href={`mailto:${DPO_EMAIL}`} className="text-[#c84b1e] hover:underline">
+                {DPO_EMAIL}
               </a>
               .
             </p>
@@ -224,8 +225,8 @@ export default function DesprePage() {
             <p className="mt-2">
               Dacă ești jurnalist sau persoană fizică și dorești eliminarea datelor tale din
               platformă, contactează-ne la{" "}
-              <a href="mailto:dpo@dinbrasov.com" className="text-[#c84b1e] hover:underline">
-                dpo@dinbrasov.com
+              <a href={`mailto:${DPO_EMAIL}`} className="text-[#c84b1e] hover:underline">
+                {DPO_EMAIL}
               </a>
               .
             </p>
@@ -304,8 +305,8 @@ export default function DesprePage() {
                 pagina de ștergere cont
               </a>{" "}
               sau contactează-ne la{" "}
-              <a href="mailto:dpo@dinbrasov.com" className="text-[#c84b1e] hover:underline">
-                dpo@dinbrasov.com
+              <a href={`mailto:${DPO_EMAIL}`} className="text-[#c84b1e] hover:underline">
+                {DPO_EMAIL}
               </a>
               . Nu îți vom solicita documente notariale sau copii de buletin — o cerere simplă
               prin email este suficientă (ANSPDCP interzice proceduri excesiv de împovărătoare).
@@ -432,14 +433,14 @@ export default function DesprePage() {
           </p>
           <p>
             <strong>Email general:</strong>{" "}
-            <a href="mailto:contact@dinbrasov.com" className="text-[#c84b1e] hover:underline">
-              contact@dinbrasov.com
+            <a href={`mailto:${SUPPORT_EMAIL}`} className="text-[#c84b1e] hover:underline">
+              {SUPPORT_EMAIL}
             </a>
           </p>
           <p>
             <strong>Responsabil protecția datelor (DPO):</strong>{" "}
-            <a href="mailto:dpo@dinbrasov.com" className="text-[#c84b1e] hover:underline">
-              dpo@dinbrasov.com
+            <a href={`mailto:${DPO_EMAIL}`} className="text-[#c84b1e] hover:underline">
+              {DPO_EMAIL}
             </a>
           </p>
           <p>

@@ -18,6 +18,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { DPO_EMAIL } from "@/lib/contact";
 
 export const CONSENT_KEY = "consent_v1";
 export const CONSENT_DATE_KEY = "consent_v1_date";
@@ -144,7 +145,7 @@ export function CookieBanner() {
         </div>
 
         <p className="text-gray-500 text-xs mt-3">
-          Operatorul date: Din Brașov SRL · DPO: dpo@dinbrasov.com ·{" "}
+          Operatorul date: Din Brașov SRL · DPO: {DPO_EMAIL} ·{" "}
           <a href="https://www.dataprotection.ro" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-300">
             ANSPDCP
           </a>
