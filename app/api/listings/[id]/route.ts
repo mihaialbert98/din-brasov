@@ -14,7 +14,6 @@ const patchSchema = z.object({
   condition: z.string().optional(),
   location: z.string().max(200).nullable().optional(),
   contactPhone: z.string().min(6).max(20).nullable().optional(),
-  contactEmail: z.string().email().nullable().optional().or(z.literal("")),
 });
 
 export async function GET(
@@ -40,7 +39,6 @@ export async function GET(
       condition: listings.condition,
       location: listings.location,
       contactPhone: listings.contactPhone,
-      contactEmail: listings.contactEmail,
       status: listings.status,
       sellerId: listings.sellerId,
     })

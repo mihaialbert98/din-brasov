@@ -21,7 +21,7 @@ const schema = z.object({
   condition: z.string().default("used"),
   location: z.string().max(200).optional(),
   contactPhone: z.string().min(6).max(20).optional(),
-  contactEmail: z.string().email().optional().or(z.literal("")),
+  images: z.array(z.string().url()).max(8).optional(),
 });
 
 export async function POST(req: Request) {
@@ -115,7 +115,7 @@ export async function POST(req: Request) {
       condition: parsed.data.condition,
       location: parsed.data.location || null,
       contactPhone: parsed.data.contactPhone || null,
-      contactEmail: parsed.data.contactEmail || null,
+      imagesJson: parsed.data.images?.length ? JSON.stringify(parsed.data.images) : null,
       sellerId: userId,
       status: "active",
       expiresAt,

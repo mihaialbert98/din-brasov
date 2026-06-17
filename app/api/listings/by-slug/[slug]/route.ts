@@ -27,7 +27,6 @@ export async function GET(
       condition: listings.condition,
       location: listings.location,
       contactPhone: listings.contactPhone,
-      contactEmail: listings.contactEmail,
       status: listings.status,
       sellerId: listings.sellerId,
     })

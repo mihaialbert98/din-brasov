@@ -30,7 +30,6 @@ export default function EditeazaAnuntPage() {
   const [condition, setCondition] = useState("used");
   const [location, setLocation] = useState("");
   const [contactPhone, setContactPhone] = useState("");
-  const [contactEmail, setContactEmail] = useState("");
 
   useEffect(() => {
     // Fetch listing by slug first to get its id
@@ -48,7 +47,6 @@ export default function EditeazaAnuntPage() {
         setCondition(data.condition ?? "used");
         setLocation(data.location ?? "");
         setContactPhone(data.contactPhone ?? "");
-        setContactEmail(data.contactEmail ?? "");
         setLoading(false);
       })
       .catch(() => {
@@ -75,7 +73,6 @@ export default function EditeazaAnuntPage() {
         condition,
         location: location || null,
         contactPhone: contactPhone || null,
-        contactEmail: contactEmail || null,
       }),
     });
 
@@ -223,14 +220,6 @@ export default function EditeazaAnuntPage() {
           <label className="font-medium text-gray-700">Telefon de contact</label>
           <input
             type="tel" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} maxLength={20}
-            className="border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-900 bg-white focus:outline-none focus:border-[#c84b1e]"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="font-medium text-gray-700">Email de contact</label>
-          <input
-            type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)}
             className="border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-900 bg-white focus:outline-none focus:border-[#c84b1e]"
           />
         </div>

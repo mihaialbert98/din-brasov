@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { UploadButton } from "@/lib/uploadthing-client";
+import { compressFiles } from "@/lib/image-compress";
 
 const CATEGORIES = ["Actualitate", "Sport", "Cultură", "Business", "Sănătate", "Altele"] as const;
 
@@ -115,6 +116,7 @@ export default function NewsEditForm({ id, initial }: Props) {
         )}
         <UploadButton
           endpoint="newsImage"
+          onBeforeUploadBegin={compressFiles}
           onClientUploadComplete={(files) => {
             if (files[0]) setImageUrl(files[0].url);
           }}

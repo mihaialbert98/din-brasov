@@ -85,10 +85,6 @@ export default async function AdminListingDetailPage({ params }: Props) {
               <dt className="text-gray-500">Telefon contact</dt>
               <dd className="font-mono font-semibold">{listing.contactPhone ?? "—"}</dd>
             </div>
-            <div className="flex justify-between">
-              <dt className="text-gray-500">Email contact</dt>
-              <dd className="text-xs">{listing.contactEmail ?? "—"}</dd>
-            </div>
             {listing.isAssisted && (
               <div className="flex justify-between">
                 <dt className="text-gray-500">Tip</dt>
