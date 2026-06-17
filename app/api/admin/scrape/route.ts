@@ -72,7 +72,8 @@ export async function POST(req: Request) {
       .set({ status: "done", finishedAt: new Date(), metaJson: JSON.stringify(results) })
       .where(eq(syncJobs.id, job.id));
 
-    return NextResponse.json({ ok: true, jobId: job.id, total, results });
+    // startedAt lets the admin list mark drafts scraped during this run as "Nou".
+    return NextResponse.json({ ok: true, jobId: job.id, total, results, startedAt: job.startedAt });
   } catch (err) {
     const aborted = err instanceof Error && err.name === "AbortError";
     await db
