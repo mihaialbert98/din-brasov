@@ -5,6 +5,8 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import ScrapePanel from "@/components/admin/ScrapePanel";
 import PublishedNewsTable from "@/components/admin/PublishedNewsTable";
+import DraftDeleteButton from "@/components/admin/DraftDeleteButton";
+import DeleteAllPendingButton from "@/components/admin/DeleteAllPendingButton";
 import Pagination from "@/components/ui/Pagination";
 
 export const metadata: Metadata = { title: "Admin — Știri" };
@@ -77,9 +79,12 @@ export default async function AdminStiriPage({ searchParams }: Props) {
 
       {/* Draft queue */}
       <section>
-        <h2 className="text-lg font-semibold text-gray-700 mb-3">
-          În așteptare ({draftTotal})
-        </h2>
+        <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+          <h2 className="text-lg font-semibold text-gray-700">
+            În așteptare ({draftTotal})
+          </h2>
+          <DeleteAllPendingButton count={draftTotal} />
+        </div>
         {draftTotal === 0 ? (
           <p className="text-gray-400 text-sm">Nu există știri de revizuit.</p>
         ) : (
@@ -98,10 +103,11 @@ export default async function AdminStiriPage({ searchParams }: Props) {
                     className="relative bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow flex flex-col overflow-hidden"
                   >
                     {isNew && (
-                      <span className="absolute top-2 right-2 z-10 bg-green-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                      <span className="absolute top-2 left-2 z-10 bg-green-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
                         Nou
                       </span>
                     )}
+                    <DraftDeleteButton id={item.id} title={item.title} />
                     {item.imageUrl && (
                       <img src={item.imageUrl} alt="" className="w-full h-32 object-cover" />
                     )}

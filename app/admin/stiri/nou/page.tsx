@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useUploadThing } from "@/lib/uploadthing-client";
+import { compressImage } from "@/lib/image-compress";
 
 const CATEGORIES = ["Actualitate", "Sport", "Cultură", "Business", "Sănătate", "Altele"];
 
@@ -34,16 +35,14 @@ export default function NouStirePage() {
       setError("Doar imagini JPG, PNG sau WebP sunt acceptate.");
       return;
     }
-    if (file.size > 4 * 1024 * 1024) {
-      setError("Imaginea nu poate depăși 4MB.");
-      return;
-    }
+    // No size cap — the image is compressed before upload.
 
     setError(null);
     // Show local preview immediately
     setImagePreview(URL.createObjectURL(file));
-    // Upload to Uploadthing
-    await startUpload([file]);
+    // Compress, then upload to Uploadthing
+    const compressed = await compressImage(file);
+    await startUpload([compressed]);
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {

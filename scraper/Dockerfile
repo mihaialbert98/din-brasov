@@ -1,17 +1,13 @@
-FROM mcr.microsoft.com/playwright:v1.50.0-jammy
+FROM node:20-slim
 
 WORKDIR /app
 
-COPY package.json pnpm-lock.yaml* ./
-RUN npm install -g pnpm && pnpm install --ignore-scripts
-
-# Install Playwright browsers
-RUN npx playwright install chromium
+COPY package.json package-lock.json* ./
+RUN npm ci --ignore-scripts || npm install --ignore-scripts
 
 COPY . .
-RUN pnpm build
+RUN npm run build
 
-ENV PORT=4000
 EXPOSE 4000
 
 CMD ["node", "dist/index.js"]

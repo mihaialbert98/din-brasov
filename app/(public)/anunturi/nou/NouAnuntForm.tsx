@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import ListingImagesField from "@/components/marketplace/ListingImagesField";
 
 const CATEGORIES = ["Electronice", "Mobilă", "Haine", "Auto", "Imobiliare", "Sport", "Servicii", "Joburi", "Altele"];
 const CONDITIONS = [
@@ -24,6 +25,7 @@ export function NouAnuntForm({
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [images, setImages] = useState<string[]>([]);
 
   const freeRemaining = Math.max(0, FREE_QUOTA - freeListingsUsed);
   const isFree = freeRemaining > 0;
@@ -49,7 +51,7 @@ export function NouAnuntForm({
         condition: form.get("condition"),
         location: form.get("location") || undefined,
         contactPhone: form.get("contactPhone") || undefined,
-        contactEmail: form.get("contactEmail") || undefined,
+        images: images.length > 0 ? images : undefined,
       }),
     });
 
@@ -174,6 +176,8 @@ export function NouAnuntForm({
           </div>
         </div>
 
+        <ListingImagesField images={images} onChange={setImages} />
+
         <div className="flex flex-col gap-1">
           <label htmlFor="contactPhone" className="font-medium text-gray-700">Telefon de contact</label>
           <input
@@ -181,16 +185,7 @@ export function NouAnuntForm({
             placeholder="ex: 0722 123 456"
             className="border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-900 bg-white focus:outline-none focus:border-[#c84b1e]"
           />
-          <p className="text-xs text-gray-400">Ascuns în pagina anunțului — vizibil doar utilizatorilor autentificați</p>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label htmlFor="contactEmail" className="font-medium text-gray-700">Email de contact</label>
-          <input
-            id="contactEmail" name="contactEmail" type="email"
-            placeholder="ex: adresa@email.ro"
-            className="border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-900 bg-white focus:outline-none focus:border-[#c84b1e]"
-          />
+          <p className="text-xs text-gray-400">Ascuns în pagina anunțului — vizibil doar utilizatorilor autentificați. Cumpărătorii te pot contacta și prin mesaje în aplicație.</p>
         </div>
 
         <p className="text-xs text-gray-400 border-t pt-4">

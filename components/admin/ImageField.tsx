@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useUploadThing } from "@/lib/uploadthing-client";
+import { compressImage } from "@/lib/image-compress";
 
 type Endpoint = "eventImage" | "newsImage" | "listingImage";
 
@@ -34,12 +35,10 @@ export default function ImageField({ endpoint, value, onChange, onError }: Props
       onError("Doar JPG, PNG sau WebP sunt acceptate.");
       return;
     }
-    if (file.size > 4 * 1024 * 1024) {
-      onError("Imaginea nu poate depăși 4MB.");
-      return;
-    }
+    // No size cap — the image is compressed before upload.
     setPreview(URL.createObjectURL(file));
-    await startUpload([file]);
+    const compressed = await compressImage(file);
+    await startUpload([compressed]);
   }
 
   function handleUrlCommit() {
@@ -97,7 +96,7 @@ export default function ImageField({ endpoint, value, onChange, onError }: Props
             ) : (
               <>
                 <p className="text-gray-500 text-sm mb-1">Apasă pentru a încărca o imagine</p>
-                <p className="text-xs text-gray-400">JPG, PNG, WebP · max 4MB</p>
+                <p className="text-xs text-gray-400">JPG, PNG, WebP · orice dimensiune</p>
               </>
             )}
             <input

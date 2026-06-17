@@ -21,7 +21,8 @@ export const users = pgTable("users", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   name: text("name"),
   email: text("email").notNull().unique(),
-  emailVerified: timestamp("email_verified", { mode: "date" }),
+  emailVerified: timestamp("email_verified", { mode: "date" }), // set on email confirmation (or by Google OAuth)
+  emailConfirmationToken: text("email_confirmation_token"), // single-use token for the confirmation link
   image: text("image"),
   password: text("password"),
   phone: text("phone"),

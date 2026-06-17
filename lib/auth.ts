@@ -65,6 +65,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const valid = await bcrypt.compare(password, user.password);
         if (!valid) return null;
 
+        // Block login until the account's email is confirmed (Google accounts
+        // are pre-verified by the OAuth flow, so they set emailVerified directly).
+        if (!user.emailVerified) {
+          throw new Error("Contul tău nu a fost confirmat. Verifică email-ul și apasă pe linkul de confirmare.");
+        }
+
         if (user.bannedUntil && user.bannedUntil > new Date()) {
           const until = user.bannedUntil.toLocaleDateString("ro-RO");
           throw new Error(`Contul tău este suspendat până la ${until}. Poți contesta prin Mesaje > Suport.`);

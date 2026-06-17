@@ -9,6 +9,7 @@ import { ReportButton } from "@/components/marketplace/ReportButton";
 import FavouriteButton from "@/components/anunturi/FavouriteButton";
 import { ReportUserButton } from "@/components/anunturi/ReportUserButton";
 import { BoostButton } from "@/components/marketplace/BoostButton";
+import ListingGallery from "@/components/marketplace/ListingGallery";
 import { PAYMENTS_ENABLED } from "@/lib/payments";
 import { auth } from "@/lib/auth";
 import type { Metadata } from "next";
@@ -72,20 +73,7 @@ export default async function AnuntPage({ params, searchParams }: Props) {
       )}
 
       {/* Image gallery */}
-      {images.length > 0 && (
-        <div className="mb-6 overflow-x-auto flex gap-3">
-          {images.map((src, i) => (
-            <img
-              key={i}
-              src={src}
-              alt={`${listing.title} - fotografie ${i + 1}`}
-              className={`rounded-xl object-cover ${
-                i === 0 ? "w-full max-h-96 flex-shrink-0" : "h-24 w-24 flex-shrink-0"
-              }`}
-            />
-          ))}
-        </div>
-      )}
+      <ListingGallery images={images} title={listing.title} />
 
       <div className="flex items-start gap-3 flex-wrap mb-4">
         {listing.isAssisted && (

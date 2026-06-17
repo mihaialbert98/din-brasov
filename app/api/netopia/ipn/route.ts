@@ -127,7 +127,7 @@ export async function POST(req: Request) {
           condition: data.condition ?? "used",
           location: data.location || null,
           contactPhone: data.contactPhone || null,
-          contactEmail: data.contactEmail || null,
+          imagesJson: Array.isArray(data.images) && data.images.length ? JSON.stringify(data.images) : null,
           sellerId: paymentRow.userId,
           status: "active",
           expiresAt,

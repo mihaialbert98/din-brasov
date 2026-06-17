@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { users, newsletterSubscribers } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { sendWelcomeEmail } from "@/lib/email";
+import { sendAccountConfirmationEmail } from "@/lib/email";
 import { slugify } from "@/lib/slugify";
 
 const schema = z.object({
@@ -39,12 +39,15 @@ export async function POST(req: Request) {
   }
 
   const hash = await bcrypt.hash(password, 12);
+  const confirmationToken = crypto.randomUUID();
   const [newUser] = await db.insert(users).values({
     name,
     email,
     password: hash,
     role: "user",
     gdprConsentAt: new Date(),
+    emailVerified: null, // confirmed via the email link before first login
+    emailConfirmationToken: confirmationToken,
   }).returning({ id: users.id });
 
   // Newsletter prefs chosen at sign-up are pre-verified (email proven via account).
@@ -62,7 +65,8 @@ export async function POST(req: Request) {
     }).catch(() => {}); // don't fail registration if newsletter insert fails
   }
 
-  await sendWelcomeEmail(email, name).catch(() => {});
+  // Send the confirmation email. The user must click the link before they can log in.
+  await sendAccountConfirmationEmail(email, name, confirmationToken).catch(() => {});
 
-  return NextResponse.json({ ok: true }, { status: 201 });
+  return NextResponse.json({ ok: true, needsConfirmation: true }, { status: 201 });
 }
