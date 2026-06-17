@@ -2,6 +2,7 @@
   "name": "din-brasov",
   "version": "0.3.0",
   "private": true,
+  "packageManager": "pnpm@9.15.0",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -52,5 +53,11 @@
     "tsx": "^4.22.4",
     "typescript": "^5",
     "vitest": "^4.1.8"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp"
+    ]
   }
 }
