@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: din-brasov-scraper
+    runtime: docker
+    rootDir: scraper
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: CRON_SECRET
+        sync: false
+      - key: DATABASE_URL
+        sync: false

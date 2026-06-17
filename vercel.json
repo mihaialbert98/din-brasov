@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/expire-listings",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/scrape-news",
+      "schedule": "0 6,12,18 * * *"
     }
   ]
 }
