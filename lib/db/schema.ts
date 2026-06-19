@@ -363,6 +363,26 @@ export const newsletterSubscribers = pgTable("newsletter_subscribers", {
   consentGivenAt: timestamp("consent_given_at", { mode: "date" }).notNull().defaultNow(),
   ipHash: text("ip_hash"), // hashed IP — data minimisation (Art. 5(1)(c))
   bannerVersion: text("banner_version"),
+  lastSentAt: timestamp("last_sent_at", { mode: "date" }), // last digest send — double-send guard
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+// ─── Newsletter campaigns ─────────────────────────────────────────────────────
+// Archive of one-off custom emails (business events, new-venue announcements) sent
+// to subscribers. Kept for accountability — who sent what, to whom, when.
+
+export const newsletterCampaigns = pgTable("newsletter_campaigns", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  subject: text("subject").notNull(),
+  heading: text("heading").notNull(),
+  bodyHtml: text("body_html").notNull(), // sanitised HTML body
+  imageUrl: text("image_url"),
+  ctaLabel: text("cta_label"),
+  ctaHref: text("cta_href"),
+  audience: text("audience").notNull(), // news | events | places | all
+  recipientCount: integer("recipient_count").notNull().default(0),
+  sentBy: text("sent_by").notNull().references(() => users.id),
+  sentAt: timestamp("sent_at", { mode: "date" }).notNull().defaultNow(),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });
 
@@ -520,6 +540,7 @@ export type SyncJob = typeof syncJobs.$inferSelect;
 export type AssistedConsentLog = typeof assistedConsentLog.$inferSelect;
 export type CookieConsentLog = typeof cookieConsentLog.$inferSelect;
 export type NewsletterSubscriber = typeof newsletterSubscribers.$inferSelect;
+export type NewsletterCampaign = typeof newsletterCampaigns.$inferSelect;
 export type Conversation = typeof conversations.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export type PhoneReveal = typeof phoneReveals.$inferSelect;

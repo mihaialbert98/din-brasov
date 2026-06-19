@@ -9,6 +9,13 @@ import type { Event } from "@/lib/db/schema";
 
 interface Props {
   items: Event[];
+  now: number; // server timestamp (ms) — for flagging past events consistently
+}
+
+/** An event is past once its end (or start, when no end) is before `now`. */
+function isPastEvent(ev: Event, now: number): boolean {
+  const end = ev.endsAt ?? ev.startsAt;
+  return end ? new Date(end).getTime() < now : false;
 }
 
 type ConfirmState =
@@ -16,7 +23,7 @@ type ConfirmState =
   | { type: "bulk"; ids: string[] }
   | null;
 
-export default function EventsTable({ items }: Props) {
+export default function EventsTable({ items, now }: Props) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirm, setConfirm] = useState<ConfirmState>(null);
@@ -107,8 +114,10 @@ export default function EventsTable({ items }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {items.map((ev) => (
-              <tr key={ev.id} className="hover:bg-gray-50">
+            {items.map((ev) => {
+              const past = isPastEvent(ev, now);
+              return (
+              <tr key={ev.id} className={`hover:bg-gray-50 ${past ? "bg-gray-50/60" : ""}`}>
                 <td className="p-3">
                   <input
                     type="checkbox"
@@ -118,9 +127,14 @@ export default function EventsTable({ items }: Props) {
                   />
                 </td>
                 <td className="p-3">
-                  <Link href={`/evenimente/${ev.slug}`} target="_blank" className="font-medium hover:underline text-gray-900">
+                  <Link href={`/evenimente/${ev.slug}`} target="_blank" className={`font-medium hover:underline ${past ? "text-gray-500" : "text-gray-900"}`}>
                     {ev.title}
                   </Link>
+                  {past && (
+                    <span className="ml-2 text-xs font-semibold bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full align-middle">
+                      Trecut
+                    </span>
+                  )}
                 </td>
                 <td className="p-3 text-gray-500 whitespace-nowrap">
                   {ev.startsAt ? formatDate(ev.startsAt, { day: "numeric", month: "short" }) : "—"}
@@ -144,7 +158,8 @@ export default function EventsTable({ items }: Props) {
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

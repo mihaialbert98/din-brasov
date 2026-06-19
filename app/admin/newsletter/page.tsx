@@ -4,6 +4,8 @@ import { newsletterSubscribers } from "@/lib/db/schema";
 import { eq, desc, count } from "drizzle-orm";
 import { formatDate } from "@/lib/utils";
 import Pagination from "@/components/ui/Pagination";
+import NewsletterSendPanel from "@/components/admin/NewsletterSendPanel";
+import NewsletterCampaignForm from "@/components/admin/NewsletterCampaignForm";
 
 export const metadata: Metadata = { title: "Newsletter — Admin" };
 
@@ -33,9 +35,14 @@ export default async function AdminNewsletterPage({
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Abonați newsletter</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Newsletter</h1>
         <p className="text-sm text-gray-500">{total} abonați activi</p>
       </div>
+
+      <NewsletterSendPanel />
+      <NewsletterCampaignForm />
+
+      <h2 className="text-lg font-semibold text-gray-700 mb-3">Abonați activi</h2>
 
       {rows.length === 0 ? (
         <p className="text-gray-500 py-12 text-center">Niciun abonat activ momentan.</p>

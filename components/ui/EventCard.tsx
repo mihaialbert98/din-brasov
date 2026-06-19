@@ -10,6 +10,8 @@ type Props = {
     isFree: boolean | null;
     price: string | null;
     currency: string | null;
+    imageUrl?: string | null;
+    category?: string | null;
   };
   compact?: boolean;
 };
@@ -26,6 +28,10 @@ function DateBadge({ startsAt, size = "md" }: { startsAt: Date | null; size?: "s
       <span className="text-xs uppercase leading-none mt-0.5">{month}</span>
     </div>
   );
+}
+
+function priceLabel(event: Props["event"]) {
+  return event.isFree ? "Intrare liberă" : event.price ? `${event.price} ${event.currency}` : "";
 }
 
 export default function EventCard({ event, compact = false }: Props) {
@@ -49,17 +55,36 @@ export default function EventCard({ event, compact = false }: Props) {
   return (
     <Link
       href={`/evenimente/${event.slug}`}
-      className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow p-5 flex gap-4"
+      className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col"
     >
-      <DateBadge startsAt={event.startsAt} />
-      <div className="flex-1 min-w-0">
+      {/* Cover image with the date badge overlaid (top-left). When there's no
+          image, fall back to a brand-coloured banner so cards stay uniform. */}
+      <div className="relative">
+        {event.imageUrl ? (
+          <img src={event.imageUrl} alt="" className="w-full h-44 object-cover" />
+        ) : (
+          <div className="w-full h-44 bg-[#1a4731]/10 flex items-center justify-center">
+            <span className="text-5xl opacity-40" aria-hidden>📅</span>
+          </div>
+        )}
+        <div className="absolute top-3 left-3 shadow-md rounded-lg overflow-hidden">
+          <DateBadge startsAt={event.startsAt} />
+        </div>
+        {event.category && (
+          <span className="absolute top-3 right-3 bg-white/90 text-[#1a4731] text-xs font-semibold px-2.5 py-1 rounded-full">
+            {event.category}
+          </span>
+        )}
+      </div>
+
+      <div className="p-5 flex-1">
         <h2 className="font-semibold text-gray-900 line-clamp-2">{event.title}</h2>
         {event.locationName && (
           <p className="text-sm text-gray-500 mt-1">📍 {event.locationName}</p>
         )}
-        <p className="text-sm text-[#d4820a] mt-1 font-medium">
-          {event.isFree ? "Intrare liberă" : event.price ? `${event.price} ${event.currency}` : ""}
-        </p>
+        {priceLabel(event) && (
+          <p className="text-sm text-[#d4820a] mt-1 font-medium">{priceLabel(event)}</p>
+        )}
       </div>
     </Link>
   );
