@@ -6,15 +6,15 @@ import { events, adminAuditLog } from "@/lib/db/schema";
 import { slugifyWithDate } from "@/lib/slugify";
 
 const schema = z.object({
-  title: z.string().min(3).max(200),
-  description: z.string().min(10),
+  title: z.string().min(3, "Titlul trebuie să aibă cel puțin 3 caractere.").max(200),
+  description: z.string().min(10, "Descrierea trebuie să aibă cel puțin 10 caractere."),
   startsAt: z.string().datetime({ local: true }),
   endsAt: z.string().datetime({ local: true }).optional(),
   locationName: z.string().max(200).optional(),
   address: z.string().max(300).optional(),
   category: z.string().optional(),
   imageUrl: z.string().url().optional(),
-  externalUrl: z.string().url().optional(),
+  externalUrl: z.string().url("Link extern invalid. Folosește o adresă completă (https://...).").optional(),
   isFree: z.boolean().default(true),
   price: z.string().optional(),
   currency: z.string().default("RON"),
@@ -31,7 +31,12 @@ export async function POST(req: Request) {
   const body = await req.json();
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Date invalide." }, { status: 400 });
+    // Surface the first specific field error so the user knows what to fix.
+    const first = parsed.error.issues[0];
+    return NextResponse.json(
+      { error: first?.message ?? "Date invalide." },
+      { status: 400 }
+    );
   }
 
   const slug = slugifyWithDate(parsed.data.title);

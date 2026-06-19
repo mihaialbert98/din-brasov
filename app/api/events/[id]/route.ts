@@ -19,8 +19,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 const editSchema = z.object({
-  title: z.string().min(3).max(200).optional(),
-  description: z.string().min(10).optional(),
+  title: z.string().min(3, "Titlul trebuie să aibă cel puțin 3 caractere.").max(200).optional(),
+  description: z.string().min(10, "Descrierea trebuie să aibă cel puțin 10 caractere.").optional(),
   startsAt: z.string().optional(),
   endsAt: z.string().optional().nullable(),
   locationName: z.string().max(200).optional().nullable(),
@@ -43,7 +43,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const body = await req.json();
   const parsed = editSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Date invalide." }, { status: 400 });
+    return NextResponse.json(
+      { error: parsed.error.issues[0]?.message ?? "Date invalide." },
+      { status: 400 }
+    );
   }
 
   const update: Record<string, unknown> = { updatedAt: new Date() };

@@ -78,9 +78,10 @@ export default function NouEvenimentPage() {
         <div className="flex flex-col gap-1">
           <label htmlFor="description" className="font-medium text-gray-700">Descriere *</label>
           <textarea
-            id="description" name="description" required rows={4}
+            id="description" name="description" required minLength={10} rows={4}
             className="border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:border-[#c84b1e] focus:ring-1 focus:ring-[#c84b1e] resize-y"
           />
+          <span className="text-xs text-gray-400">Minim 10 caractere.</span>
         </div>
 
         <div className="grid grid-cols-2 gap-4">

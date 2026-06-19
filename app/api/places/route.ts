@@ -6,12 +6,12 @@ import { places, adminAuditLog } from "@/lib/db/schema";
 import { slugifyWithDate } from "@/lib/slugify";
 
 const schema = z.object({
-  name: z.string().min(2).max(200),
-  description: z.string().min(10),
+  name: z.string().min(2, "Numele trebuie să aibă cel puțin 2 caractere.").max(200),
+  description: z.string().min(10, "Descrierea trebuie să aibă cel puțin 10 caractere."),
   category: z.string().optional(),
   address: z.string().max(300).optional(),
   phone: z.string().max(50).optional(),
-  website: z.string().url().optional().or(z.literal("")),
+  website: z.string().url("Website invalid. Folosește o adresă completă (https://...).").optional().or(z.literal("")),
   imageUrl: z.string().url().optional().or(z.literal("")),
 });
 

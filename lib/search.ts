@@ -45,12 +45,18 @@ export async function searchNews(
 
 export async function searchEvents(
   query: string,
-  { page = 1, category }: { page?: number; category?: string } = {}
+  { page = 1, category, includePast = false }: { page?: number; category?: string; includePast?: boolean } = {}
 ) {
   const conditions = [eq(events.status, "published")];
   if (category) conditions.push(eq(events.category, category));
   if (query) {
     conditions.push(sql`${events.searchVector} @@ ${searchQuery(query)}`);
+  }
+  if (!includePast) {
+    // Hide finished events from the public list. An event is "past" only once its
+    // end (or its start, when there's no end) is before now — so an in-progress
+    // or same-day event still shows.
+    conditions.push(sql`COALESCE(${events.endsAt}, ${events.startsAt}) >= NOW()`);
   }
 
   return db
@@ -69,6 +75,7 @@ export async function searchEvents(
     })
     .from(events)
     .where(and(...conditions))
+    // Soonest upcoming first — the most relevant ordering for a visitor.
     .orderBy(sql`${events.startsAt} ASC`)
     .limit(PAGE_SIZE)
     .offset((page - 1) * PAGE_SIZE);
