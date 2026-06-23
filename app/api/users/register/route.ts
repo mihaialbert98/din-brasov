@@ -5,7 +5,11 @@ import { db } from "@/lib/db";
 import { users, newsletterSubscribers } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { sendAccountConfirmationEmail } from "@/lib/email";
-import { slugify } from "@/lib/slugify";
+import {
+  countActiveUsers,
+  FOUNDING_MEMBER_CAP,
+  FOUNDING_MEMBER_ALLOWANCE,
+} from "@/lib/permissions";
 
 const schema = z.object({
   name: z.string().min(2).max(100),
@@ -38,6 +42,10 @@ export async function POST(req: Request) {
     );
   }
 
+  // Founding-member promotion: the first FOUNDING_MEMBER_CAP non-deleted users get
+  // a lifetime higher free-listing allowance + VIP badge. Decided server-side.
+  const founding = (await countActiveUsers()) < FOUNDING_MEMBER_CAP;
+
   const hash = await bcrypt.hash(password, 12);
   const confirmationToken = crypto.randomUUID();
   const [newUser] = await db.insert(users).values({
@@ -48,6 +56,9 @@ export async function POST(req: Request) {
     gdprConsentAt: new Date(),
     emailVerified: null, // confirmed via the email link before first login
     emailConfirmationToken: confirmationToken,
+    isFoundingMember: founding,
+    freeListingsAllowance: founding ? FOUNDING_MEMBER_ALLOWANCE : 2,
+    foundingMemberAt: founding ? new Date() : null,
   }).returning({ id: users.id });
 
   // Newsletter prefs chosen at sign-up are pre-verified (email proven via account).
@@ -66,7 +77,7 @@ export async function POST(req: Request) {
   }
 
   // Send the confirmation email. The user must click the link before they can log in.
-  await sendAccountConfirmationEmail(email, name, confirmationToken).catch(() => {});
+  await sendAccountConfirmationEmail(email, name, confirmationToken, { founding }).catch(() => {});
 
   return NextResponse.json({ ok: true, needsConfirmation: true }, { status: 201 });
 }

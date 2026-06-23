@@ -18,12 +18,8 @@ export const metadata: Metadata = {
   description: SITE_DESCRIPTION,
   applicationName: SITE_NAME,
   alternates: { canonical: "/" },
-  icons: {
-    icon: [
-      { url: "/logo.png", type: "image/png" },
-    ],
-    apple: "/logo.png",
-  },
+  // Favicon + apple-touch icon are auto-wired from app/icon.png and
+  // app/apple-icon.png (Next.js file conventions) — no manual config needed.
   robots: {
     index: true,
     follow: true,

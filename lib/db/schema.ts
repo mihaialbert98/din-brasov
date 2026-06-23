@@ -34,6 +34,11 @@ export const users = pgTable("users", {
   deletedAt: timestamp("deleted_at", { mode: "date" }),
   bannedUntil: timestamp("banned_until", { mode: "date" }),
   freeListingsUsed: integer("free_listings_used").notNull().default(0),
+  // Per-user free-listing allowance (overrides the default). 2 for normal users,
+  // 4 for founding members. Server-controlled only.
+  freeListingsAllowance: integer("free_listings_allowance").notNull().default(2),
+  isFoundingMember: boolean("is_founding_member").notNull().default(false), // first 1000 users
+  foundingMemberAt: timestamp("founding_member_at", { mode: "date" }),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });

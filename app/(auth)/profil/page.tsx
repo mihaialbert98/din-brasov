@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { listings, listingFavourites } from "@/lib/db/schema";
+import { listings, listingFavourites, users } from "@/lib/db/schema";
 import { eq, and, desc, count, inArray } from "drizzle-orm";
 import Link from "next/link";
 import { signOut } from "@/lib/auth";
@@ -44,6 +44,12 @@ export default async function ProfilPage() {
   if (!session?.user) redirect("/intra");
 
   const userId = session.user.id!;
+
+  const [me] = await db
+    .select({ isFoundingMember: users.isFoundingMember })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
 
   const myListings = await db
     .select({
@@ -94,8 +100,20 @@ export default async function ProfilPage() {
 
       {/* User info */}
       <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-        <p className="font-semibold text-lg">{session.user.name}</p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="font-semibold text-lg">{session.user.name}</p>
+          {me?.isFoundingMember && (
+            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-gradient-to-r from-[#d4820a] to-[#c84b1e] text-white">
+              ★ Membru fondator
+            </span>
+          )}
+        </div>
         <p className="text-gray-500">{session.user.email}</p>
+        {me?.isFoundingMember && (
+          <p className="text-sm text-gray-500 mt-2">
+            Beneficii: 4 anunțuri gratuite pe viață · acces timpuriu la funcții noi · suport prioritar.
+          </p>
+        )}
       </div>
 
       {/* My listings */}

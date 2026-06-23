@@ -12,14 +12,17 @@ const CONDITIONS = [
   { value: "not_applicable", label: "Nu se aplică (servicii, joburi)" },
 ];
 
-const FREE_QUOTA = 2;
 const LISTING_PRICE_RON = 9;
 
 export function NouAnuntForm({
   freeListingsUsed,
+  allowance,
+  exempt,
   paymentsEnabled,
 }: {
   freeListingsUsed: number;
+  allowance: number;
+  exempt: boolean;
   paymentsEnabled: boolean;
 }) {
   const router = useRouter();
@@ -27,9 +30,10 @@ export function NouAnuntForm({
   const [error, setError] = useState<string | null>(null);
   const [images, setImages] = useState<string[]>([]);
 
-  const freeRemaining = Math.max(0, FREE_QUOTA - freeListingsUsed);
-  const isFree = freeRemaining > 0;
-  // Quota reached and payments aren't live yet → block the 3rd listing.
+  // Admin/moderator post unlimited (server-enforced) — never blocked, never charged.
+  const freeRemaining = exempt ? Infinity : Math.max(0, allowance - freeListingsUsed);
+  const isFree = exempt || freeRemaining > 0;
+  // Quota reached and payments aren't live yet → block the next listing.
   const blocked = !isFree && !paymentsEnabled;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -89,21 +93,25 @@ export function NouAnuntForm({
           ? "bg-red-50 border border-red-200 text-red-800"
           : "bg-amber-50 border border-amber-200 text-amber-800"
       }`}>
-        <span className="text-lg">{isFree ? "🎉" : blocked ? "🔒" : "💳"}</span>
+        <span className="text-lg">{exempt ? "♾️" : isFree ? "🎉" : blocked ? "🔒" : "💳"}</span>
         <div>
-          {isFree ? (
+          {exempt ? (
             <span>
-              Ai <strong>{freeRemaining}</strong> {freeRemaining === 1 ? "anunț gratuit rămas" : "anunțuri gratuite rămase"}.
-              {" "}Primele {FREE_QUOTA} anunțuri sunt gratuite.
+              <strong>Cont echipă</strong> — poți publica anunțuri nelimitate, gratuit.
+            </span>
+          ) : isFree ? (
+            <span>
+              Ai <strong>{freeRemaining}</strong> {freeRemaining === 1 ? "anunț gratuit rămas" : "anunțuri gratuite rămase"}
+              {" "}din {allowance}.
             </span>
           ) : blocked ? (
             <span>
-              Ai atins limita de <strong>{FREE_QUOTA} anunțuri</strong>. Plata pentru anunțuri
+              Ai atins limita de <strong>{allowance} anunțuri</strong>. Plata pentru anunțuri
               suplimentare va fi disponibilă în curând.
             </span>
           ) : (
             <span>
-              Ai folosit cele {FREE_QUOTA} anunțuri gratuite. Publicarea acestui anunț costă{" "}
+              Ai folosit cele {allowance} anunțuri gratuite. Publicarea acestui anunț costă{" "}
               <strong>{LISTING_PRICE_RON} RON</strong>. Vei fi redirecționat la plată.
             </span>
           )}
