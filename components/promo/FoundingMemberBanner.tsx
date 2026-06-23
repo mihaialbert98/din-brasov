@@ -17,7 +17,7 @@ export default function FoundingMemberBanner({
   if (spotsLeft <= 0) return null;
 
   const perks = [
-    "4 anunțuri gratuite pe viață",
+    "4 anunțuri active gratuite",
     "Acces timpuriu la funcții noi",
     "Suport prioritar",
   ];

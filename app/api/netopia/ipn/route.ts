@@ -5,7 +5,7 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { db } from "@/lib/db";
-import { payments, listings, users } from "@/lib/db/schema";
+import { payments, listings, paidSlots } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { slugifyWithDate } from "@/lib/slugify";
 
@@ -115,6 +115,17 @@ export async function POST(req: Request) {
       const slug = slugifyWithDate(data.title);
       const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
+      // A paid listing gets a paid slot: a 30-day rentable window that can be
+      // refilled once if the user deletes the listing before it expires.
+      const [slot] = await db
+        .insert(paidSlots)
+        .values({
+          userId: paymentRow.userId,
+          paymentId: paymentRow.id,
+          expiresAt,
+        })
+        .returning({ id: paidSlots.id });
+
       const [listing] = await db
         .insert(listings)
         .values({
@@ -131,26 +142,17 @@ export async function POST(req: Request) {
           sellerId: paymentRow.userId,
           status: "active",
           expiresAt,
+          isPaid: true,
+          paidSlotId: slot.id,
         })
         .returning({ id: listings.id, slug: listings.slug });
 
-      // Link the listing to the payment and increment user counter
+      // Occupy the slot and link the listing to the payment.
+      await db.update(paidSlots).set({ currentListingId: listing.id }).where(eq(paidSlots.id, slot.id));
       await db
         .update(payments)
         .set({ listingId: listing.id })
         .where(eq(payments.netopiaOrderId, orderId));
-
-      // Get current count then increment
-      const [u] = await db
-        .select({ freeListingsUsed: users.freeListingsUsed })
-        .from(users)
-        .where(eq(users.id, paymentRow.userId))
-        .limit(1);
-
-      await db
-        .update(users)
-        .set({ freeListingsUsed: (u?.freeListingsUsed ?? 0) + 1 })
-        .where(eq(users.id, paymentRow.userId));
     } catch (err) {
       console.error("IPN listing creation error:", err);
       return NextResponse.json({ errorCode: 1 }, { status: 500 });

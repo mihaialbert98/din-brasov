@@ -5,11 +5,7 @@ import { db } from "@/lib/db";
 import { users, newsletterSubscribers } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { sendAccountConfirmationEmail } from "@/lib/email";
-import {
-  countActiveUsers,
-  FOUNDING_MEMBER_CAP,
-  FOUNDING_MEMBER_ALLOWANCE,
-} from "@/lib/permissions";
+import { grantFoundingIfEligible } from "@/lib/permissions";
 
 const schema = z.object({
   name: z.string().min(2).max(100),
@@ -42,10 +38,6 @@ export async function POST(req: Request) {
     );
   }
 
-  // Founding-member promotion: the first FOUNDING_MEMBER_CAP non-deleted users get
-  // a lifetime higher free-listing allowance + VIP badge. Decided server-side.
-  const founding = (await countActiveUsers()) < FOUNDING_MEMBER_CAP;
-
   const hash = await bcrypt.hash(password, 12);
   const confirmationToken = crypto.randomUUID();
   const [newUser] = await db.insert(users).values({
@@ -56,10 +48,11 @@ export async function POST(req: Request) {
     gdprConsentAt: new Date(),
     emailVerified: null, // confirmed via the email link before first login
     emailConfirmationToken: confirmationToken,
-    isFoundingMember: founding,
-    freeListingsAllowance: founding ? FOUNDING_MEMBER_ALLOWANCE : 2,
-    foundingMemberAt: founding ? new Date() : null,
   }).returning({ id: users.id });
+
+  // Founding-member promotion — single source of truth, shared with Google signups
+  // (lib/auth.ts createUser event). Decided server-side; never from client input.
+  const founding = newUser?.id ? await grantFoundingIfEligible(newUser.id) : false;
 
   // Newsletter prefs chosen at sign-up are pre-verified (email proven via account).
   if (wantsNews || wantsEvents || wantsPlaces) {

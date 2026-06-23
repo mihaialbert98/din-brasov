@@ -208,6 +208,10 @@ export const listings = pgTable(
     expiresAt: timestamp("expires_at", { mode: "date" }),
     isBoosted: boolean("is_boosted").notNull().default(false),
     boostedUntil: timestamp("boosted_until", { mode: "date" }),
+    // Paid listing (purchased a slot, above the free allowance). isPaid drives the
+    // "Plătit" badge; paidSlotId links to the reusable paid_slots row.
+    isPaid: boolean("is_paid").notNull().default(false),
+    paidSlotId: text("paid_slot_id"),
     isAssisted: boolean("is_assisted").default(false),
     staffOperatorId: text("staff_operator_id").references(() => users.id),
     staffConsentTicked: boolean("staff_consent_ticked").default(false),
@@ -491,6 +495,29 @@ export const payments = pgTable(
   ]
 );
 
+// ─── Paid slots ───────────────────────────────────────────────────────────────
+// A paid slot = a 30-day rentable window created when a user pays for a listing
+// above their free allowance. The slot lives independently of any single listing:
+// if the user deletes the listing while the slot is still valid, they may post ONE
+// replacement into it for the remaining days (replacementUsed guards that).
+
+export const paidSlots = pgTable(
+  "paid_slots",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    paymentId: text("payment_id").references(() => payments.id, { onDelete: "set null" }),
+    currentListingId: text("current_listing_id"), // listing occupying the slot (nullable when vacated)
+    replacementUsed: boolean("replacement_used").notNull().default(false), // one free refill allowed
+    expiresAt: timestamp("expires_at", { mode: "date" }).notNull(), // 30 days from purchase
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("paid_slots_user_idx").on(t.userId),
+    index("paid_slots_expires_idx").on(t.expiresAt),
+  ]
+);
+
 // ─── Sponsors ─────────────────────────────────────────────────────────────────
 
 export const sponsors = pgTable("sponsors", {
@@ -555,5 +582,6 @@ export type UserReport = typeof userReports.$inferSelect;
 export type SupportConversation = typeof supportConversations.$inferSelect;
 export type SupportMessage = typeof supportMessages.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
+export type PaidSlot = typeof paidSlots.$inferSelect;
 export type Sponsor = typeof sponsors.$inferSelect;
 export type SponsorLead = typeof sponsorLeads.$inferSelect;

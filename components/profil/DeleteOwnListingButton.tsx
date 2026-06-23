@@ -3,7 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export default function DeleteOwnListingButton({ listingId, title }: { listingId: string; title: string }) {
+export default function DeleteOwnListingButton({
+  listingId,
+  title,
+  warning,
+}: {
+  listingId: string;
+  title: string;
+  /** Optional caution shown in the confirm step (e.g. paid slot will be lost). */
+  warning?: string;
+}) {
   const router = useRouter();
   const [confirm, setConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -27,6 +36,7 @@ export default function DeleteOwnListingButton({ listingId, title }: { listingId
     return (
       <span className="flex flex-col items-start gap-1">
         <span className="text-xs text-gray-600">Ești sigur?</span>
+        {warning && <span className="text-xs text-red-600 font-medium max-w-[220px]">⚠️ {warning}</span>}
         <span className="flex gap-2">
           <button
             onClick={() => setConfirm(false)}
