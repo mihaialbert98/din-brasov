@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ListingImagesField from "@/components/marketplace/ListingImagesField";
+import ListingRules from "@/components/marketplace/ListingRules";
 
 const CATEGORIES = ["Electronice", "Mobilă", "Haine", "Auto", "Imobiliare", "Sport", "Servicii", "Joburi", "Altele"];
 const CONDITIONS = [
@@ -15,14 +16,16 @@ const CONDITIONS = [
 const LISTING_PRICE_RON = 9;
 
 export function NouAnuntForm({
-  freeListingsUsed,
+  currentCount,
   allowance,
   exempt,
+  hasReusableSlot = false,
   paymentsEnabled,
 }: {
-  freeListingsUsed: number;
+  currentCount: number;
   allowance: number;
   exempt: boolean;
+  hasReusableSlot?: boolean;
   paymentsEnabled: boolean;
 }) {
   const router = useRouter();
@@ -31,9 +34,12 @@ export function NouAnuntForm({
   const [images, setImages] = useState<string[]>([]);
 
   // Admin/moderator post unlimited (server-enforced) — never blocked, never charged.
-  const freeRemaining = exempt ? Infinity : Math.max(0, allowance - freeListingsUsed);
-  const isFree = exempt || freeRemaining > 0;
-  // Quota reached and payments aren't live yet → block the next listing.
+  // Quota is based on CURRENT free listings (active + expired-in-grace), so deleting
+  // or letting one expire frees a slot. A vacated paid slot also lets the user post
+  // one free replacement, so it counts as "free" here too.
+  const freeRemaining = exempt ? Infinity : Math.max(0, allowance - currentCount);
+  const isFree = exempt || freeRemaining > 0 || hasReusableSlot;
+  // Quota reached, no reusable slot, and payments aren't live yet → block.
   const blocked = !isFree && !paymentsEnabled;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -99,24 +105,32 @@ export function NouAnuntForm({
             <span>
               <strong>Cont echipă</strong> — poți publica anunțuri nelimitate, gratuit.
             </span>
+          ) : freeRemaining <= 0 && hasReusableSlot ? (
+            <span>
+              Ai un <strong>slot plătit disponibil</strong>. Poți publica încă un anunț gratuit, pentru
+              zilele rămase din slot. (Înlocuire unică.)
+            </span>
           ) : isFree ? (
             <span>
-              Ai <strong>{freeRemaining}</strong> {freeRemaining === 1 ? "anunț gratuit rămas" : "anunțuri gratuite rămase"}
-              {" "}din {allowance}.
+              Folosești <strong>{currentCount} din {allowance}</strong> anunțuri active gratuite.
+              {" "}Mai poți publica <strong>{freeRemaining}</strong>.
             </span>
           ) : blocked ? (
             <span>
-              Ai atins limita de <strong>{allowance} anunțuri</strong>. Plata pentru anunțuri
-              suplimentare va fi disponibilă în curând.
+              Ai atins limita de <strong>{allowance} anunțuri active</strong>. Șterge un anunț sau
+              așteaptă expirarea ca să publici altul. Plata pentru anunțuri suplimentare va fi
+              disponibilă în curând.
             </span>
           ) : (
             <span>
-              Ai folosit cele {allowance} anunțuri gratuite. Publicarea acestui anunț costă{" "}
+              Ai atins limita de {allowance} anunțuri active gratuite. Publicarea acestui anunț costă{" "}
               <strong>{LISTING_PRICE_RON} RON</strong>. Vei fi redirecționat la plată.
             </span>
           )}
         </div>
       </div>
+
+      <ListingRules allowance={allowance} />
 
       <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm p-6 space-y-5">
         {error && (

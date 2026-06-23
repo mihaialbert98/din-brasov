@@ -196,7 +196,7 @@ export async function sendAccountConfirmationEmail(
           <p style="margin:0 0 6px;font-size:15px;font-weight:700;color:#c84b1e;">🎉 Ești membru fondator!</p>
           <p style="margin:0;font-size:13px;line-height:1.6;color:#6b7280;">
             Faci parte din primii 1000 de membri Din Brașov. Beneficiezi de:
-            <strong>4 anunțuri gratuite pe viață</strong>, acces timpuriu la funcții noi și suport prioritar.
+            <strong>4 anunțuri active gratuite</strong>, acces timpuriu la funcții noi și suport prioritar.
           </p>
         </td></tr>
       </table>`
@@ -251,7 +251,7 @@ export async function sendFoundingWelcomeEmail(to: string, name: string) {
         <tr><td style="background:#fdf6ec;border:1px solid #e8d9c5;border-radius:12px;padding:16px 18px;">
           <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#c84b1e;">Beneficiile tale:</p>
           <p style="margin:0;font-size:13px;line-height:1.7;color:#6b7280;">
-            ✓ 4 anunțuri gratuite pe viață<br>
+            ✓ 4 anunțuri active gratuite<br>
             ✓ Acces timpuriu la funcții noi<br>
             ✓ Suport prioritar
           </p>

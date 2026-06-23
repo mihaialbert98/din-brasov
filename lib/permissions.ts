@@ -3,8 +3,16 @@
  * can't drift between routes. Server-side only.
  */
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
-import { count, isNull, eq } from "drizzle-orm";
+import { users, paidSlots, listings } from "@/lib/db/schema";
+import { count, isNull, eq, and, gt, inArray } from "drizzle-orm";
+
+/**
+ * Listing statuses that occupy a slot: `active` and `expired` (still in the
+ * renewal grace window). `sold`/`removed`/`suspended` do not — so deleting or
+ * fully expiring a listing frees a slot. Single source of truth; reused by the
+ * create API, the new-listing form, and the profile.
+ */
+export const SLOT_STATUSES = ["active", "expired"] as const;
 
 /**
  * Whether a role is exempt from listing/boost payments (unlimited free listings,
@@ -69,4 +77,65 @@ export async function grantFoundingIfEligible(userId: string): Promise<boolean> 
     })
     .where(eq(users.id, userId));
   return true;
+}
+
+/**
+ * Find a reusable paid slot for a user, if any. A slot is reusable when it's still
+ * within its 30-day window, its one free replacement hasn't been used, and it's
+ * currently vacant (the paid listing was deleted → currentListingId cleared).
+ * Returns the slot id + its expiry (the remaining window for the replacement), or null.
+ */
+export async function findReusablePaidSlot(
+  userId: string
+): Promise<{ id: string; expiresAt: Date } | null> {
+  const now = new Date();
+  const [slot] = await db
+    .select({ id: paidSlots.id, expiresAt: paidSlots.expiresAt })
+    .from(paidSlots)
+    .where(
+      and(
+        eq(paidSlots.userId, userId),
+        eq(paidSlots.replacementUsed, false),
+        isNull(paidSlots.currentListingId),
+        gt(paidSlots.expiresAt, now)
+      )
+    )
+    .limit(1);
+  return slot ?? null;
+}
+
+/**
+ * Count the user's CURRENT free listings (non-paid, active or expired-in-grace) —
+ * the basis for the free-quota check. Paid listings sit above the free allowance
+ * (tracked via paid_slots) so they're excluded here.
+ */
+export async function countFreeListings(userId: string): Promise<number> {
+  const [{ c }] = await db
+    .select({ c: count() })
+    .from(listings)
+    .where(
+      and(
+        eq(listings.sellerId, userId),
+        eq(listings.isPaid, false),
+        inArray(listings.status, [...SLOT_STATUSES])
+      )
+    );
+  return c;
+}
+
+/** How many reusable (vacant, still-valid, replacement-unused) paid slots a user has. */
+export async function countReusablePaidSlots(userId: string): Promise<number> {
+  const now = new Date();
+  const [{ c }] = await db
+    .select({ c: count() })
+    .from(paidSlots)
+    .where(
+      and(
+        eq(paidSlots.userId, userId),
+        eq(paidSlots.replacementUsed, false),
+        isNull(paidSlots.currentListingId),
+        gt(paidSlots.expiresAt, now)
+      )
+    );
+  return c;
 }

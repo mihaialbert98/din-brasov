@@ -30,10 +30,10 @@ export const RETENTION = {
    *  and gives users a window to cancel deletion requests. */
   USER_DELETION_GRACE_DAYS: 30,
 
-  /** Expired listings: retained for 30 days post-expiry so the owner can renew.
+  /** Expired listings: retained for 7 days post-expiry so the owner can renew.
    *  Contact data is kept in DB during this window but never shown publicly.
-   *  After 30 days with no renewal, listing is hard-deleted including photos. */
-  LISTING_POST_EXPIRY_DAYS: 30,
+   *  After 7 days with no renewal, listing is hard-deleted including photos. */
+  LISTING_POST_EXPIRY_DAYS: 7,
 
   /** Assisted listing consent logs: kept for life of listing + 3 years
    *  (Romanian Civil Code limitation period) to defend against complaints. */
@@ -143,7 +143,8 @@ export async function hardDeleteExpiredUsers(): Promise<number> {
 // ─── Listing hard-delete after grace period ───────────────────────────────────
 
 /**
- * Hard-delete expired listings that have passed the 30-day renewal grace period.
+ * Hard-delete expired listings that have passed the renewal grace period
+ * (RETENTION.LISTING_POST_EXPIRY_DAYS).
  * Deletes Uploadthing images first, then the DB row (cascade clears favourites,
  * reports, phone reveals, and assisted consent logs).
  *

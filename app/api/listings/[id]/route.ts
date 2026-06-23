@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { listings } from "@/lib/db/schema";
+import { listings, paidSlots } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { UTApi } from "uploadthing/server";
 
@@ -118,7 +118,14 @@ export async function DELETE(
   const { id } = await params;
 
   const [listing] = await db
-    .select({ id: listings.id, sellerId: listings.sellerId, status: listings.status, imagesJson: listings.imagesJson })
+    .select({
+      id: listings.id,
+      sellerId: listings.sellerId,
+      status: listings.status,
+      imagesJson: listings.imagesJson,
+      isPaid: listings.isPaid,
+      paidSlotId: listings.paidSlotId,
+    })
     .from(listings)
     .where(eq(listings.id, id))
     .limit(1);
@@ -146,6 +153,15 @@ export async function DELETE(
     if (keys.length) await new UTApi().deleteFiles(keys);
   } catch {
     // non-critical
+  }
+
+  // Vacate the paid slot (if any) so the user can post one replacement into it for
+  // the remaining days. The slot's replacementUsed flag still limits it to one refill.
+  if (listing.isPaid && listing.paidSlotId) {
+    await db
+      .update(paidSlots)
+      .set({ currentListingId: null })
+      .where(eq(paidSlots.id, listing.paidSlotId));
   }
 
   await db.delete(listings).where(eq(listings.id, id));

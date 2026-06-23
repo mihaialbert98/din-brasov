@@ -1,13 +1,15 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { listings, listingFavourites, users } from "@/lib/db/schema";
+import { listings, listingFavourites, users, paidSlots } from "@/lib/db/schema";
 import { eq, and, desc, count, inArray } from "drizzle-orm";
 import Link from "next/link";
 import { signOut } from "@/lib/auth";
 import { formatDate } from "@/lib/utils";
 import { RETENTION } from "@/lib/gdpr";
+import { isStaffExempt, countReusablePaidSlots, SLOT_STATUSES } from "@/lib/permissions";
 import RenewButton from "@/components/profil/RenewButton";
+import ListingRules from "@/components/marketplace/ListingRules";
 import DeleteOwnListingButton from "@/components/profil/DeleteOwnListingButton";
 import UnfavouriteButton from "@/components/profil/UnfavouriteButton";
 import type { Metadata } from "next";
@@ -39,6 +41,13 @@ function isWithinGracePeriod(expiresAt: Date | null): boolean {
   return expiresAt > graceCutoff;
 }
 
+/** Days until an expired listing is auto-deleted (0 = today). */
+function graceDaysLeft(expiresAt: Date | null): number {
+  if (!expiresAt) return 0;
+  const deleteAt = new Date(expiresAt).getTime() + RETENTION.LISTING_POST_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+  return Math.max(0, Math.ceil((deleteAt - Date.now()) / (24 * 60 * 60 * 1000)));
+}
+
 export default async function ProfilPage() {
   const session = await auth();
   if (!session?.user) redirect("/intra");
@@ -46,7 +55,11 @@ export default async function ProfilPage() {
   const userId = session.user.id!;
 
   const [me] = await db
-    .select({ isFoundingMember: users.isFoundingMember })
+    .select({
+      isFoundingMember: users.isFoundingMember,
+      freeListingsAllowance: users.freeListingsAllowance,
+      role: users.role,
+    })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
@@ -61,10 +74,24 @@ export default async function ProfilPage() {
       status: listings.status,
       expiresAt: listings.expiresAt,
       createdAt: listings.createdAt,
+      isPaid: listings.isPaid,
+      // Whether this paid listing's slot has already used its one free replacement.
+      // If yes, deleting it loses the paid slot for good (drives the delete warning).
+      slotReplacementUsed: paidSlots.replacementUsed,
     })
     .from(listings)
+    .leftJoin(paidSlots, eq(listings.paidSlotId, paidSlots.id))
     .where(eq(listings.sellerId, userId))
     .orderBy(desc(listings.createdAt));
+
+  // Slot usage — free (non-paid) active + expired-in-grace listings occupy a free
+  // slot (matches the create API). Paid listings don't count against the free quota.
+  const allowance = me?.freeListingsAllowance ?? 2;
+  const slotsUsed = myListings.filter(
+    (l) => !l.isPaid && (SLOT_STATUSES as readonly string[]).includes(l.status)
+  ).length;
+  // Vacated paid slots the user can still fill with one free replacement.
+  const reusablePaidSlots = await countReusablePaidSlots(userId);
 
   // Favourite counts for each of my listings
   const myListingIds = myListings.map((l) => l.id);
@@ -111,14 +138,14 @@ export default async function ProfilPage() {
         <p className="text-gray-500">{session.user.email}</p>
         {me?.isFoundingMember && (
           <p className="text-sm text-gray-500 mt-2">
-            Beneficii: 4 anunțuri gratuite pe viață · acces timpuriu la funcții noi · suport prioritar.
+            Beneficii: 4 anunțuri active gratuite · acces timpuriu la funcții noi · suport prioritar.
           </p>
         )}
       </div>
 
       {/* My listings */}
       <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-1">
           <h2 className="font-semibold text-lg">Anunțurile mele</h2>
           <Link
             href="/anunturi/nou"
@@ -127,6 +154,20 @@ export default async function ProfilPage() {
             + Adaugă anunț
           </Link>
         </div>
+        {!isStaffExempt(me?.role) && (
+          <p className="text-sm text-gray-500 mb-1">
+            Folosești <strong>{slotsUsed}</strong> din {allowance} anunțuri active gratuite.
+          </p>
+        )}
+        {reusablePaidSlots > 0 && (
+          <p className="text-sm text-[#c84b1e] font-medium mb-4">
+            Ai <strong>{reusablePaidSlots}</strong> {reusablePaidSlots === 1 ? "slot plătit disponibil" : "sloturi plătite disponibile"}
+            {" "}— poți publica o înlocuire gratuită pentru zilele rămase.
+          </p>
+        )}
+
+        <ListingRules allowance={allowance} />
+
         {myListings.length === 0 ? (
           <p className="text-gray-500 text-sm">Nu ai niciun anunț publicat.</p>
         ) : (
@@ -135,6 +176,14 @@ export default async function ProfilPage() {
               const favCount = favCountMap[l.id] ?? 0;
               const canRenew = l.status === "expired" && isWithinGracePeriod(l.expiresAt);
               const canEdit = l.status === "active";
+              // Deleting a paid listing whose slot's free replacement is already used
+              // closes the paid slot — warn. If the replacement is still available,
+              // reassure instead.
+              const deleteWarning = l.isPaid
+                ? l.slotReplacementUsed
+                  ? "Acesta e un anunț plătit, iar înlocuirea gratuită a fost deja folosită. Dacă îl ștergi, slotul plătit se închide și va trebui să plătești din nou."
+                  : "Acesta e un anunț plătit. Dacă îl ștergi, poți publica o singură înlocuire gratuită în slotul rămas."
+                : undefined;
               return (
                 <li key={l.id} className="py-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div className="flex-1 min-w-0">
@@ -148,6 +197,9 @@ export default async function ProfilPage() {
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusBadgeClass(l.status)}`}>
                         {STATUS_LABELS[l.status] ?? l.status}
                       </span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${l.isPaid ? "bg-[#c84b1e]/10 text-[#c84b1e]" : "bg-gray-100 text-gray-600"}`}>
+                        {l.isPaid ? "Plătit" : "Gratuit"}
+                      </span>
                       {favCount > 0 && (
                         <span className="flex items-center gap-1 text-xs text-gray-500">
                           ❤️ {favCount} {favCount === 1 ? "salvare" : "salvări"}
@@ -158,10 +210,18 @@ export default async function ProfilPage() {
                           expiră {formatDate(l.expiresAt)}
                         </span>
                       )}
-                      {l.expiresAt && l.status === "expired" && (
-                        <span className="text-xs text-gray-400">
-                          expirat {formatDate(l.expiresAt)}
+                      {l.status === "expired" && canRenew && (
+                        <span className="text-xs font-medium text-red-600">
+                          {(() => {
+                            const d = graceDaysLeft(l.expiresAt);
+                            return d <= 0
+                              ? "se șterge azi dacă nu reînnoiești"
+                              : `se șterge în ${d} ${d === 1 ? "zi" : "zile"} dacă nu reînnoiești`;
+                          })()}
                         </span>
+                      )}
+                      {l.status === "expired" && !canRenew && l.expiresAt && (
+                        <span className="text-xs text-gray-400">expirat {formatDate(l.expiresAt)}</span>
                       )}
                     </div>
                   </div>
@@ -174,11 +234,11 @@ export default async function ProfilPage() {
                         Editează
                       </Link>
                     )}
-                    {canEdit && <DeleteOwnListingButton listingId={l.id} title={l.title} />}
+                    {canEdit && <DeleteOwnListingButton listingId={l.id} title={l.title} warning={deleteWarning} />}
                     {canRenew && (
                       <>
                         <RenewButton listingId={l.id} />
-                        <DeleteOwnListingButton listingId={l.id} title={l.title} />
+                        <DeleteOwnListingButton listingId={l.id} title={l.title} warning={deleteWarning} />
                       </>
                     )}
                   </div>

@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { listings, users, payments } from "@/lib/db/schema";
+import { listings, users, payments, paidSlots } from "@/lib/db/schema";
 import { slugifyWithDate } from "@/lib/slugify";
 import { startNetopiaPayment } from "@/lib/netopia";
 import { PAYMENTS_ENABLED } from "@/lib/payments";
-import { isStaffExempt } from "@/lib/permissions";
-import { eq } from "drizzle-orm";
+import { isStaffExempt, findReusablePaidSlot, countFreeListings } from "@/lib/permissions";
+import { eq, and } from "drizzle-orm";
 
 // Prices in RON
 const LISTING_CREATION_PRICE = 9;
@@ -42,7 +42,6 @@ export async function POST(req: Request) {
   // never from the request — so the exemption cannot be forged by the client.
   const [user] = await db
     .select({
-      freeListingsUsed: users.freeListingsUsed,
       freeListingsAllowance: users.freeListingsAllowance,
       role: users.role,
       name: users.name,
@@ -56,13 +55,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Utilizator negăsit." }, { status: 404 });
   }
 
+  // Free quota = current non-paid listings (active or expired-in-grace). Paid
+  // listings sit above the free allowance (tracked via paid_slots).
+  const currentCount = await countFreeListings(userId);
+
   // Admin/moderator: unlimited free listings, never charged.
   const exempt = isStaffExempt(user.role);
-  const needsPayment = !exempt && user.freeListingsUsed >= user.freeListingsAllowance;
+  const withinFreeQuota = exempt || currentCount < user.freeListingsAllowance;
+
+  // If over the free quota, the user may still post for free into a reusable paid
+  // slot (a previously-paid 30-day window they vacated, with their one replacement
+  // unused). Otherwise they must pay.
+  const reusableSlot = withinFreeQuota ? null : await findReusablePaidSlot(userId);
+  const needsPayment = !withinFreeQuota && !reusableSlot;
 
   if (needsPayment && !PAYMENTS_ENABLED) {
     return NextResponse.json(
-      { error: `Ai atins limita de ${user.freeListingsAllowance} anunțuri. Plata pentru anunțuri suplimentare va fi disponibilă în curând.` },
+      { error: `Ai atins limita de ${user.freeListingsAllowance} anunțuri active. Șterge un anunț sau așteaptă expirarea, ori plata va fi disponibilă în curând.` },
       { status: 403 }
     );
   }
@@ -108,9 +117,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ needsPayment: true, paymentUrl }, { status: 202 });
   }
 
-  // Free path — create listing directly
+  // Create the listing. If it's filling a reusable paid slot, it inherits the
+  // slot's remaining window and is marked paid; otherwise it's a normal free
+  // listing with a fresh 30-day window.
   const slug = slugifyWithDate(parsed.data.title);
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  const expiresAt = reusableSlot
+    ? reusableSlot.expiresAt
+    : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
   const [listing] = await db
     .insert(listings)
@@ -128,17 +141,23 @@ export async function POST(req: Request) {
       sellerId: userId,
       status: "active",
       expiresAt,
+      isPaid: !!reusableSlot,
+      paidSlotId: reusableSlot?.id ?? null,
     })
     .returning({ id: listings.id, slug: listings.slug });
 
-  // Increment the used counter — but not for exempt staff (their listings are
-  // unlimited, so we keep their counter clean / irrelevant).
-  if (!exempt) {
+  // If we used a reusable slot, consume its one allowed replacement and re-occupy it.
+  // Conditional update (replacementUsed=false) makes the claim atomic — if two
+  // requests race for the same slot, only the first claims it; the loser's listing
+  // simply remains a normal paid listing in the slot without double-spending it.
+  if (reusableSlot) {
     await db
-      .update(users)
-      .set({ freeListingsUsed: user.freeListingsUsed + 1 })
-      .where(eq(users.id, userId));
+      .update(paidSlots)
+      .set({ currentListingId: listing.id, replacementUsed: true })
+      .where(and(eq(paidSlots.id, reusableSlot.id), eq(paidSlots.replacementUsed, false)));
   }
+
+  // No counter to bump — the free quota is computed live from current listings.
 
   return NextResponse.json({ ok: true, slug: listing.slug }, { status: 201 });
 }
