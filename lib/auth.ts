@@ -10,6 +10,8 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { users, accounts, sessions, verificationTokens } from "@/lib/db/schema";
+import { grantFoundingIfEligible } from "@/lib/permissions";
+import { sendFoundingWelcomeEmail } from "@/lib/email";
 
 // DrizzleAdapter needs a real client instance (not a Proxy) to detect the DB type
 function makeAuthDb() {
@@ -113,6 +115,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         (session.user as any).role = token.role as string;
       }
       return session;
+    },
+  },
+  events: {
+    // Fires once when the adapter creates a new user — i.e. OAuth (Google) signups.
+    // Credentials signups are inserted by our register route (not the adapter), so
+    // they're handled there. This gives Google users the same founding-member grant
+    // and, since they receive no confirmation email, a VIP welcome email.
+    async createUser({ user }) {
+      if (!user.id) return;
+      try {
+        const granted = await grantFoundingIfEligible(user.id);
+        if (granted && user.email) {
+          await sendFoundingWelcomeEmail(user.email, user.name ?? "").catch(() => {});
+        }
+      } catch {
+        // Never block sign-up if the grant/email fails.
+      }
     },
   },
 });
