@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 type Props = {
   listing: {
@@ -45,7 +46,15 @@ export default function ListingCard({ listing, compact = false }: Props) {
       className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col"
     >
       {images[0] ? (
-        <img src={images[0]} alt={listing.title} className="w-full h-44 object-cover" />
+        <div className="relative w-full h-44">
+          <Image
+            src={images[0]}
+            alt={listing.title}
+            fill
+            sizes="(max-width: 640px) 100vw, 33vw"
+            className="object-cover"
+          />
+        </div>
       ) : (
         <div className="w-full h-44 bg-gray-100 flex items-center justify-center text-gray-400 text-4xl">
           📦

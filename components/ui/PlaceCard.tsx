@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 type Props = {
   place: {
@@ -32,7 +33,9 @@ export default function PlaceCard({ place, compact = false }: Props) {
         className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden border border-[#e8d9c5] flex flex-col"
       >
         {image ? (
-          <img src={image} alt={place.name} className="w-full h-32 object-cover" />
+          <div className="relative w-full h-32">
+            <Image src={image} alt={place.name} fill sizes="(max-width: 640px) 100vw, 33vw" className="object-cover" />
+          </div>
         ) : (
           <div className="w-full h-32 bg-gradient-to-br from-[#e8d9c5] to-[#c84b1e]/20 flex items-center justify-center">
             <span className="text-3xl">🏠</span>
@@ -55,7 +58,9 @@ export default function PlaceCard({ place, compact = false }: Props) {
       className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col group"
     >
       {image ? (
-        <img src={image} alt={place.name} className="w-full h-40 object-cover group-hover:scale-105 transition-transform duration-300" />
+        <div className="relative w-full h-40 overflow-hidden">
+          <Image src={image} alt={place.name} fill sizes="(max-width: 640px) 100vw, 33vw" className="object-cover group-hover:scale-105 transition-transform duration-300" />
+        </div>
       ) : (
         <div className="w-full h-40 bg-gradient-to-br from-[#e8d9c5] to-[#c84b1e]/20 flex items-center justify-center">
           <span className="text-4xl">🏠</span>

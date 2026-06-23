@@ -5,11 +5,14 @@ import CategoryFilter from "@/components/ui/CategoryFilter";
 import { db } from "@/lib/db";
 import { places } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Localuri",
-  description: "Localuri noi și recomandate din Brașov.",
-};
+export const metadata: Metadata = pageMetadata({
+  title: "Localuri din Brașov",
+  description: "Restaurante, cafenele, magazine și alte localuri noi și recomandate din Brașov.",
+  path: "/localuri",
+  section: "Localuri",
+});
 
 export default async function LocaluriPage({
   searchParams,

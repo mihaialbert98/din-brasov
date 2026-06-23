@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import { SUPPORT_EMAIL, DPO_EMAIL } from "@/lib/contact";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Despre noi · GDPR · Cookies",
   description:
     "Informații despre platforma Din Brașov, politica de confidențialitate (GDPR) și utilizarea cookie-urilor.",
-};
+  path: "/despre",
+  section: "Despre",
+});
 
 export default function DesprePage() {
   return (

@@ -5,11 +5,14 @@ import CategoryFilter from "@/components/ui/CategoryFilter";
 import { db } from "@/lib/db";
 import { events } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Evenimente",
-  description: "Evenimente în Brașov — concerte, expoziții, târguri și mai mult.",
-};
+export const metadata: Metadata = pageMetadata({
+  title: "Evenimente în Brașov",
+  description: "Evenimente în Brașov — concerte, expoziții, târguri și alte activități. Vezi ce se întâmplă în oraș.",
+  path: "/evenimente",
+  section: "Evenimente",
+});
 
 export default async function EvenimentePage({
   searchParams,

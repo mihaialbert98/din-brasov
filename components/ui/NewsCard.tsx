@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 type Props = {
   item: {
@@ -41,7 +42,15 @@ export default function NewsCard({ item, compact = false }: Props) {
       className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow p-5 flex flex-col gap-3"
     >
       {item.imageUrl && (
-        <img src={item.imageUrl} alt={item.title} className="w-full h-48 object-cover rounded-lg" />
+        <div className="relative w-full h-48 rounded-lg overflow-hidden">
+          <Image
+            src={item.imageUrl}
+            alt={item.title}
+            fill
+            sizes="(max-width: 640px) 100vw, 50vw"
+            className="object-cover"
+          />
+        </div>
       )}
       <div className="flex items-center gap-2">
         <span className="text-xs font-semibold text-[#d4820a] uppercase tracking-wide">

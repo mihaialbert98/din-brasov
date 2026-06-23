@@ -25,6 +25,9 @@
   --color-background: var(--color-background);
   --color-surface: var(--color-surface);
   --color-cream: var(--color-cream);
+  /* next/font variables (set on <html> in app/layout.tsx) */
+  --font-sans: var(--font-sans), system-ui, -apple-system, sans-serif;
+  --font-serif: var(--font-serif), Georgia, "Times New Roman", serif;
 }
 
 * {
@@ -34,7 +37,7 @@
 body {
   background: var(--color-background);
   color: var(--color-text);
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
   font-size: 18px;
   line-height: 1.6;
 }

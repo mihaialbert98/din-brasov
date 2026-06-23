@@ -43,7 +43,11 @@ export default auth((req) => {
     return NextResponse.redirect(new URL("/intra", req.url));
   }
 
-  return NextResponse.next();
+  // Every path the matcher covers is private (admin/profile/post-listing) — keep
+  // it out of search indexes even if a link leaks.
+  const res = NextResponse.next();
+  res.headers.set("X-Robots-Tag", "noindex, nofollow");
+  return res;
 });
 
 export const config = {

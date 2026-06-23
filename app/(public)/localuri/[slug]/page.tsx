@@ -1,8 +1,11 @@
 import { notFound } from "next/navigation";
+import Image from "next/image";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { places } from "@/lib/db/schema";
 import type { Metadata } from "next";
+import JsonLd from "@/components/seo/JsonLd";
+import { pageMetadata, localBusinessJsonLd, breadcrumbJsonLd } from "@/lib/seo";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -14,8 +17,15 @@ async function getPlace(slug: string) {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const place = await getPlace(slug);
-  if (!place) return {};
-  return { title: place.name, description: place.description.slice(0, 155) };
+  if (!place || place.status !== "published") return { title: "Local negăsit" };
+  const images: string[] = place.imagesJson ? JSON.parse(place.imagesJson) : [];
+  return pageMetadata({
+    title: place.name,
+    description: place.description,
+    path: `/localuri/${place.slug}`,
+    image: images[0],
+    section: "Localuri",
+  });
 }
 
 export default async function LocalPage({ params }: Props) {
@@ -28,8 +38,31 @@ export default async function LocalPage({ params }: Props) {
 
   return (
     <article className="max-w-2xl mx-auto px-4 py-10">
+      <JsonLd
+        data={[
+          localBusinessJsonLd({
+            name: place.name,
+            description: place.description,
+            path: `/localuri/${place.slug}`,
+            category: place.category,
+            address: place.address,
+            phone: place.phone,
+            website: place.website,
+            image: images[0],
+            latitude: place.latitude,
+            longitude: place.longitude,
+          }),
+          breadcrumbJsonLd([
+            { name: "Acasă", path: "/" },
+            { name: "Localuri", path: "/localuri" },
+            { name: place.name, path: `/localuri/${place.slug}` },
+          ]),
+        ]}
+      />
       {images[0] && (
-        <img src={images[0]} alt={place.name} className="w-full rounded-xl mb-6 max-h-80 object-cover" />
+        <div className="relative w-full h-80 rounded-xl mb-6 overflow-hidden">
+          <Image src={images[0]} alt={place.name} fill priority sizes="(max-width: 768px) 100vw, 672px" className="object-cover" />
+        </div>
       )}
       {place.category && (
         <span className="text-xs bg-green-100 text-green-800 px-3 py-1 rounded-full font-medium">

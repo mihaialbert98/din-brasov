@@ -1,9 +1,12 @@
 import { notFound } from "next/navigation";
+import Image from "next/image";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { newsItems } from "@/lib/db/schema";
 import { formatDate } from "@/lib/utils";
 import type { Metadata } from "next";
+import JsonLd from "@/components/seo/JsonLd";
+import { pageMetadata, articleJsonLd, breadcrumbJsonLd } from "@/lib/seo";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -19,8 +22,16 @@ async function getNews(slug: string) {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const item = await getNews(slug);
-  if (!item) return {};
-  return { title: item.title, description: item.excerpt };
+  if (!item || item.status !== "published") return { title: "Știre negăsită" };
+  return pageMetadata({
+    title: item.title,
+    description: item.excerpt,
+    path: `/stiri/${item.slug}`,
+    image: item.imageUrl ?? undefined,
+    type: "article",
+    publishedTime: item.publishedAt ? new Date(item.publishedAt).toISOString() : undefined,
+    section: "Știri",
+  });
 }
 
 export default async function StirePage({ params }: Props) {
@@ -31,6 +42,23 @@ export default async function StirePage({ params }: Props) {
 
   return (
     <article className="max-w-2xl mx-auto px-4 py-10">
+      <JsonLd
+        data={[
+          articleJsonLd({
+            title: item.title,
+            description: item.excerpt,
+            path: `/stiri/${item.slug}`,
+            image: item.imageUrl,
+            publishedAt: item.publishedAt,
+            sourceName: item.sourceName,
+          }),
+          breadcrumbJsonLd([
+            { name: "Acasă", path: "/" },
+            { name: "Știri", path: "/stiri" },
+            { name: item.title, path: `/stiri/${item.slug}` },
+          ]),
+        ]}
+      />
       <div className="mb-4">
         <span className="text-sm font-semibold text-[#d4820a] uppercase tracking-wide">
           {item.sourceName}
@@ -47,11 +75,9 @@ export default async function StirePage({ params }: Props) {
       )}
 
       {item.imageUrl && (
-        <img
-          src={item.imageUrl}
-          alt={item.title}
-          className="w-full rounded-xl mb-6 max-h-80 object-cover"
-        />
+        <div className="relative w-full h-80 rounded-xl mb-6 overflow-hidden">
+          <Image src={item.imageUrl} alt={item.title} fill priority sizes="(max-width: 768px) 100vw, 672px" className="object-cover" />
+        </div>
       )}
 
       <p className="text-lg text-gray-700 leading-relaxed mb-8">{item.excerpt}</p>

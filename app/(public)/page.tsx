@@ -1,9 +1,24 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { searchNews, searchEvents, searchListings, searchPlaces } from "@/lib/search";
 import NewsCard from "@/components/ui/NewsCard";
 import EventCard from "@/components/ui/EventCard";
 import PlaceCard from "@/components/ui/PlaceCard";
 import ListingCard from "@/components/ui/ListingCard";
+import JsonLd from "@/components/seo/JsonLd";
+import { organizationJsonLd, websiteJsonLd, pageMetadata } from "@/lib/seo";
+
+const homeTitle = "Din Brașov — știri, evenimente, localuri și anunțuri";
+export const metadata: Metadata = {
+  ...pageMetadata({
+    title: homeTitle,
+    description:
+      "Platforma civică a brașovenilor: ultimele știri locale, evenimente, localuri noi și anunțuri de vânzare-cumpărare din Brașov.",
+    path: "/",
+  }),
+  // Homepage uses an absolute title (no "%s | Din Brașov" template suffix).
+  title: { absolute: homeTitle },
+};
 
 export default async function HomePage() {
   const [latestNews, upcomingEvents, recentPlaces, recentListings] = await Promise.all([
@@ -15,6 +30,7 @@ export default async function HomePage() {
 
   return (
     <div>
+      <JsonLd data={[organizationJsonLd(), websiteJsonLd()]} />
       {/* Hero */}
       <section className="relative bg-[#1a1a1a] text-white overflow-hidden" aria-label="Introducere">
         <div className="absolute right-0 top-0 w-[320px] sm:w-[480px] h-[320px] sm:h-[480px] rounded-full bg-[#c84b1e] opacity-20 translate-x-1/3 -translate-y-1/3 pointer-events-none" aria-hidden />

@@ -13,6 +13,8 @@ import ListingGallery from "@/components/marketplace/ListingGallery";
 import { PAYMENTS_ENABLED } from "@/lib/payments";
 import { auth } from "@/lib/auth";
 import type { Metadata } from "next";
+import JsonLd from "@/components/seo/JsonLd";
+import { pageMetadata, productJsonLd, breadcrumbJsonLd } from "@/lib/seo";
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ payment?: string }> };
 
@@ -28,11 +30,18 @@ async function getListing(slug: string) {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const item = await getListing(slug);
-  if (!item) return {};
-  return {
+  if (!item || item.status === "removed" || item.status === "suspended") {
+    return { title: "Anunț negăsit" };
+  }
+  const images: string[] = item.imagesJson ? JSON.parse(item.imagesJson) : [];
+  return pageMetadata({
     title: item.title,
-    description: item.description.slice(0, 155),
-  };
+    description: item.description,
+    path: `/anunturi/${item.slug}`,
+    image: images[0],
+    type: "article",
+    section: "Anunțuri",
+  });
 }
 
 export default async function AnuntPage({ params, searchParams }: Props) {
@@ -56,6 +65,27 @@ export default async function AnuntPage({ params, searchParams }: Props) {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
+      {!isSuspended && (
+        <JsonLd
+          data={[
+            productJsonLd({
+              title: listing.title,
+              description: listing.description,
+              path: `/anunturi/${listing.slug}`,
+              image: images[0],
+              price: listing.price,
+              currency: listing.currency,
+              category: listing.category,
+              available: listing.status === "active",
+            }),
+            breadcrumbJsonLd([
+              { name: "Acasă", path: "/" },
+              { name: "Anunțuri", path: "/anunturi" },
+              { name: listing.title, path: `/anunturi/${listing.slug}` },
+            ]),
+          ]}
+        />
+      )}
       {paymentStatus === "success" && (
         <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6 text-green-800 text-sm">
           ✅ Plată finalizată cu succes! Anunțul tău este acum activ.
