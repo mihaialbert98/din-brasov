@@ -51,3 +51,6 @@ scraper/.env
 
 # IDE
 .vscode/
+
+# Promo brief (local only)
+PROMO-BRIEF.md

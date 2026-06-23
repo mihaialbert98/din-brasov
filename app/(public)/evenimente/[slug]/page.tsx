@@ -1,9 +1,12 @@
 import { notFound } from "next/navigation";
+import Image from "next/image";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { events } from "@/lib/db/schema";
 import { formatDate } from "@/lib/utils";
 import type { Metadata } from "next";
+import JsonLd from "@/components/seo/JsonLd";
+import { pageMetadata, eventJsonLd, breadcrumbJsonLd } from "@/lib/seo";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -15,8 +18,15 @@ async function getEvent(slug: string) {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const ev = await getEvent(slug);
-  if (!ev) return {};
-  return { title: ev.title, description: ev.description.slice(0, 155) };
+  if (!ev || ev.status !== "published") return { title: "Eveniment negăsit" };
+  return pageMetadata({
+    title: ev.title,
+    description: ev.description,
+    path: `/evenimente/${ev.slug}`,
+    image: ev.imageUrl ?? undefined,
+    type: "article",
+    section: "Evenimente",
+  });
 }
 
 export default async function EvenimentPage({ params }: Props) {
@@ -27,8 +37,32 @@ export default async function EvenimentPage({ params }: Props) {
 
   return (
     <article className="max-w-2xl mx-auto px-4 py-10">
+      <JsonLd
+        data={[
+          eventJsonLd({
+            title: ev.title,
+            description: ev.description,
+            path: `/evenimente/${ev.slug}`,
+            startsAt: ev.startsAt,
+            endsAt: ev.endsAt,
+            locationName: ev.locationName,
+            address: ev.address,
+            image: ev.imageUrl,
+            isFree: ev.isFree,
+            price: ev.price,
+            currency: ev.currency,
+          }),
+          breadcrumbJsonLd([
+            { name: "Acasă", path: "/" },
+            { name: "Evenimente", path: "/evenimente" },
+            { name: ev.title, path: `/evenimente/${ev.slug}` },
+          ]),
+        ]}
+      />
       {ev.imageUrl && (
-        <img src={ev.imageUrl} alt={ev.title} className="w-full rounded-xl mb-6 max-h-80 object-cover" />
+        <div className="relative w-full h-80 rounded-xl mb-6 overflow-hidden">
+          <Image src={ev.imageUrl} alt={ev.title} fill priority sizes="(max-width: 768px) 100vw, 672px" className="object-cover" />
+        </div>
       )}
       <span className="text-xs bg-green-100 text-green-800 px-3 py-1 rounded-full font-medium">
         {ev.category ?? "Eveniment"}

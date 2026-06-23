@@ -2,11 +2,14 @@ import type { Metadata } from "next";
 import { searchNews } from "@/lib/search";
 import CategoryFilter from "@/components/ui/CategoryFilter";
 import NewsCard from "@/components/ui/NewsCard";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Știri",
-  description: "Ultimele știri din Brașov.",
-};
+export const metadata: Metadata = pageMetadata({
+  title: "Știri din Brașov",
+  description: "Ultimele știri locale din Brașov — actualitate, sport, cultură, business și sănătate.",
+  path: "/stiri",
+  section: "Știri",
+});
 
 const CATEGORIES = ["Actualitate", "Sport", "Cultură", "Business", "Sănătate", "Altele"];
 

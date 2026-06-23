@@ -6,11 +6,14 @@ import CategoryFilter from "@/components/ui/CategoryFilter";
 import ListingCard from "@/components/ui/ListingCard";
 import Pagination from "@/components/ui/Pagination";
 import SortSelect from "@/components/ui/SortSelect";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Anunțuri",
-  description: "Cumpără și vinde în Brașov — anunțuri de la oameni reali.",
-};
+export const metadata: Metadata = pageMetadata({
+  title: "Anunțuri Brașov — cumpără și vinde local",
+  description: "Anunțuri de vânzare-cumpărare din Brașov, de la oameni reali. Electronice, mobilă, auto, imobiliare și altele — sigur, fără spam.",
+  path: "/anunturi",
+  section: "Anunțuri",
+});
 
 const CATEGORIES = [
   "Electronice", "Mobilă", "Haine", "Auto", "Imobiliare", "Sport", "Servicii", "Joburi", "Altele",

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 type Props = {
   event: {
@@ -61,7 +62,9 @@ export default function EventCard({ event, compact = false }: Props) {
           image, fall back to a brand-coloured banner so cards stay uniform. */}
       <div className="relative">
         {event.imageUrl ? (
-          <img src={event.imageUrl} alt="" className="w-full h-44 object-cover" />
+          <div className="relative w-full h-44">
+            <Image src={event.imageUrl} alt={event.title} fill sizes="(max-width: 640px) 100vw, 50vw" className="object-cover" />
+          </div>
         ) : (
           <div className="w-full h-44 bg-[#1a4731]/10 flex items-center justify-center">
             <span className="text-5xl opacity-40" aria-hidden>📅</span>

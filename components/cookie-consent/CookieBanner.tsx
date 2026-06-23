@@ -55,6 +55,9 @@ export function CookieBanner() {
     localStorage.setItem(CONSENT_DATE_KEY, String(now));
     document.cookie = `${CONSENT_KEY}=${level};path=/;expires=${expires.toUTCString()};SameSite=Lax`;
 
+    // Notify listeners (e.g. analytics) so they can react without a page reload.
+    window.dispatchEvent(new CustomEvent("consent-changed", { detail: level }));
+
     // Log consent server-side (Art. 7(1) — burden of proof on controller)
     await fetch("/api/consent/cookie", {
       method: "POST",
