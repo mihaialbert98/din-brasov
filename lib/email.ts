@@ -183,8 +183,24 @@ export async function sendCustomCampaign(to: string, token: string, c: CampaignC
   });
 }
 
-export async function sendAccountConfirmationEmail(to: string, name: string, token: string) {
+export async function sendAccountConfirmationEmail(
+  to: string,
+  name: string,
+  token: string,
+  opts?: { founding?: boolean }
+) {
   const confirmUrl = `${APP_URL}/api/auth/confirm?token=${token}`;
+  const foundingBlock = opts?.founding
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+        <tr><td style="background:#fdf6ec;border:1px solid #e8d9c5;border-radius:12px;padding:16px 18px;">
+          <p style="margin:0 0 6px;font-size:15px;font-weight:700;color:#c84b1e;">🎉 Ești membru fondator!</p>
+          <p style="margin:0;font-size:13px;line-height:1.6;color:#6b7280;">
+            Faci parte din primii 1000 de membri Din Brașov. Beneficiezi de:
+            <strong>4 anunțuri gratuite pe viață</strong>, acces timpuriu la funcții noi și suport prioritar.
+          </p>
+        </td></tr>
+      </table>`
+    : "";
   const html = emailLayout({
     heading: `Salut${name ? `, ${name}` : ""}! Confirmă-ți contul`,
     body: `
@@ -192,6 +208,7 @@ export async function sendAccountConfirmationEmail(to: string, name: string, tok
         Mulțumim că te-ai alăturat comunității Din Brașov. Mai e un singur pas — confirmă-ți adresa de email apăsând butonul de mai jos:
       </p>
       ${ctaButton(confirmUrl, "Confirmă contul")}
+      ${foundingBlock}
       <p style="margin:0 0 8px;font-size:13px;line-height:1.6;color:#6b7280;">
         Sau copiază acest link în browser:<br>
         <a href="${confirmUrl}" style="color:#c84b1e;word-break:break-all;">${confirmUrl}</a>

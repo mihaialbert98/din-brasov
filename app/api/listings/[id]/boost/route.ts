@@ -6,6 +6,7 @@ import { listings, users, payments } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { startNetopiaPayment } from "@/lib/netopia";
 import { PAYMENTS_ENABLED } from "@/lib/payments";
+import { isStaffExempt } from "@/lib/permissions";
 
 // Prices in RON per boost duration
 const BOOST_PRICES: Record<number, number> = { 7: 9, 14: 15 };
@@ -21,13 +22,6 @@ export async function POST(
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Neautorizat." }, { status: 401 });
-  }
-
-  if (!PAYMENTS_ENABLED) {
-    return NextResponse.json(
-      { error: "Promovarea anunțurilor va fi disponibilă în curând." },
-      { status: 403 }
-    );
   }
 
   const { id } = await params;
@@ -56,14 +50,34 @@ export async function POST(
     return NextResponse.json({ error: "Poți promova doar anunțuri active." }, { status: 400 });
   }
 
+  // Role read from the DB — never from the request — so the exemption can't be forged.
   const [user] = await db
-    .select({ name: users.name, email: users.email })
+    .select({ name: users.name, email: users.email, role: users.role })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
 
   if (!user) {
     return NextResponse.json({ error: "Utilizator negăsit." }, { status: 404 });
+  }
+
+  // Admin/moderator: boost their own listing for free, bypassing payment entirely
+  // (works even while payments are globally disabled).
+  if (isStaffExempt(user.role)) {
+    const boostedUntil = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+    await db
+      .update(listings)
+      .set({ isBoosted: true, boostedUntil })
+      .where(eq(listings.id, listing.id));
+    return NextResponse.json({ ok: true, boostedUntil });
+  }
+
+  // Non-exempt users: payment required.
+  if (!PAYMENTS_ENABLED) {
+    return NextResponse.json(
+      { error: "Promovarea anunțurilor va fi disponibilă în curând." },
+      { status: 403 }
+    );
   }
 
   const orderId = crypto.randomUUID();

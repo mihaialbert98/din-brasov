@@ -1,13 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import FoundingMemberBanner from "@/components/promo/FoundingMemberBanner";
 
 export default function ContNouPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [spotsLeft, setSpotsLeft] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch("/api/founding-spots")
+      .then((r) => r.json())
+      .then((d) => setSpotsLeft(d.spotsLeft ?? 0))
+      .catch(() => {});
+  }, []);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -54,6 +63,10 @@ export default function ContNouPage() {
       <h1 className="text-3xl font-bold font-serif text-[#1a4731] text-center mb-8">
         Cont nou
       </h1>
+
+      {spotsLeft !== null && spotsLeft > 0 && (
+        <FoundingMemberBanner spotsLeft={spotsLeft} variant="compact" />
+      )}
 
       <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm p-6 space-y-5">
         {error && (

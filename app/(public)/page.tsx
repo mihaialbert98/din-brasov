@@ -7,6 +7,9 @@ import PlaceCard from "@/components/ui/PlaceCard";
 import ListingCard from "@/components/ui/ListingCard";
 import JsonLd from "@/components/seo/JsonLd";
 import { organizationJsonLd, websiteJsonLd, pageMetadata } from "@/lib/seo";
+import FoundingMemberBanner from "@/components/promo/FoundingMemberBanner";
+import { getFoundingSpotsLeft } from "@/lib/permissions";
+import { auth } from "@/lib/auth";
 
 const homeTitle = "Din Brașov — știri, evenimente, localuri și anunțuri";
 export const metadata: Metadata = {
@@ -21,12 +24,17 @@ export const metadata: Metadata = {
 };
 
 export default async function HomePage() {
-  const [latestNews, upcomingEvents, recentPlaces, recentListings] = await Promise.all([
+  const [latestNews, upcomingEvents, recentPlaces, recentListings, session, spotsLeft] = await Promise.all([
     searchNews("", { page: 1 }).catch(() => []),
     searchEvents("", { page: 1 }).catch(() => []),
     searchPlaces("", { page: 1 }).catch(() => []),
     searchListings("", { page: 1 }).then((r) => r.listings).catch(() => []),
+    auth().catch(() => null),
+    getFoundingSpotsLeft().catch(() => 0),
   ]);
+
+  // Promote the founding-member offer only to logged-out visitors (the goal is signups).
+  const showFounding = !session?.user && spotsLeft > 0;
 
   return (
     <div>
@@ -77,6 +85,9 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Founding-member promo (logged-out visitors, while spots remain) */}
+      {showFounding && <FoundingMemberBanner spotsLeft={spotsLeft} />}
 
       {/* Assisted listings CTA */}
       <section className="bg-[#e8d9c5] border-y border-[#c84b1e]/20 py-8 px-4">

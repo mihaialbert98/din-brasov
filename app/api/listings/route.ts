@@ -6,9 +6,9 @@ import { listings, users, payments } from "@/lib/db/schema";
 import { slugifyWithDate } from "@/lib/slugify";
 import { startNetopiaPayment } from "@/lib/netopia";
 import { PAYMENTS_ENABLED } from "@/lib/payments";
+import { isStaffExempt } from "@/lib/permissions";
 import { eq } from "drizzle-orm";
 
-const FREE_LISTING_QUOTA = 2;
 // Prices in RON
 const LISTING_CREATION_PRICE = 9;
 
@@ -38,9 +38,16 @@ export async function POST(req: Request) {
 
   const userId = session.user.id;
 
-  // Check free listing quota
+  // Check free listing quota. Role + allowance are read from the DB row only —
+  // never from the request — so the exemption cannot be forged by the client.
   const [user] = await db
-    .select({ freeListingsUsed: users.freeListingsUsed, name: users.name, email: users.email })
+    .select({
+      freeListingsUsed: users.freeListingsUsed,
+      freeListingsAllowance: users.freeListingsAllowance,
+      role: users.role,
+      name: users.name,
+      email: users.email,
+    })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
@@ -49,11 +56,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Utilizator negăsit." }, { status: 404 });
   }
 
-  const needsPayment = user.freeListingsUsed >= FREE_LISTING_QUOTA;
+  // Admin/moderator: unlimited free listings, never charged.
+  const exempt = isStaffExempt(user.role);
+  const needsPayment = !exempt && user.freeListingsUsed >= user.freeListingsAllowance;
 
   if (needsPayment && !PAYMENTS_ENABLED) {
     return NextResponse.json(
-      { error: "Ai atins limita de 2 anunțuri. Plata pentru anunțuri suplimentare va fi disponibilă în curând." },
+      { error: `Ai atins limita de ${user.freeListingsAllowance} anunțuri. Plata pentru anunțuri suplimentare va fi disponibilă în curând.` },
       { status: 403 }
     );
   }
@@ -122,11 +131,14 @@ export async function POST(req: Request) {
     })
     .returning({ id: listings.id, slug: listings.slug });
 
-  // Increment the used counter
-  await db
-    .update(users)
-    .set({ freeListingsUsed: user.freeListingsUsed + 1 })
-    .where(eq(users.id, userId));
+  // Increment the used counter — but not for exempt staff (their listings are
+  // unlimited, so we keep their counter clean / irrelevant).
+  if (!exempt) {
+    await db
+      .update(users)
+      .set({ freeListingsUsed: user.freeListingsUsed + 1 })
+      .where(eq(users.id, userId));
+  }
 
   return NextResponse.json({ ok: true, slug: listing.slug }, { status: 201 });
 }
