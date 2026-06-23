@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { isOptimizableImage } from "@/lib/utils";
 
 type Props = {
   item: {
@@ -49,6 +50,7 @@ export default function NewsCard({ item, compact = false }: Props) {
             fill
             sizes="(max-width: 640px) 100vw, 50vw"
             className="object-cover"
+            unoptimized={!isOptimizableImage(item.imageUrl)}
           />
         </div>
       )}

@@ -3,7 +3,7 @@ import Image from "next/image";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { newsItems } from "@/lib/db/schema";
-import { formatDate } from "@/lib/utils";
+import { formatDate, isOptimizableImage } from "@/lib/utils";
 import type { Metadata } from "next";
 import JsonLd from "@/components/seo/JsonLd";
 import { pageMetadata, articleJsonLd, breadcrumbJsonLd } from "@/lib/seo";
@@ -76,7 +76,7 @@ export default async function StirePage({ params }: Props) {
 
       {item.imageUrl && (
         <div className="relative w-full h-80 rounded-xl mb-6 overflow-hidden">
-          <Image src={item.imageUrl} alt={item.title} fill priority sizes="(max-width: 768px) 100vw, 672px" className="object-cover" />
+          <Image src={item.imageUrl} alt={item.title} fill priority sizes="(max-width: 768px) 100vw, 672px" className="object-cover" unoptimized={!isOptimizableImage(item.imageUrl)} />
         </div>
       )}
 

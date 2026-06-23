@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { isOptimizableImage } from "@/lib/utils";
 
 type Props = {
   event: {
@@ -63,7 +64,7 @@ export default function EventCard({ event, compact = false }: Props) {
       <div className="relative">
         {event.imageUrl ? (
           <div className="relative w-full h-44">
-            <Image src={event.imageUrl} alt={event.title} fill sizes="(max-width: 640px) 100vw, 50vw" className="object-cover" />
+            <Image src={event.imageUrl} alt={event.title} fill sizes="(max-width: 640px) 100vw, 50vw" className="object-cover" unoptimized={!isOptimizableImage(event.imageUrl)} />
           </div>
         ) : (
           <div className="w-full h-44 bg-[#1a4731]/10 flex items-center justify-center">
