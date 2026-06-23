@@ -3,7 +3,7 @@ import Image from "next/image";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { events } from "@/lib/db/schema";
-import { formatDate } from "@/lib/utils";
+import { formatDate, isOptimizableImage } from "@/lib/utils";
 import type { Metadata } from "next";
 import JsonLd from "@/components/seo/JsonLd";
 import { pageMetadata, eventJsonLd, breadcrumbJsonLd } from "@/lib/seo";
@@ -61,7 +61,7 @@ export default async function EvenimentPage({ params }: Props) {
       />
       {ev.imageUrl && (
         <div className="relative w-full h-80 rounded-xl mb-6 overflow-hidden">
-          <Image src={ev.imageUrl} alt={ev.title} fill priority sizes="(max-width: 768px) 100vw, 672px" className="object-cover" />
+          <Image src={ev.imageUrl} alt={ev.title} fill priority sizes="(max-width: 768px) 100vw, 672px" className="object-cover" unoptimized={!isOptimizableImage(ev.imageUrl)} />
         </div>
       )}
       <span className="text-xs bg-green-100 text-green-800 px-3 py-1 rounded-full font-medium">
