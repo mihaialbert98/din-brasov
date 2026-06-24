@@ -63,7 +63,7 @@ export default async function ExperientePage({
               className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow overflow-hidden group"
             >
               {exp.imageUrl ? (
-                <img src={exp.imageUrl} alt={exp.title} className="w-full h-44 object-cover group-hover:scale-105 transition-transform duration-300" />
+                <img src={exp.imageUrl} alt={exp.title} className="w-full h-44 object-cover group-hover:scale-115 transition-transform duration-300" />
               ) : (
                 <div className="w-full h-44 bg-gradient-to-br from-[#e8d9c5] to-[#c84b1e]/20 flex items-center justify-center">
                   <span className="text-4xl">🎯</span>

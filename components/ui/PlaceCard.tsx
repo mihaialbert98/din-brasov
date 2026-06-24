@@ -59,7 +59,7 @@ export default function PlaceCard({ place, compact = false }: Props) {
     >
       {image ? (
         <div className="relative w-full h-40 overflow-hidden">
-          <Image src={image} alt={place.name} fill sizes="(max-width: 640px) 100vw, 33vw" className="object-cover group-hover:scale-105 transition-transform duration-300" />
+          <Image src={image} alt={place.name} fill sizes="(max-width: 640px) 100vw, 33vw" className="object-cover group-hover:scale-115 transition-transform duration-300" />
         </div>
       ) : (
         <div className="w-full h-40 bg-gradient-to-br from-[#e8d9c5] to-[#c84b1e]/20 flex items-center justify-center">

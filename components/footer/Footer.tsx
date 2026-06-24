@@ -22,13 +22,15 @@ export function Footer() {
           <div>
             {/* Logo + wordmark */}
             <div className="flex items-center gap-3 mb-3">
-              <img
-                src="/logo.png"
-                alt="Din Brașov"
-                width={40}
-                height={40}
-                className="rounded-full object-cover flex-shrink-0"
-              />
+              <span className="block w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
+                <img
+                  src="/logo.png"
+                  alt="Din Brașov"
+                  width={40}
+                  height={40}
+                  className="w-full h-full object-cover scale-115"
+                />
+              </span>
               <span className="font-bold text-lg text-white">
                 Din <span className="text-[#c84b1e]">Brașov</span>
               </span>
@@ -78,7 +80,7 @@ export function Footer() {
           <div>
             <h4 className="font-semibold text-white mb-3">Anunț Asistat</h4>
             <p className="text-sm text-gray-400 mb-2">
-              Nu știi să folosești internetul? Sună-ne!
+              Ai nevoie de ajutor in publicare anuntului? Sună-ne!
             </p>
             <a
               href="tel:+40770936013"

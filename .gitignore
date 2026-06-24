@@ -43,6 +43,7 @@ next-env.d.ts
 # Claude Code
 CLAUDE.md
 .claude/
+agents/
 
 # Scraper
 scraper/node_modules/
