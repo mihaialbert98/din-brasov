@@ -96,7 +96,7 @@ export default async function HomePage() {
         <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center gap-4 text-center md:text-left">
           <div className="text-5xl" aria-hidden>📞</div>
           <div>
-            <h2 className="text-xl font-bold text-[#1a1a1a] mb-1">Nu știi să folosești internetul?</h2>
+            <h2 className="text-xl font-bold text-[#1a1a1a] mb-1">Ai nevoie de ajutor in publicare anuntului?</h2>
             <p className="text-gray-700 text-lg mb-2">Sună-ne și noi publicăm anunțul în locul tău, gratuit.</p>
             <a href="tel:+40770936013" className="text-xl sm:text-3xl font-bold text-[#c84b1e] hover:underline" aria-label="Sună pentru ajutor cu anunțul">
               0770 936 013
