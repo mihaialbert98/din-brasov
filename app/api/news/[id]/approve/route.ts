@@ -34,5 +34,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     entityId: id,
   });
 
-  return NextResponse.redirect(new URL("/admin/stiri", req.url));
+  // Return to the same draft-queue page the moderator came from (preserves position).
+  const dp = new URL(req.url).searchParams.get("dp");
+  const dest = new URL("/admin/stiri", req.url);
+  if (dp) dest.searchParams.set("dp", dp);
+  return NextResponse.redirect(dest);
 }
