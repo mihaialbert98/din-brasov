@@ -5,15 +5,17 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import ScrapePanel from "@/components/admin/ScrapePanel";
 import PublishedNewsTable from "@/components/admin/PublishedNewsTable";
-import DraftDeleteButton from "@/components/admin/DraftDeleteButton";
 import DeleteAllPendingButton from "@/components/admin/DeleteAllPendingButton";
+import DraftReviewGrid, { type DraftCard } from "@/components/admin/DraftReviewGrid";
 import Pagination from "@/components/ui/Pagination";
+import { normalizeTitle } from "@/lib/text";
 
 export const metadata: Metadata = { title: "Admin — Știri" };
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 const DRAFTS_PER_PAGE = 12;
 const PUBLISHED_PER_PAGE = 20;
+const NEW_BATCH_WINDOW_MS = 60 * 60 * 1000; // 1h — drafts from the latest scrape
 
 function daysUntilExpiry(createdAt: Date | null): number {
   if (!createdAt) return 0;
@@ -31,17 +33,15 @@ function buildHref(params: Record<string, string | undefined>, key: string, page
 }
 
 interface Props {
-  searchParams: Promise<{ since?: string; dp?: string; pp?: string }>;
+  searchParams: Promise<{ dp?: string; pp?: string }>;
 }
 
 export default async function AdminStiriPage({ searchParams }: Props) {
   const params = await searchParams;
-  const since = params.since;
-  const sinceDate = since ? new Date(since) : null;
   const draftPage = Math.max(1, parseInt(params.dp ?? "1"));
   const pubPage = Math.max(1, parseInt(params.pp ?? "1"));
 
-  const [[{ draftTotal }], [{ pubTotal }], drafts, published] = await Promise.all([
+  const [[{ draftTotal }], [{ pubTotal }], drafts, published, publishedTitleRows, scrapeAgg] = await Promise.all([
     db.select({ draftTotal: count() }).from(newsItems).where(eq(newsItems.status, "draft")),
     db.select({ pubTotal: count() }).from(newsItems).where(eq(newsItems.status, "published")),
     db.select().from(newsItems).where(eq(newsItems.status, "draft"))
@@ -52,6 +52,10 @@ export default async function AdminStiriPage({ searchParams }: Props) {
       .orderBy(desc(newsItems.publishedAt))
       .limit(PUBLISHED_PER_PAGE)
       .offset((pubPage - 1) * PUBLISHED_PER_PAGE),
+    // All published titles → duplicate detection against the draft set.
+    db.select({ title: newsItems.title }).from(newsItems).where(eq(newsItems.status, "published")),
+    // Latest scrape time across ALL drafts → "newly scraped" batch boundary.
+    db.select({ scrapedAt: newsItems.scrapedAt }).from(newsItems).where(eq(newsItems.status, "draft")),
   ]);
 
   const draftTotalPages = Math.ceil(draftTotal / DRAFTS_PER_PAGE);
@@ -61,7 +65,28 @@ export default async function AdminStiriPage({ searchParams }: Props) {
     (i) => i.publishedAt != null && new Date(i.publishedAt).getTime() < Date.now() - THIRTY_DAYS_MS
   );
 
-  const currentParams = { since, dp: params.dp, pp: params.pp };
+  // Duplicate detection: a draft whose normalized title matches a published one.
+  const publishedTitleSet = new Set(publishedTitleRows.map((r) => normalizeTitle(r.title)));
+  const latestScrape = scrapeAgg.reduce<number>((max, r) => {
+    const t = r.scrapedAt ? new Date(r.scrapedAt).getTime() : 0;
+    return t > max ? t : max;
+  }, 0);
+
+  const draftCards: DraftCard[] = drafts.map((item) => ({
+    id: item.id,
+    title: item.title,
+    excerpt: item.excerpt,
+    sourceName: item.sourceName,
+    category: item.category,
+    imageUrl: item.imageUrl,
+    daysUntilExpiry: daysUntilExpiry(item.createdAt),
+    isDuplicate: publishedTitleSet.has(normalizeTitle(item.title)),
+    isNewBatch:
+      item.scrapedAt != null &&
+      new Date(item.scrapedAt).getTime() >= latestScrape - NEW_BATCH_WINDOW_MS,
+  }));
+
+  const currentParams = { dp: params.dp, pp: params.pp };
 
   return (
     <div className="space-y-8">
@@ -89,46 +114,7 @@ export default async function AdminStiriPage({ searchParams }: Props) {
           <p className="text-gray-400 text-sm">Nu există știri de revizuit.</p>
         ) : (
           <>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {drafts.map((item) => {
-                const days = daysUntilExpiry(item.createdAt);
-                const isNew = sinceDate !== null &&
-                  (item.scrapedAt ?? item.createdAt) !== null &&
-                  new Date(item.scrapedAt ?? item.createdAt!).getTime() >= sinceDate.getTime();
-
-                return (
-                  <Link
-                    key={item.id}
-                    href={`/admin/stiri/${item.id}`}
-                    className="relative bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow flex flex-col overflow-hidden"
-                  >
-                    {isNew && (
-                      <span className="absolute top-2 left-2 z-10 bg-green-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                        Nou
-                      </span>
-                    )}
-                    <DraftDeleteButton id={item.id} title={item.title} />
-                    {item.imageUrl && (
-                      <img src={item.imageUrl} alt="" className="w-full h-32 object-cover" />
-                    )}
-                    <div className="p-4 flex flex-col gap-2 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-[#c84b1e] uppercase">{item.sourceName}</span>
-                        {item.category && <span className="text-xs text-gray-400">· {item.category}</span>}
-                      </div>
-                      <h2 className="font-semibold text-gray-900 text-sm line-clamp-3">{item.title}</h2>
-                      <p className="text-xs text-gray-500 line-clamp-2">{item.excerpt}</p>
-                      <div className="mt-auto pt-2 flex items-center justify-between">
-                        <span className={`text-xs font-medium ${days <= 1 ? "text-red-500" : "text-gray-400"}`}>
-                          Expiră în {days} {days === 1 ? "zi" : "zile"}
-                        </span>
-                        <span className="text-xs text-[#c84b1e] font-medium">Revizuiește →</span>
-                      </div>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
+            <DraftReviewGrid drafts={draftCards} draftPage={draftPage} />
             <Pagination
               currentPage={draftPage}
               totalPages={draftTotalPages}

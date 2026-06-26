@@ -1,10 +1,11 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { searchNews, searchEvents, searchListings, searchPlaces } from "@/lib/search";
+import { searchNews, searchEvents, searchListings, searchPlaces, searchExperiences } from "@/lib/search";
 import NewsCard from "@/components/ui/NewsCard";
 import EventCard from "@/components/ui/EventCard";
 import PlaceCard from "@/components/ui/PlaceCard";
 import ListingCard from "@/components/ui/ListingCard";
+import ExperienceCard from "@/components/ui/ExperienceCard";
 import JsonLd from "@/components/seo/JsonLd";
 import { organizationJsonLd, websiteJsonLd, pageMetadata } from "@/lib/seo";
 import FoundingMemberBanner from "@/components/promo/FoundingMemberBanner";
@@ -24,11 +25,12 @@ export const metadata: Metadata = {
 };
 
 export default async function HomePage() {
-  const [latestNews, upcomingEvents, recentPlaces, recentListings, session, spotsLeft] = await Promise.all([
+  const [latestNews, upcomingEvents, recentPlaces, recentListings, recentExperiences, session, spotsLeft] = await Promise.all([
     searchNews("", { page: 1 }).catch(() => []),
     searchEvents("", { page: 1 }).catch(() => []),
     searchPlaces("", { page: 1 }).catch(() => []),
     searchListings("", { page: 1 }).then((r) => r.listings).catch(() => []),
+    searchExperiences("", { page: 1 }).catch(() => []),
     auth().catch(() => null),
     getFoundingSpotsLeft().catch(() => 0),
   ]);
@@ -73,6 +75,9 @@ export default async function HomePage() {
               </Link>
               <Link href="/localuri" className="bg-white/10 text-white font-semibold px-6 py-3 rounded-xl hover:bg-white/20 transition-colors border border-white/20">
                 Localuri
+              </Link>
+              <Link href="/experiente" className="bg-white/10 text-white font-semibold px-6 py-3 rounded-xl hover:bg-white/20 transition-colors border border-white/20">
+                Experiențe
               </Link>
               <Link href="/anunturi" className="bg-[#6bb5d4] text-[#1a1a1a] font-semibold px-6 py-3 rounded-xl hover:bg-[#4a9ab8] hover:text-white transition-colors">
                 Anunțuri
@@ -164,6 +169,27 @@ export default async function HomePage() {
             <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
               {recentPlaces.slice(0, 3).map((place) => (
                 <PlaceCard key={place.id} place={place} compact />
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Recent experiences */}
+        <section aria-label="Experiențe">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-[#1a1a1a]">
+              <span className="border-b-4 border-[#6bb5d4] pb-1">Experiențe</span>
+            </h2>
+            <Link href="/experiente" className="text-[#c84b1e] font-semibold hover:underline text-sm">
+              Vezi toate →
+            </Link>
+          </div>
+          {recentExperiences.length === 0 ? (
+            <p className="text-gray-500">Nu există experiențe disponibile momentan.</p>
+          ) : (
+            <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
+              {recentExperiences.slice(0, 3).map((exp) => (
+                <ExperienceCard key={exp.id} experience={exp} />
               ))}
             </div>
           )}

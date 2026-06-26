@@ -1,6 +1,6 @@
 import { sql, and, eq, count } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { newsItems, events, listings, places } from "@/lib/db/schema";
+import { newsItems, events, listings, places, experiences } from "@/lib/db/schema";
 
 const PAGE_SIZE = 20;
 
@@ -167,6 +167,32 @@ export async function searchPlaces(
     .from(places)
     .where(and(...conditions))
     .orderBy(sql`${places.createdAt} DESC`)
+    .limit(PAGE_SIZE)
+    .offset((page - 1) * PAGE_SIZE);
+}
+
+export async function searchExperiences(
+  query: string,
+  { page = 1, category }: { page?: number; category?: string } = {}
+) {
+  const conditions = [eq(experiences.status, "published")];
+  if (category) conditions.push(eq(experiences.category, category));
+  if (query) {
+    conditions.push(sql`${experiences.searchVector} @@ ${searchQuery(query)}`);
+  }
+
+  return db
+    .select({
+      id: experiences.id,
+      title: experiences.title,
+      slug: experiences.slug,
+      category: experiences.category,
+      imageUrl: experiences.imageUrl,
+      description: experiences.description,
+    })
+    .from(experiences)
+    .where(and(...conditions))
+    .orderBy(sql`${experiences.createdAt} DESC`)
     .limit(PAGE_SIZE)
     .offset((page - 1) * PAGE_SIZE);
 }

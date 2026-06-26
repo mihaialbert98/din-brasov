@@ -45,11 +45,9 @@ export default function ScrapePanel() {
       const added = data.total ?? 0;
       setTotal(added);
       if (added > 0) {
-        // Navigate with ?since=<scrape start> so the freshly scraped drafts get
-        // the "Nou" badge in the review queue. Use the server's start time when
-        // available (avoids clock skew), else fall back to now.
-        const since = data.startedAt ? new Date(data.startedAt).toISOString() : new Date().toISOString();
-        router.push(`/admin/stiri?since=${encodeURIComponent(since)}`);
+        // Reload the draft queue so the freshly scraped drafts appear. (All drafts
+        // show the "Nou" badge until reviewed — no since-param needed.)
+        router.refresh();
       }
     } catch {
       setError("Eroare de rețea. Încearcă din nou.");

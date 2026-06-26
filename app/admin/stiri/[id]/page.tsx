@@ -13,10 +13,12 @@ export const metadata: Metadata = { title: "Admin — Revizuire știre" };
 
 interface Props {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ dp?: string }>;
 }
 
-export default async function NewsDetailPage({ params }: Props) {
+export default async function NewsDetailPage({ params, searchParams }: Props) {
   const { id } = await params;
+  const { dp } = await searchParams;
 
   const [item] = await db
     .select()
@@ -27,11 +29,14 @@ export default async function NewsDetailPage({ params }: Props) {
   if (!item) notFound();
 
   const isDraft = item.status === "draft";
+  // Preserve the draft-queue page so publish/reject/back returns where we left off.
+  const dpQuery = dp ? `?dp=${encodeURIComponent(dp)}` : "";
+  const backHref = `/admin/stiri${dpQuery}`;
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
-        <Link href="/admin/stiri" className="text-sm text-gray-500 hover:text-gray-800 transition-colors">
+        <Link href={backHref} className="text-sm text-gray-500 hover:text-gray-800 transition-colors">
           ← Înapoi la știri
         </Link>
         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
@@ -96,7 +101,7 @@ export default async function NewsDetailPage({ params }: Props) {
       <div className="flex flex-wrap gap-3">
         {isDraft && (
           <>
-            <form action={`/api/news/${item.id}/approve`} method="POST">
+            <form action={`/api/news/${item.id}/approve${dpQuery}`} method="POST">
               <button
                 type="submit"
                 className="bg-green-600 text-white font-semibold px-5 py-2 rounded-lg text-sm hover:bg-green-700 transition-colors"
@@ -104,7 +109,7 @@ export default async function NewsDetailPage({ params }: Props) {
                 Publică
               </button>
             </form>
-            <form action={`/api/news/${item.id}/reject`} method="POST">
+            <form action={`/api/news/${item.id}/reject${dpQuery}`} method="POST">
               <button
                 type="submit"
                 className="bg-gray-100 text-gray-700 font-semibold px-5 py-2 rounded-lg text-sm hover:bg-gray-200 transition-colors"
