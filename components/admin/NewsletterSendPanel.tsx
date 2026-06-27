@@ -14,6 +14,7 @@ export default function NewsletterSendPanel() {
   const [preview, setPreview] = useState<SendResult | null>(null);
   const [result, setResult] = useState<SendResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [force, setForce] = useState(false);
 
   async function call(dryRun: boolean) {
     setError(null);
@@ -23,7 +24,7 @@ export default function NewsletterSendPanel() {
       const res = await fetch("/api/newsletter/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dryRun }),
+        body: JSON.stringify({ dryRun, force }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -44,7 +45,10 @@ export default function NewsletterSendPanel() {
 
   async function handleSend() {
     const n = preview?.recipients.length ?? 0;
-    if (!confirm(`Trimiți newsletter-ul săptămânal către ${n} abonați?`)) return;
+    const warn = force
+      ? ` Atenție: vor primi și abonații cărora le-ai trimis recent.`
+      : "";
+    if (!confirm(`Trimiți newsletter-ul săptămânal către ${n} abonați?${warn}`)) return;
     await call(false);
   }
 
@@ -55,6 +59,16 @@ export default function NewsletterSendPanel() {
         Digest automat cu știrile, evenimentele și localurile noi din ultima săptămână. Fiecare
         abonat primește doar secțiunile la care s-a abonat.
       </p>
+
+      <label className="flex items-center gap-2 text-xs text-gray-600 mb-3 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={force}
+          onChange={(e) => { setForce(e.target.checked); setPreview(null); setResult(null); }}
+          className="w-4 h-4 accent-[#c84b1e]"
+        />
+        Trimite oricum (include și abonații cărora le-am trimis recent)
+      </label>
 
       <div className="flex items-center gap-3 flex-wrap">
         <button

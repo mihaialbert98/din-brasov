@@ -7,7 +7,7 @@ import { sendWeeklyDigest } from "@/lib/newsletter-send";
 
 export const maxDuration = 60;
 
-const schema = z.object({ dryRun: z.boolean().optional() });
+const schema = z.object({ dryRun: z.boolean().optional(), force: z.boolean().optional() });
 
 function canSend(role: string | undefined) {
   return role === "admin" || role === "moderator";
@@ -25,8 +25,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Date invalide." }, { status: 400 });
   }
   const dryRun = parsed.data.dryRun ?? false;
+  const force = parsed.data.force ?? false;
 
-  const result = await sendWeeklyDigest({ dryRun });
+  const result = await sendWeeklyDigest({ dryRun, force });
 
   if (!dryRun) {
     await db.insert(adminAuditLog).values({
@@ -38,6 +39,7 @@ export async function POST(req: Request) {
         sent: result.sent,
         skipped: result.skipped,
         failed: result.failed,
+        force,
       }),
     });
   }
