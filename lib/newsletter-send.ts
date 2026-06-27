@@ -65,7 +65,8 @@ function matchesAudience(sub: NewsletterSubscriber, audience: CampaignAudience):
 export async function sendWeeklyDigest({
   since,
   dryRun = false,
-}: { since?: Date; dryRun?: boolean } = {}): Promise<SendResult> {
+  force = false,
+}: { since?: Date; dryRun?: boolean; force?: boolean } = {}): Promise<SendResult> {
   const digest = await composeDigest({ since });
   const hasNews = digest.news.items.length > 0;
   const hasEvents = digest.events.items.length > 0;
@@ -74,6 +75,7 @@ export async function sendWeeklyDigest({
   const subs = await activeSubscribers();
 
   // Determine each subscriber's effective (opted-in AND non-empty) sections.
+  // `force` bypasses the recently-sent guard for an intentional re-send.
   const targets = subs
     .map((sub) => {
       const sections = {
@@ -83,7 +85,7 @@ export async function sendWeeklyDigest({
       };
       return { sub, sections, any: sections.news || sections.events || sections.places };
     })
-    .filter((t) => t.any && !sentRecently(t.sub));
+    .filter((t) => t.any && (force || !sentRecently(t.sub)));
 
   const result: SendResult = {
     sent: 0,
