@@ -1,10 +1,33 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import DraftDeleteButton from "@/components/admin/DraftDeleteButton";
+
+// Selection must survive page navigation (each ?dp= change is a full server
+// re-render that remounts this component). We persist the checked ids in
+// sessionStorage so cherry-picking works across pages; cleared after a publish.
+const SELECTION_KEY = "admin-draft-selection";
+
+function loadSelection(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = sessionStorage.getItem(SELECTION_KEY);
+    return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function saveSelection(ids: Set<string>) {
+  try {
+    sessionStorage.setItem(SELECTION_KEY, JSON.stringify([...ids]));
+  } catch {
+    /* ignore quota / privacy-mode failures */
+  }
+}
 
 export interface DraftCard {
   id: string;
@@ -30,40 +53,53 @@ const MODE_LABELS: Record<Mode, string> = {
 export default function DraftReviewGrid({
   drafts,
   draftPage,
+  totalNonDup,
+  totalNew,
+  totalDup,
 }: {
   drafts: DraftCard[];
   draftPage: number;
+  totalNonDup: number; // non-duplicate drafts across ALL pages
+  totalNew: number; // newly-scraped non-duplicate drafts across ALL pages
+  totalDup: number; // duplicate drafts across ALL pages
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  // Hydrate from sessionStorage so checks persist across page navigation.
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmMode, setConfirmMode] = useState<Mode | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const allIds = drafts.map((d) => d.id);
-  const allSelected = allIds.length > 0 && allIds.every((id) => selected.has(id));
+  useEffect(() => {
+    setSelected(loadSelection());
+  }, []);
 
-  // Counts to show how many each mode will publish (client-side hint; the server
-  // re-resolves authoritatively).
-  const nonDupCount = drafts.filter((d) => !d.isDuplicate).length;
-  const newCount = drafts.filter((d) => d.isNewBatch && !d.isDuplicate).length;
-  const dupCount = drafts.filter((d) => d.isDuplicate).length;
+  function updateSelection(next: Set<string>) {
+    setSelected(next);
+    saveSelection(next);
+  }
+
+  // The "all/new/non_overlap" modes act on EVERY pending draft server-side, so
+  // their counts are the cross-page totals, not the current page's.
+  const dupCount = totalDup;
 
   function toggleOne(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+    const next = new Set(selected);
+    next.has(id) ? next.delete(id) : next.add(id);
+    updateSelection(next);
+  }
+
+  function clearSelection() {
+    updateSelection(new Set());
   }
 
   function modeCount(mode: Mode): number {
     switch (mode) {
       case "all":
       case "non_overlap":
-        return nonDupCount;
+        return totalNonDup;
       case "new":
-        return newCount;
+        return totalNew;
       case "selected":
         return selected.size;
     }
@@ -86,7 +122,7 @@ export default function DraftReviewGrid({
           const d = await res.json().catch(() => ({}));
           throw new Error(d.error ?? "Eroare la publicare.");
         }
-        setSelected(new Set());
+        updateSelection(new Set());
         setConfirmMode(null);
         router.refresh();
       } catch (err: any) {
@@ -102,28 +138,28 @@ export default function DraftReviewGrid({
       {/* Bulk action bar */}
       <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4 flex flex-wrap items-center gap-2">
         <span className="text-sm font-medium text-amber-800 mr-auto">
-          Publicare în masă (fără revizuire individuală)
+          Publicare în masă (din toate paginile, fără revizuire individuală)
         </span>
         <button
           onClick={() => { setConfirmMode("all"); setError(null); }}
-          disabled={nonDupCount === 0}
+          disabled={totalNonDup === 0}
           className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#c84b1e] text-white hover:bg-[#d9603a] transition-colors disabled:opacity-40"
         >
-          {MODE_LABELS.all} ({nonDupCount})
+          {MODE_LABELS.all} ({totalNonDup})
         </button>
         <button
           onClick={() => { setConfirmMode("new"); setError(null); }}
-          disabled={newCount === 0}
+          disabled={totalNew === 0}
           className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-40"
         >
-          {MODE_LABELS.new} ({newCount})
+          {MODE_LABELS.new} ({totalNew})
         </button>
         <button
           onClick={() => { setConfirmMode("non_overlap"); setError(null); }}
-          disabled={nonDupCount === 0}
+          disabled={totalNonDup === 0}
           className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-40"
         >
-          {MODE_LABELS.non_overlap} ({nonDupCount})
+          {MODE_LABELS.non_overlap} ({totalNonDup})
         </button>
         <button
           onClick={() => { setConfirmMode("selected"); setError(null); }}
@@ -133,6 +169,18 @@ export default function DraftReviewGrid({
           {MODE_LABELS.selected} ({selected.size})
         </button>
       </div>
+
+      {/* Cross-page selection indicator */}
+      {selected.size > 0 && (
+        <div className="text-xs text-gray-500 mb-3 flex items-center gap-2">
+          <span>
+            {selected.size} {selected.size === 1 ? "știre selectată" : "știri selectate"} (pe toate paginile)
+          </span>
+          <button onClick={clearSelection} className="text-[#c84b1e] font-medium hover:underline">
+            Deselectează tot
+          </button>
+        </div>
+      )}
 
       {/* Draft cards */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">

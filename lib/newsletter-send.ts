@@ -42,7 +42,7 @@ function sentRecently(sub: NewsletterSubscriber): boolean {
   return Date.now() - new Date(sub.lastSentAt).getTime() < 6 * 24 * 60 * 60 * 1000;
 }
 
-export type CampaignAudience = "news" | "events" | "places" | "all";
+export type CampaignAudience = "news" | "events" | "places" | "experiences" | "all";
 
 function matchesAudience(sub: NewsletterSubscriber, audience: CampaignAudience): boolean {
   switch (audience) {
@@ -52,6 +52,8 @@ function matchesAudience(sub: NewsletterSubscriber, audience: CampaignAudience):
       return sub.wantsEvents;
     case "places":
       return sub.wantsPlaces;
+    case "experiences":
+      return sub.wantsExperiences;
     case "all":
       return true;
   }
@@ -71,6 +73,7 @@ export async function sendWeeklyDigest({
   const hasNews = digest.news.items.length > 0;
   const hasEvents = digest.events.items.length > 0;
   const hasPlaces = digest.places.items.length > 0;
+  const hasExperiences = digest.experiences.items.length > 0;
 
   const subs = await activeSubscribers();
 
@@ -82,8 +85,13 @@ export async function sendWeeklyDigest({
         news: sub.wantsNews && hasNews,
         events: sub.wantsEvents && hasEvents,
         places: sub.wantsPlaces && hasPlaces,
+        experiences: sub.wantsExperiences && hasExperiences,
       };
-      return { sub, sections, any: sections.news || sections.events || sections.places };
+      return {
+        sub,
+        sections,
+        any: sections.news || sections.events || sections.places || sections.experiences,
+      };
     })
     .filter((t) => t.any && (force || !sentRecently(t.sub)));
 

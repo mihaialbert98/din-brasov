@@ -33,6 +33,7 @@ export function NewsletterBanner() {
   const [wantsNews, setWantsNews] = useState(false);
   const [wantsEvents, setWantsEvents] = useState(false);
   const [wantsPlaces, setWantsPlaces] = useState(false);
+  const [wantsExperiences, setWantsExperiences] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
@@ -88,13 +89,14 @@ export function NewsletterBanner() {
     setWantsNews(true);
     setWantsEvents(true);
     setWantsPlaces(true);
+    setWantsExperiences(true);
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
 
-    if (!wantsNews && !wantsEvents && !wantsPlaces) {
+    if (!wantsNews && !wantsEvents && !wantsPlaces && !wantsExperiences) {
       setError("Selectează cel puțin o categorie.");
       return;
     }
@@ -104,7 +106,7 @@ export function NewsletterBanner() {
       const res = await fetch("/api/newsletter/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, wantsNews, wantsEvents, wantsPlaces, website, bannerVersion: BANNER_VERSION }),
+        body: JSON.stringify({ email, wantsNews, wantsEvents, wantsPlaces, wantsExperiences, website, bannerVersion: BANNER_VERSION }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -186,7 +188,7 @@ export function NewsletterBanner() {
               <div className="text-4xl mb-2" aria-hidden>📬</div>
               <h2 className="font-bold text-xl mb-1">Primește ce contează din Brașov</h2>
               <p className="text-gray-300 text-sm">
-                Știri, evenimente și localuri noi — direct pe email, fără spam.
+                Știri, evenimente, localuri și experiențe noi — direct pe email, fără spam.
               </p>
             </div>
 
@@ -220,6 +222,7 @@ export function NewsletterBanner() {
                     { label: "Știri", checked: wantsNews, set: setWantsNews },
                     { label: "Evenimente", checked: wantsEvents, set: setWantsEvents },
                     { label: "Localuri noi", checked: wantsPlaces, set: setWantsPlaces },
+                    { label: "Experiențe noi", checked: wantsExperiences, set: setWantsExperiences },
                   ].map((c) => (
                     <label
                       key={c.label}

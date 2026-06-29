@@ -35,6 +35,10 @@ export default async function EvenimentPage({ params }: Props) {
 
   if (!ev || ev.status !== "published") notFound();
 
+  // An event is "ended" once its end date (or its start, when there's no end) is
+  // in the past — same rule the public list and newsletter use to hide it.
+  const isEnded = (ev.endsAt ?? ev.startsAt).getTime() < Date.now();
+
   return (
     <article className="max-w-2xl mx-auto px-4 py-10">
       <JsonLd
@@ -64,6 +68,11 @@ export default async function EvenimentPage({ params }: Props) {
           <Image src={ev.imageUrl} alt={ev.title} fill priority sizes="(max-width: 768px) 100vw, 672px" className="object-cover" unoptimized={!isOptimizableImage(ev.imageUrl)} />
         </div>
       )}
+      {isEnded && (
+        <div className="bg-gray-100 border border-gray-200 text-gray-700 rounded-xl px-4 py-3 mb-4 text-sm font-medium">
+          ⏳ Acest eveniment s-a încheiat.
+        </div>
+      )}
       <span className="text-xs bg-green-100 text-green-800 px-3 py-1 rounded-full font-medium">
         {ev.category ?? "Eveniment"}
       </span>
@@ -75,7 +84,7 @@ export default async function EvenimentPage({ params }: Props) {
         <p>
           {ev.isFree ? "✅ Intrare liberă" : ev.price ? `🎟️ ${ev.price} ${ev.currency}` : ""}
         </p>
-        {ev.externalUrl && (
+        {ev.externalUrl && !isEnded && (
           <a
             href={ev.externalUrl}
             target="_blank"

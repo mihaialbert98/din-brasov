@@ -124,10 +124,27 @@ function digestPlacesBlock(d: Digest["places"]): string {
     ${ctaButton(`${APP_URL}/localuri`, `Vezi toate localurile${more} →`)}`;
 }
 
+function digestExperiencesBlock(d: Digest["experiences"]): string {
+  if (d.items.length === 0) return "";
+  const rows = d.items
+    .map((x) => {
+      return `<tr><td style="padding:8px 0;border-bottom:1px solid #f0f0f0;">
+        <a href="${APP_URL}/experiente/${esc(x.slug)}" style="font-size:15px;font-weight:600;color:#1a1a1a;text-decoration:none;line-height:1.4;">${esc(x.title)}</a>
+        ${x.category ? `<span style="font-size:11px;color:#c84b1e;text-transform:uppercase;margin-left:6px;">${esc(x.category)}</span>` : ""}
+      </td></tr>`;
+    })
+    .join("");
+  const more = d.total > d.items.length ? ` (+${d.total - d.items.length})` : "";
+  return `${sectionHeading("Experiențe noi")}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}</table>
+    ${ctaButton(`${APP_URL}/experiente`, `Vezi toate experiențele${more} →`)}`;
+}
+
 export interface DigestSections {
   news: boolean;
   events: boolean;
   places: boolean;
+  experiences: boolean;
 }
 
 /**
@@ -144,6 +161,7 @@ export async function sendNewsletterDigest(
     (sections.news ? digestNewsBlock(digest.news) : "") +
     (sections.events ? digestEventsBlock(digest.events) : "") +
     (sections.places ? digestPlacesBlock(digest.places) : "") +
+    (sections.experiences ? digestExperiencesBlock(digest.experiences) : "") +
     unsubscribeFooter(token);
 
   const html = emailLayout({ heading: "Din Brașov săptămâna asta", body });

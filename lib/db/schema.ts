@@ -365,6 +365,7 @@ export const newsletterSubscribers = pgTable("newsletter_subscribers", {
   wantsNews: boolean("wants_news").notNull().default(false),
   wantsEvents: boolean("wants_events").notNull().default(false),
   wantsPlaces: boolean("wants_places").notNull().default(false),
+  wantsExperiences: boolean("wants_experiences").notNull().default(false),
   status: text("status").notNull().default("pending"), // pending | active | unsubscribed
   verificationToken: text("verification_token"), // also serves as the unsubscribe token
   verifiedAt: timestamp("verified_at", { mode: "date" }),
