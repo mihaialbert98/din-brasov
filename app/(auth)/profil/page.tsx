@@ -1,8 +1,8 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { listings, listingFavourites, users, paidSlots } from "@/lib/db/schema";
-import { eq, and, desc, count, inArray } from "drizzle-orm";
+import { listings, listingFavourites, users, paidSlots, newsletterSubscribers } from "@/lib/db/schema";
+import { eq, and, or, desc, count, inArray } from "drizzle-orm";
 import Link from "next/link";
 import { signOut } from "@/lib/auth";
 import { formatDate } from "@/lib/utils";
@@ -12,6 +12,7 @@ import RenewButton from "@/components/profil/RenewButton";
 import ListingRules from "@/components/marketplace/ListingRules";
 import DeleteOwnListingButton from "@/components/profil/DeleteOwnListingButton";
 import UnfavouriteButton from "@/components/profil/UnfavouriteButton";
+import NewsletterPreferences from "@/components/profil/NewsletterPreferences";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Profilul meu" };
@@ -120,6 +121,28 @@ export default async function ProfilPage() {
     .from(listingFavourites)
     .innerJoin(listings, eq(listingFavourites.listingId, listings.id))
     .where(and(eq(listingFavourites.userId, userId), eq(listings.status, "active")));
+
+  // Newsletter subscription — matched by account id or email (account subscribers
+  // are linked by both). Only an "active" subscription counts as opted-in.
+  const userEmail = session.user.email ?? null;
+  const [subscriber] = await db
+    .select()
+    .from(newsletterSubscribers)
+    .where(
+      userEmail
+        ? or(eq(newsletterSubscribers.userId, userId), eq(newsletterSubscribers.email, userEmail))
+        : eq(newsletterSubscribers.userId, userId)
+    )
+    .limit(1);
+  const newsletterPrefs =
+    subscriber && subscriber.status === "active"
+      ? {
+          wantsNews: subscriber.wantsNews,
+          wantsEvents: subscriber.wantsEvents,
+          wantsPlaces: subscriber.wantsPlaces,
+          wantsExperiences: subscriber.wantsExperiences,
+        }
+      : { wantsNews: false, wantsEvents: false, wantsPlaces: false, wantsExperiences: false };
 
   return (
     <div className="w-full max-w-2xl">
@@ -282,6 +305,9 @@ export default async function ProfilPage() {
           </ul>
         )}
       </div>
+
+      {/* Newsletter preferences */}
+      <NewsletterPreferences initial={newsletterPrefs} />
 
       {/* Account actions */}
       <div className="flex flex-col gap-3">
