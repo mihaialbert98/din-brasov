@@ -21,6 +21,7 @@ const schema = z.object({
   wantsNews: z.boolean(),
   wantsEvents: z.boolean(),
   wantsPlaces: z.boolean(),
+  wantsExperiences: z.boolean().optional(),
   bannerVersion: z.string().max(20).optional(),
   // Honeypot — must be empty. Bots tend to fill every field.
   website: z.string().max(0).optional(),
@@ -39,9 +40,10 @@ export async function POST(req: Request) {
   }
 
   const { wantsNews, wantsEvents, wantsPlaces, bannerVersion } = parsed.data;
+  const wantsExperiences = parsed.data.wantsExperiences ?? false;
   const email = parsed.data.email.toLowerCase();
 
-  if (!wantsNews && !wantsEvents && !wantsPlaces) {
+  if (!wantsNews && !wantsEvents && !wantsPlaces && !wantsExperiences) {
     return NextResponse.json(
       { error: "Selectează cel puțin o categorie." },
       { status: 400 }
@@ -82,6 +84,7 @@ export async function POST(req: Request) {
           wantsNews,
           wantsEvents,
           wantsPlaces,
+          wantsExperiences,
           status: "pending",
           verificationToken,
           unsubscribedAt: null,
@@ -98,6 +101,7 @@ export async function POST(req: Request) {
         wantsNews,
         wantsEvents,
         wantsPlaces,
+        wantsExperiences,
         status: "pending",
         verificationToken,
         ipHash,

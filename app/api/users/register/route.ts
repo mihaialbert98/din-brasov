@@ -14,6 +14,7 @@ const schema = z.object({
   wantsNews: z.boolean().optional(),
   wantsEvents: z.boolean().optional(),
   wantsPlaces: z.boolean().optional(),
+  wantsExperiences: z.boolean().optional(),
 });
 
 export async function POST(req: Request) {
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { name, password, wantsNews, wantsEvents, wantsPlaces } = parsed.data;
+  const { name, password, wantsNews, wantsEvents, wantsPlaces, wantsExperiences } = parsed.data;
   const email = parsed.data.email.toLowerCase();
 
   const [existing] = await db.select().from(users).where(eq(users.email, email)).limit(1);
@@ -55,13 +56,14 @@ export async function POST(req: Request) {
   const founding = newUser?.id ? await grantFoundingIfEligible(newUser.id) : false;
 
   // Newsletter prefs chosen at sign-up are pre-verified (email proven via account).
-  if (wantsNews || wantsEvents || wantsPlaces) {
+  if (wantsNews || wantsEvents || wantsPlaces || wantsExperiences) {
     await db.insert(newsletterSubscribers).values({
       email,
       userId: newUser?.id ?? null,
       wantsNews: !!wantsNews,
       wantsEvents: !!wantsEvents,
       wantsPlaces: !!wantsPlaces,
+      wantsExperiences: !!wantsExperiences,
       status: "active",
       verificationToken: crypto.randomUUID(), // stable unsubscribe token
       verifiedAt: new Date(),

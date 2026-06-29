@@ -6,7 +6,7 @@
  */
 import { sql, and, eq, count, gte } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { newsItems, events, places } from "@/lib/db/schema";
+import { newsItems, events, places, experiences } from "@/lib/db/schema";
 
 const PREVIEW_LIMIT = 5;
 
@@ -33,11 +33,18 @@ export interface DigestPlace {
   category: string | null;
   address: string | null;
 }
+export interface DigestExperience {
+  title: string;
+  slug: string;
+  category: string | null;
+  imageUrl: string | null;
+}
 
 export interface Digest {
   news: { items: DigestNewsItem[]; total: number };
   events: { items: DigestEvent[]; total: number };
   places: { items: DigestPlace[]; total: number };
+  experiences: { items: DigestExperience[]; total: number };
 }
 
 /** Recently published news within the window. */
@@ -61,9 +68,16 @@ async function getDigestNews(since: Date): Promise<Digest["news"]> {
   return { items, total };
 }
 
-/** Upcoming published events (past events are useless in a newsletter). */
+/**
+ * Still-relevant published events. An event is included until it has finished —
+ * i.e. its end date (or its start date, when there's no end) is still >= now —
+ * so in-progress and same-day events are kept. Mirrors the public list rule.
+ */
 async function getDigestEvents(now: Date): Promise<Digest["events"]> {
-  const where = and(eq(events.status, "published"), gte(events.startsAt, now));
+  const where = and(
+    eq(events.status, "published"),
+    sql`COALESCE(${events.endsAt}, ${events.startsAt}) >= ${now}`
+  );
   const [items, [{ total }]] = await Promise.all([
     db
       .select({
@@ -105,16 +119,37 @@ async function getDigestPlaces(since: Date): Promise<Digest["places"]> {
   return { items, total };
 }
 
+/** Newly added published experiences within the window. */
+async function getDigestExperiences(since: Date): Promise<Digest["experiences"]> {
+  const where = and(eq(experiences.status, "published"), gte(experiences.createdAt, since));
+  const [items, [{ total }]] = await Promise.all([
+    db
+      .select({
+        title: experiences.title,
+        slug: experiences.slug,
+        category: experiences.category,
+        imageUrl: experiences.imageUrl,
+      })
+      .from(experiences)
+      .where(where)
+      .orderBy(sql`${experiences.createdAt} DESC`)
+      .limit(PREVIEW_LIMIT),
+    db.select({ total: count() }).from(experiences).where(where),
+  ]);
+  return { items, total };
+}
+
 /**
  * Compose the full digest once. `since` defaults to 7 days ago (weekly window).
  */
 export async function composeDigest({ since }: { since?: Date } = {}): Promise<Digest> {
   const now = new Date();
   const from = since ?? new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const [news, events, places] = await Promise.all([
+  const [news, events, places, experiences] = await Promise.all([
     getDigestNews(from),
     getDigestEvents(now),
     getDigestPlaces(from),
+    getDigestExperiences(from),
   ]);
-  return { news, events, places };
+  return { news, events, places, experiences };
 }

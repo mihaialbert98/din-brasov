@@ -15,7 +15,7 @@ const schema = z.object({
   imageUrl: z.string().url().optional(),
   ctaLabel: z.string().max(60).optional(),
   ctaHref: z.string().url().optional(),
-  audience: z.enum(["news", "events", "places", "all"]),
+  audience: z.enum(["news", "events", "places", "experiences", "all"]),
   dryRun: z.boolean().optional(),
 });
 

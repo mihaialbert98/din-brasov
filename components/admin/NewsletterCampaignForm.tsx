@@ -4,12 +4,13 @@ import { useState } from "react";
 import { UploadButton } from "@/lib/uploadthing-client";
 import { compressFiles } from "@/lib/image-compress";
 
-type Audience = "events" | "places" | "news" | "all";
+type Audience = "events" | "places" | "news" | "experiences" | "all";
 
 const AUDIENCES: { value: Audience; label: string }[] = [
   { value: "events", label: "Abonați la evenimente" },
   { value: "places", label: "Abonați la localuri noi" },
   { value: "news", label: "Abonați la știri" },
+  { value: "experiences", label: "Abonați la experiențe noi" },
   { value: "all", label: "Toți abonații activi" },
 ];
 

@@ -67,6 +67,7 @@ export default async function AdminNewsletterPage({
                       {s.wantsNews && <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">Știri</span>}
                       {s.wantsEvents && <span className="text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full">Evenimente</span>}
                       {s.wantsPlaces && <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full">Localuri</span>}
+                      {s.wantsExperiences && <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full">Experiențe</span>}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-gray-600">

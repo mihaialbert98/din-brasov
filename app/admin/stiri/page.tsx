@@ -86,6 +86,23 @@ export default async function AdminStiriPage({ searchParams }: Props) {
       new Date(item.scrapedAt).getTime() >= latestScrape - NEW_BATCH_WINDOW_MS,
   }));
 
+  // True cross-page counts for the bulk-publish buttons. The bulk modes operate on
+  // ALL pending drafts server-side, so the button labels must reflect the whole
+  // queue — not just the drafts on the current page. We need every draft's title +
+  // scrapedAt (cheap) to compute duplicate / newly-scraped totals.
+  const allDraftMeta = await db
+    .select({ title: newsItems.title, scrapedAt: newsItems.scrapedAt })
+    .from(newsItems)
+    .where(eq(newsItems.status, "draft"));
+  const totalDup = allDraftMeta.filter((d) => publishedTitleSet.has(normalizeTitle(d.title))).length;
+  const totalNonDup = draftTotal - totalDup;
+  const totalNew = allDraftMeta.filter(
+    (d) =>
+      d.scrapedAt != null &&
+      new Date(d.scrapedAt).getTime() >= latestScrape - NEW_BATCH_WINDOW_MS &&
+      !publishedTitleSet.has(normalizeTitle(d.title))
+  ).length;
+
   const currentParams = { dp: params.dp, pp: params.pp };
 
   return (
@@ -114,7 +131,13 @@ export default async function AdminStiriPage({ searchParams }: Props) {
           <p className="text-gray-400 text-sm">Nu există știri de revizuit.</p>
         ) : (
           <>
-            <DraftReviewGrid drafts={draftCards} draftPage={draftPage} />
+            <DraftReviewGrid
+              drafts={draftCards}
+              draftPage={draftPage}
+              totalNonDup={totalNonDup}
+              totalNew={totalNew}
+              totalDup={totalDup}
+            />
             <Pagination
               currentPage={draftPage}
               totalPages={draftTotalPages}

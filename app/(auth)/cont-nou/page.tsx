@@ -43,6 +43,7 @@ export default function ContNouPage() {
         wantsNews: form.get("wantsNews") === "on",
         wantsEvents: form.get("wantsEvents") === "on",
         wantsPlaces: form.get("wantsPlaces") === "on",
+        wantsExperiences: form.get("wantsExperiences") === "on",
       }),
     });
 
@@ -118,6 +119,7 @@ export default function ContNouPage() {
               { name: "wantsNews", label: "Știri" },
               { name: "wantsEvents", label: "Evenimente" },
               { name: "wantsPlaces", label: "Localuri noi" },
+              { name: "wantsExperiences", label: "Experiențe noi" },
             ].map((c) => (
               <label key={c.name} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
                 <input type="checkbox" name={c.name} className="w-4 h-4 accent-[#c84b1e]" />
