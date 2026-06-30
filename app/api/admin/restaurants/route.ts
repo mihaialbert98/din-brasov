@@ -12,10 +12,10 @@ import {
   users,
   restaurants,
   restaurantMembers,
-  restaurantTables,
   adminAuditLog,
 } from "@/lib/db/schema";
 import { slugify } from "@/lib/slugify";
+import { addNumberedTables } from "@/lib/restaurant-tables";
 
 const schema = z.object({
   name: z.string().min(2, "Numele trebuie să aibă cel puțin 2 caractere.").max(200),
@@ -23,7 +23,7 @@ const schema = z.object({
   description: z.string().max(2000).optional(),
   address: z.string().max(300).optional(),
   phone: z.string().max(50).optional(),
-  tableLabels: z.array(z.string().min(1).max(50)).max(100).optional(), // e.g. ["Masa 1","Masa 2"]
+  tableCount: z.number().int().min(1).max(100).optional(), // auto-labeled Masa 1…N
 });
 
 /** Build a unique slug from the name (no date suffix — it's a brand URL). */
@@ -56,7 +56,7 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-  const { name, ownerEmail, description, address, phone, tableLabels } = parsed.data;
+  const { name, ownerEmail, description, address, phone, tableCount } = parsed.data;
 
   // Owner must already have an account (v1 — no invite flow).
   const [owner] = await db
@@ -93,20 +93,15 @@ export async function POST(req: Request) {
     memberRole: "owner",
   });
 
-  // Optional initial tables — each gets an auto-minted unguessable qrToken.
-  const labels = (tableLabels ?? []).map((l) => l.trim()).filter(Boolean);
-  if (labels.length > 0) {
-    await db.insert(restaurantTables).values(
-      labels.map((label) => ({ restaurantId, label }))
-    );
-  }
+  // Optional initial tables — auto-labeled Masa 1…N, each with its own QR token.
+  const tablesCreated = tableCount ? await addNumberedTables(restaurantId, tableCount) : 0;
 
   await db.insert(adminAuditLog).values({
     adminId: session.user.id,
     action: "create_restaurant",
     entityType: "restaurant",
     entityId: restaurantId,
-    metadataJson: JSON.stringify({ name, slug, ownerEmail, tables: labels.length }),
+    metadataJson: JSON.stringify({ name, slug, ownerEmail, tables: tablesCreated }),
   });
 
   return NextResponse.json({ ok: true, id: restaurantId, slug }, { status: 201 });

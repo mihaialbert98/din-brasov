@@ -22,7 +22,7 @@ export default function TablesManager({
   initialTables: TableData[];
 }) {
   const router = useRouter();
-  const [newLabel, setNewLabel] = useState("");
+  const [addCount, setAddCount] = useState(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,11 +50,10 @@ export default function TablesManager({
     }
   }
 
-  async function addTable() {
-    const label = newLabel.trim();
-    if (!label) return;
-    const r = await call(base, "POST", { label });
-    if (r) { setNewLabel(""); router.refresh(); }
+  async function addTables() {
+    const count = Math.max(1, Math.min(100, Math.floor(addCount)));
+    const r = await call(base, "POST", { count });
+    if (r) { setAddCount(1); router.refresh(); }
   }
 
   async function deleteTable(t: TableData) {
@@ -124,22 +123,29 @@ export default function TablesManager({
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow-sm p-4 flex gap-2">
-        <input
-          value={newLabel}
-          onChange={(e) => setNewLabel(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && addTable()}
-          placeholder="Masă nouă (ex: Masa 8, Terasa 2)"
-          className="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 text-base focus:outline-none focus:border-[#c84b1e]"
-          maxLength={50}
-        />
-        <button
-          onClick={addTable}
-          disabled={busy || !newLabel.trim()}
-          className="bg-[#c84b1e] text-white font-semibold px-4 py-2.5 rounded-lg hover:bg-[#d9603a] transition-colors disabled:opacity-50"
-        >
-          Adaugă masă
-        </button>
+      <div className="bg-white rounded-xl shadow-sm p-4">
+        <label className="text-sm font-medium text-gray-700">Adaugă mese</label>
+        <p className="text-xs text-gray-500 mt-0.5 mb-2">
+          Mesele se numerotează automat (Masa 1, Masa 2, …). Alege câte mese vrei să adaugi.
+        </p>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={addCount}
+            onChange={(e) => setAddCount(parseInt(e.target.value) || 1)}
+            onKeyDown={(e) => e.key === "Enter" && addTables()}
+            className="w-24 border border-gray-300 rounded-lg px-4 py-2.5 text-base focus:outline-none focus:border-[#c84b1e]"
+          />
+          <button
+            onClick={addTables}
+            disabled={busy || addCount < 1}
+            className="bg-[#c84b1e] text-white font-semibold px-4 py-2.5 rounded-lg hover:bg-[#d9603a] transition-colors disabled:opacity-50"
+          >
+            {addCount === 1 ? "Adaugă o masă" : `Adaugă ${addCount} mese`}
+          </button>
+        </div>
       </div>
 
       {initialTables.length === 0 ? (

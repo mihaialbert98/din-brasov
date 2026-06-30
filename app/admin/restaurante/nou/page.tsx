@@ -15,11 +15,8 @@ export default function NouRestaurantPage() {
     setLoading(true);
 
     const form = new FormData(e.currentTarget);
-    // Initial tables: one per line or comma-separated, e.g. "Masa 1, Masa 2".
-    const tableLabels = String(form.get("tables") ?? "")
-      .split(/[\n,]/)
-      .map((s) => s.trim())
-      .filter(Boolean);
+    // Initial tables: a count → auto-labeled Masa 1…N server-side.
+    const tableCount = parseInt(String(form.get("tableCount") ?? "")) || 0;
 
     const res = await fetch("/api/admin/restaurants", {
       method: "POST",
@@ -30,7 +27,7 @@ export default function NouRestaurantPage() {
         description: form.get("description") || undefined,
         address: form.get("address") || undefined,
         phone: form.get("phone") || undefined,
-        tableLabels: tableLabels.length ? tableLabels : undefined,
+        tableCount: tableCount > 0 ? tableCount : undefined,
       }),
     });
 
@@ -94,14 +91,13 @@ export default function NouRestaurantPage() {
         </div>
 
         <div className="flex flex-col gap-1">
-          <label htmlFor="tables" className="font-medium text-gray-700">Mese inițiale (opțional)</label>
-          <textarea
-            id="tables" name="tables" rows={3}
-            placeholder={"Masa 1\nMasa 2\nTerasa 1"}
-            className={`${field} resize-y`}
+          <label htmlFor="tableCount" className="font-medium text-gray-700">Număr de mese (opțional)</label>
+          <input
+            id="tableCount" name="tableCount" type="number" min={0} max={100} defaultValue={0}
+            className={`${field} w-32`}
           />
           <span className="text-xs text-gray-400">
-            Câte una pe linie (sau separate prin virgulă). Fiecare masă primește un cod QR unic. Poți adăuga mese și mai târziu.
+            Mesele se numerotează automat: Masa 1, Masa 2, … Fiecare primește un cod QR unic. Poți adăuga mese și mai târziu.
           </span>
         </div>
 
