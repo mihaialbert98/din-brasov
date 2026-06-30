@@ -28,9 +28,13 @@ export interface MenuCategoryData {
 export default function MenuManager({
   restaurantId,
   initialCategories,
+  requiresUnlock = false,
+  initiallyUnlocked = true,
 }: {
   restaurantId: string;
   initialCategories: MenuCategoryData[];
+  requiresUnlock?: boolean; // false for admins (they bypass 2FA)
+  initiallyUnlocked?: boolean;
 }) {
   const router = useRouter();
   const [newCategory, setNewCategory] = useState("");
@@ -39,7 +43,54 @@ export default function MenuManager({
   // Which category is showing its item form, and the item being edited (or null = new).
   const [itemForm, setItemForm] = useState<{ categoryId: string; item: MenuItemData | null } | null>(null);
 
+  // Edit lock (2FA). When requiresUnlock and not unlocked, mutations are blocked.
+  const [unlocked, setUnlocked] = useState(!requiresUnlock || initiallyUnlocked);
+  const [codeSent, setCodeSent] = useState(false);
+  const [code, setCode] = useState("");
+  const [unlockBusy, setUnlockBusy] = useState(false);
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+
   const base = `/api/restaurants/${restaurantId}/menu`;
+  const locked = requiresUnlock && !unlocked;
+
+  async function requestCode() {
+    setUnlockBusy(true);
+    setUnlockError(null);
+    try {
+      const res = await fetch(`${base}/unlock`, { method: "POST" });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error ?? "Eroare.");
+      if (d.unlocked) { setUnlocked(true); return; } // admin shortcut
+      setCodeSent(true);
+    } catch (e: any) {
+      setUnlockError(e?.message ?? "Eroare.");
+    } finally {
+      setUnlockBusy(false);
+    }
+  }
+
+  async function verifyCode() {
+    const value = code.trim();
+    if (!value) return;
+    setUnlockBusy(true);
+    setUnlockError(null);
+    try {
+      const res = await fetch(`${base}/unlock?action=verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: value }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error ?? "Cod greșit.");
+      setUnlocked(true);
+      setCode("");
+      setCodeSent(false);
+    } catch (e: any) {
+      setUnlockError(e?.message ?? "Cod greșit.");
+    } finally {
+      setUnlockBusy(false);
+    }
+  }
 
   async function call(url: string, method: string, body?: unknown) {
     setError(null);
@@ -52,6 +103,8 @@ export default function MenuManager({
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
+        // 423 = edit window expired mid-session → re-lock and prompt for a code.
+        if (res.status === 423) setUnlocked(false);
         throw new Error(d.error ?? "Eroare.");
       }
       return await res.json().catch(() => ({}));
@@ -118,7 +171,50 @@ export default function MenuManager({
         </div>
       )}
 
+      {/* Edit lock (2FA) banner */}
+      {locked && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <p className="text-sm font-medium text-amber-900 mb-1">🔒 Editarea meniului este blocată</p>
+          <p className="text-xs text-amber-800 mb-3">
+            Pentru siguranță, modificările necesită un cod trimis pe emailul tău. Codul deblochează
+            editarea pentru 30 de minute.
+          </p>
+          {unlockError && <p className="text-xs text-red-600 mb-2">{unlockError}</p>}
+          {!codeSent ? (
+            <button
+              onClick={requestCode}
+              disabled={unlockBusy}
+              className="bg-[#c84b1e] text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-[#d9603a] transition-colors disabled:opacity-50"
+            >
+              {unlockBusy ? "Se trimite..." : "Trimite cod pe email"}
+            </button>
+          ) : (
+            <div className="flex gap-2 flex-wrap items-center">
+              <input
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && verifyCode()}
+                placeholder="Cod din email"
+                inputMode="numeric"
+                className="border border-gray-300 rounded-lg px-4 py-2 text-base focus:outline-none focus:border-[#c84b1e] w-40"
+              />
+              <button
+                onClick={verifyCode}
+                disabled={unlockBusy || !code.trim()}
+                className="bg-[#c84b1e] text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-[#d9603a] transition-colors disabled:opacity-50"
+              >
+                {unlockBusy ? "..." : "Deblochează"}
+              </button>
+              <button onClick={requestCode} disabled={unlockBusy} className="text-xs text-gray-500 hover:underline">
+                Retrimite codul
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Add category */}
+      {!locked && (
       <div className="bg-white rounded-xl shadow-sm p-4 flex gap-2">
         <input
           value={newCategory}
@@ -135,6 +231,7 @@ export default function MenuManager({
           Adaugă
         </button>
       </div>
+      )}
 
       {initialCategories.length === 0 && (
         <p className="text-gray-500 text-sm">Nicio categorie încă. Adaugă prima categorie mai sus.</p>
@@ -144,6 +241,7 @@ export default function MenuManager({
         <div key={cat.id} className="bg-white rounded-xl shadow-sm p-5">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-lg text-gray-900">{cat.name}</h2>
+            {!locked && (
             <div className="flex gap-2 text-xs">
               <button onClick={() => renameCategory(cat.id, cat.name)} className="text-gray-500 hover:underline">
                 Redenumește
@@ -152,6 +250,7 @@ export default function MenuManager({
                 Șterge
               </button>
             </div>
+            )}
           </div>
 
           {cat.items.length === 0 ? (
@@ -176,6 +275,7 @@ export default function MenuManager({
                       <p className="text-xs text-gray-400 mt-0.5">Alergeni: {item.allergens.join(", ")}</p>
                     )}
                   </div>
+                  {!locked && (
                   <div className="flex flex-col gap-1 items-end text-xs flex-shrink-0">
                     <button onClick={() => toggleAvailable(item)} className="text-gray-500 hover:underline" disabled={busy}>
                       {item.isAvailable ? "Marchează indisponibil" : "Marchează disponibil"}
@@ -187,17 +287,20 @@ export default function MenuManager({
                       Șterge
                     </button>
                   </div>
+                  )}
                 </li>
               ))}
             </ul>
           )}
 
-          <button
-            onClick={() => setItemForm({ categoryId: cat.id, item: null })}
-            className="text-sm text-[#c84b1e] font-medium hover:underline"
-          >
-            + Adaugă produs
-          </button>
+          {!locked && (
+            <button
+              onClick={() => setItemForm({ categoryId: cat.id, item: null })}
+              className="text-sm text-[#c84b1e] font-medium hover:underline"
+            >
+              + Adaugă produs
+            </button>
+          )}
         </div>
       ))}
 

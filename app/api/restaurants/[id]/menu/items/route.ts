@@ -5,7 +5,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { menuItems, menuCategories } from "@/lib/db/schema";
-import { canManageRestaurant } from "@/lib/restaurant-permissions";
+import { authorizeMenuEdit } from "@/lib/restaurant-permissions";
 
 const createSchema = z.object({
   categoryId: z.string().min(1),
@@ -20,10 +20,7 @@ const createSchema = z.object({
 async function authorize(restaurantId: string) {
   const session = await auth();
   const role = (session?.user as any)?.role as string | undefined;
-  if (!session?.user?.id) return { error: "Neautorizat", status: 401 as const };
-  const ok = await canManageRestaurant(session.user.id, restaurantId, role);
-  if (!ok) return { error: "Neautorizat", status: 403 as const };
-  return { userId: session.user.id };
+  return authorizeMenuEdit(session, role, restaurantId);
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {

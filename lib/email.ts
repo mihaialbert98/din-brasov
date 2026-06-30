@@ -336,3 +336,19 @@ export async function sendAccountDeletionConfirmationEmail(to: string) {
     html: `<p>Cererea ta de ștergere a contului a fost înregistrată. Contul tău va fi șters definitiv în 30 de zile.</p><p>Dacă te-ai răzgândit, contactează-ne la ${SUPPORT_EMAIL}.</p>`,
   });
 }
+
+/**
+ * Menu-edit verification code (2FA for the restaurant owner). Sent when the owner
+ * wants to unlock menu editing on the shared service screen.
+ */
+export async function sendMenuEditCodeEmail(to: string, restaurantName: string, code: string) {
+  return getResend()?.emails.send({
+    from: FROM,
+    to,
+    subject: `Cod de modificare meniu — ${restaurantName}`,
+    html: `<p>Salut,</p>
+<p>Codul tău pentru a debloca modificarea meniului la <strong>${restaurantName}</strong> este:</p>
+<p style="font-size:28px;font-weight:bold;letter-spacing:4px;color:#c84b1e;margin:16px 0">${code}</p>
+<p style="color:#666;font-size:13px">Codul este valabil 10 minute. După introducere, vei putea modifica meniul timp de 30 de minute. Dacă nu ai cerut tu acest cod, ignoră acest email.</p>`,
+  });
+}

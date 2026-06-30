@@ -326,7 +326,7 @@ export default async function ProfilPage() {
                   </Link>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="text-xs text-gray-500">
-                      {r.memberRole === "owner" ? "Proprietar" : "Ospătar"}
+                      Proprietar
                     </span>
                     {r.status === "suspended" && (
                       <span className="text-xs text-red-600">Suspendat</span>

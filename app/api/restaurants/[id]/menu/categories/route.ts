@@ -5,23 +5,16 @@ import { eq, asc, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { menuCategories } from "@/lib/db/schema";
-import { canManageRestaurant } from "@/lib/restaurant-permissions";
+import { canManageRestaurant, authorizeMenuEdit } from "@/lib/restaurant-permissions";
 
 const createSchema = z.object({ name: z.string().min(1).max(120) });
 
-async function authorize(restaurantId: string) {
-  const session = await auth();
-  const role = (session?.user as any)?.role as string | undefined;
-  if (!session?.user?.id) return { error: "Neautorizat", status: 401 as const };
-  const ok = await canManageRestaurant(session.user.id, restaurantId, role);
-  if (!ok) return { error: "Neautorizat", status: 403 as const };
-  return { userId: session.user.id };
-}
-
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const auth = await authorize(id);
-  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const session = await auth();
+  const role = (session?.user as any)?.role as string | undefined;
+  const gate = await authorizeMenuEdit(session, role, id);
+  if ("error" in gate) return NextResponse.json({ error: gate.error }, { status: gate.status });
 
   const parsed = createSchema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: "Date invalide." }, { status: 400 });
@@ -40,10 +33,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   return NextResponse.json({ ok: true, id: created!.id }, { status: 201 });
 }
 
-export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const auth = await authorize(id);
-  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const session = await auth();
+  const role = (session?.user as any)?.role as string | undefined;
+  if (!session?.user?.id || !(await canManageRestaurant(session.user.id, id, role))) {
+    return NextResponse.json({ error: "Neautorizat" }, { status: 403 });
+  }
 
   const rows = await db
     .select()

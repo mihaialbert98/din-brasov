@@ -678,6 +678,28 @@ export const serviceRequests = pgTable(
   ]
 );
 
+// Email-code 2FA for menu edits. The owner requests a code (emailed), verifies it,
+// and gets a short unlock window during which menu mutations are allowed. Protects
+// the shared service screen from unauthorised edits. One row per (restaurant, user).
+export const restaurantEditUnlocks = pgTable(
+  "restaurant_edit_unlocks",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    codeHash: text("code_hash"), // sha256 of the current 6-digit code
+    codeExpiresAt: timestamp("code_expires_at", { mode: "date" }), // code valid until
+    attempts: integer("attempts").notNull().default(0), // wrong-code attempts on current code
+    unlockedUntil: timestamp("unlocked_until", { mode: "date" }), // edit window granted on verify
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("restaurant_edit_unlocks_unique_idx").on(t.restaurantId, t.userId)]
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type NewsItem = typeof newsItems.$inferSelect;
@@ -720,3 +742,4 @@ export type RestaurantTable = typeof restaurantTables.$inferSelect;
 export type NewRestaurantTable = typeof restaurantTables.$inferInsert;
 export type ServiceRequest = typeof serviceRequests.$inferSelect;
 export type NewServiceRequest = typeof serviceRequests.$inferInsert;
+export type RestaurantEditUnlock = typeof restaurantEditUnlocks.$inferSelect;

@@ -36,21 +36,29 @@ export default async function MesePage({
   const data: TableData[] = await Promise.all(
     tables.map(async (t) => {
       const url = absoluteUrl(`/m/${t.qrToken}`);
-      const qrDataUrl = await QRCode.toDataURL(url, { width: 320, margin: 1 });
+      // Dark-brown QR on white — high contrast for reliable scanning, on-brand.
+      const qrDataUrl = await QRCode.toDataURL(url, {
+        width: 320,
+        margin: 1,
+        color: { dark: "#1a1a1a", light: "#ffffff" },
+      });
       return { id: t.id, label: t.label, menuUrl: url, qrDataUrl };
     })
   );
+
+  const logoUrl = absoluteUrl("/logo.png");
 
   return (
     <div className="max-w-3xl">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Mese & coduri QR</h1>
       <p className="text-sm text-gray-500 mb-6">
-        Fiecare masă are un cod QR unic. Clienții îl scanează ca să vadă meniul și să cheme ospătarul.
-        Printează cardul și pune-l pe masă.
+        Fiecare masă are un card cu cod QR unic, în stil Din Brașov. Clienții îl scanează ca să vadă
+        meniul și să cheme ospătarul. Printează cardul și pune-l pe masă.
       </p>
       <TablesManager
         restaurantId={restaurant.id}
         restaurantName={restaurant.name}
+        logoUrl={logoUrl}
         initialTables={data}
       />
     </div>

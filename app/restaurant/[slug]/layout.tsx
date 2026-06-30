@@ -30,20 +30,16 @@ export default async function RestaurantLayout({
   const membership = await getMembership(session.user.id, restaurant.id);
   const platform = isPlatformStaff(role);
 
-  // Not a member and not platform staff → no access.
-  if (!membership && !platform) notFound();
-
+  // Access is owner (membership) or platform staff (admin/moderator oversight).
   const canManage = platform || membership?.memberRole === "owner";
+  if (!canManage) notFound();
 
-  const nav = canManage
-    ? [
-        { href: `/restaurant/${slug}`, label: "Prezentare" },
-        { href: `/restaurant/${slug}/meniu`, label: "Meniu" },
-        { href: `/restaurant/${slug}/mese`, label: "Mese & QR" },
-        { href: `/restaurant/${slug}/personal`, label: "Personal" },
-        { href: `/restaurant/${slug}/serviciu`, label: "Serviciu" },
-      ]
-    : [{ href: `/restaurant/${slug}/serviciu`, label: "Serviciu" }];
+  const nav = [
+    { href: `/restaurant/${slug}`, label: "Prezentare" },
+    { href: `/restaurant/${slug}/meniu`, label: "Meniu" },
+    { href: `/restaurant/${slug}/mese`, label: "Mese & QR" },
+    { href: `/restaurant/${slug}/serviciu`, label: "Serviciu" },
+  ];
 
   return (
     <div className="flex min-h-screen bg-gray-100">
@@ -68,11 +64,7 @@ export default async function RestaurantLayout({
         <div className="p-4 border-t border-white/10 text-xs text-gray-400">
           <p className="font-medium text-white truncate">{session.user?.name}</p>
           <p className="text-gray-400">
-            {platform && !membership
-              ? "Administrator"
-              : membership?.memberRole === "owner"
-                ? "Proprietar"
-                : "Ospătar"}
+            {platform && !membership ? "Administrator" : "Proprietar"}
           </p>
         </div>
       </aside>
