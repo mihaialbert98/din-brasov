@@ -1,4 +1,8 @@
-/** Waiter acknowledges (clears) a service request. */
+/**
+ * Waiter accepts a service request. The request is a transient live signal — once
+ * accepted it is DELETED from the DB (no history kept). service_requests acts as a
+ * queue of currently-open calls, not a log.
+ */
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
@@ -19,8 +23,7 @@ export async function POST(
   }
 
   await db
-    .update(serviceRequests)
-    .set({ status: "acknowledged", acknowledgedBy: session.user.id, acknowledgedAt: new Date() })
+    .delete(serviceRequests)
     .where(and(eq(serviceRequests.id, reqId), eq(serviceRequests.restaurantId, id)));
 
   return NextResponse.json({ ok: true });

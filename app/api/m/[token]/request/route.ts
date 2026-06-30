@@ -45,24 +45,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   }
 
   // De-dup: if a same-type request is already pending for this table, refresh it
-  // instead of stacking a duplicate the waiter has to clear twice.
-  const [pending] = await db
+  // instead of stacking a duplicate the waiter has to clear twice. (Open requests
+  // are the only rows that exist — accepted ones are deleted.)
+  const [open] = await db
     .select({ id: serviceRequests.id })
     .from(serviceRequests)
     .where(
       and(
         eq(serviceRequests.tableId, ctx.tableId),
-        eq(serviceRequests.type, parsed.data.type),
-        eq(serviceRequests.status, "pending")
+        eq(serviceRequests.type, parsed.data.type)
       )
     )
     .limit(1);
 
-  if (pending) {
+  if (open) {
     await db
       .update(serviceRequests)
       .set({ createdAt: new Date() })
-      .where(eq(serviceRequests.id, pending.id));
+      .where(eq(serviceRequests.id, open.id));
     return NextResponse.json({ ok: true });
   }
 
@@ -70,7 +70,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     restaurantId: ctx.restaurantId,
     tableId: ctx.tableId,
     type: parsed.data.type,
-    status: "pending",
   });
 
   return NextResponse.json({ ok: true }, { status: 201 });

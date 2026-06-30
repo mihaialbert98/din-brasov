@@ -1,6 +1,6 @@
 /** Waiter board — list pending service requests for a restaurant. Polled by the board UI. */
 import { NextResponse } from "next/server";
-import { and, eq, asc } from "drizzle-orm";
+import { eq, asc } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { serviceRequests, restaurantTables } from "@/lib/db/schema";
@@ -24,7 +24,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     })
     .from(serviceRequests)
     .innerJoin(restaurantTables, eq(serviceRequests.tableId, restaurantTables.id))
-    .where(and(eq(serviceRequests.restaurantId, id), eq(serviceRequests.status, "pending")))
+    .where(eq(serviceRequests.restaurantId, id))
     .orderBy(asc(serviceRequests.createdAt));
 
   return NextResponse.json({ data: rows });

@@ -668,13 +668,12 @@ export const serviceRequests = pgTable(
       .notNull()
       .references(() => restaurantTables.id, { onDelete: "cascade" }),
     type: text("type").notNull(), // call_waiter | request_check
-    status: text("status").notNull().default("pending"), // pending | acknowledged | done
-    acknowledgedBy: text("acknowledged_by").references(() => users.id),
-    acknowledgedAt: timestamp("acknowledged_at", { mode: "date" }),
+    // Transient live queue: a row exists only while the call is OPEN. The waiter
+    // accepting it DELETES the row (no status/history kept).
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => [
-    index("service_requests_restaurant_status_idx").on(t.restaurantId, t.status),
+    index("service_requests_restaurant_idx").on(t.restaurantId),
     index("service_requests_table_idx").on(t.tableId),
   ]
 );
