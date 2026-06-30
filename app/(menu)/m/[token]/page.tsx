@@ -7,6 +7,7 @@ import {
   menuItems,
 } from "@/lib/db/schema";
 import { eq, and, asc } from "drizzle-orm";
+import ServiceButtons from "@/components/restaurant/ServiceButtons";
 
 type Props = { params: Promise<{ token: string }> };
 
@@ -113,6 +114,8 @@ export default async function ScannedMenuPage({ params }: Props) {
         Meniu digital prin{" "}
         <span className="font-semibold">Din Brașov</span>
       </footer>
+
+      <ServiceButtons token={token} />
     </div>
   );
 }

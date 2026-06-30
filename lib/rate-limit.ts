@@ -1,6 +1,6 @@
 import { createHash } from "crypto";
 import { db } from "@/lib/db";
-import { phoneReveals, messages, newsletterSubscribers } from "@/lib/db/schema";
+import { phoneReveals, messages, newsletterSubscribers, serviceRequests } from "@/lib/db/schema";
 import { eq, and, gt, count } from "drizzle-orm";
 
 export function hashIp(ip: string): string {
@@ -69,6 +69,21 @@ export async function checkNewsletterSubscribeLimit(ipHash: string): Promise<boo
     .from(newsletterSubscribers)
     .where(and(eq(newsletterSubscribers.ipHash, ipHash), gt(newsletterSubscribers.consentGivenAt, since)));
   return (row?.c ?? 0) < 5;
+}
+
+/**
+ * Anti-spam for anonymous table service requests: cap total requests per table to
+ * 6 per 5 minutes (covers accidental double-taps + abuse without blocking a real
+ * "I tapped it again because nobody came"). Diners are anonymous, so we limit by
+ * table, not user/IP.
+ */
+export async function checkServiceRequestLimit(tableId: string): Promise<boolean> {
+  const since = new Date(Date.now() - 5 * 60 * 1000);
+  const [row] = await db
+    .select({ c: count() })
+    .from(serviceRequests)
+    .where(and(eq(serviceRequests.tableId, tableId), gt(serviceRequests.createdAt, since)));
+  return (row?.c ?? 0) < 6;
 }
 
 /** URL detection — scam messages almost always contain links */
