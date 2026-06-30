@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useUploadThing } from "@/lib/uploadthing-client";
 import { compressImage } from "@/lib/image-compress";
 
-type Endpoint = "eventImage" | "newsImage" | "listingImage";
+type Endpoint = "eventImage" | "newsImage" | "listingImage" | "menuItemImage";
 
 interface Props {
   endpoint: Endpoint;
