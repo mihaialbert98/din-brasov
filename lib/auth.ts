@@ -136,4 +136,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
 });
 
-export type UserRole = "user" | "staff" | "moderator" | "admin";
+export type UserRole = "user" | "staff" | "moderator" | "admin" | "restaurant_admin";

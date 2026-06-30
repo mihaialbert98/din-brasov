@@ -12,6 +12,7 @@ const LISTING_STATUS: Record<string, string> = {
 const ROLE_COLORS: Record<string, string> = {
   user: "bg-gray-100 text-gray-700",
   staff: "bg-blue-100 text-blue-700",
+  restaurant_admin: "bg-[#c84b1e]/10 text-[#c84b1e]",
   moderator: "bg-purple-100 text-purple-700",
   admin: "bg-red-100 text-red-700",
 };

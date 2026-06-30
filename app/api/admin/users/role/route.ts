@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { users, adminAuditLog } from "@/lib/db/schema";
 
-const VALID_ROLES = ["user", "staff", "moderator", "admin"] as const;
+const VALID_ROLES = ["user", "staff", "moderator", "admin", "restaurant_admin"] as const;
 
 export async function POST(req: Request) {
   const session = await auth();

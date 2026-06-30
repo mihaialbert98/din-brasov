@@ -16,6 +16,7 @@ const ROLE_LABELS: Record<string, string> = {
   staff: "Asistent",
   moderator: "Moderator",
   admin: "Administrator",
+  restaurant_admin: "Admin restaurant",
 };
 
 export default async function UtilizatoriPage() {
@@ -212,6 +213,7 @@ export default async function UtilizatoriPage() {
                             >
                               <option value="user">Utilizator</option>
                               <option value="staff">Asistent</option>
+                              <option value="restaurant_admin">Admin restaurant</option>
                               <option value="moderator">Moderator</option>
                               <option value="admin">Administrator</option>
                             </select>

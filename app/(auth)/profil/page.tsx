@@ -310,10 +310,17 @@ export default async function ProfilPage() {
         )}
       </div>
 
-      {/* Restaurants I manage / work at */}
-      {myRestaurants.length > 0 && (
+      {/* Restaurants I manage. Shown if I have any, or if I hold the restaurant_admin
+          role (so a newly-granted admin sees where their dashboard will appear). */}
+      {(myRestaurants.length > 0 || me?.role === "restaurant_admin") && (
         <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
           <h2 className="font-semibold text-lg mb-4">Restaurantele mele</h2>
+          {myRestaurants.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              Ai rolul de administrator de restaurant, dar încă nu ți-a fost atribuit niciun restaurant.
+              Echipa Din Brașov îți va activa restaurantul în curând.
+            </p>
+          ) : (
           <ul className="divide-y">
             {myRestaurants.map((r) => (
               <li key={r.id} className="py-3 flex items-center justify-between gap-3">
@@ -342,6 +349,7 @@ export default async function ProfilPage() {
               </li>
             ))}
           </ul>
+          )}
         </div>
       )}
 
