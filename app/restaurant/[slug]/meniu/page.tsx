@@ -1,7 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import Link from "next/link";
 import { db } from "@/lib/db";
-import { menuCategories, menuItems } from "@/lib/db/schema";
+import { menuCategories, menuItems, restaurantTables } from "@/lib/db/schema";
 import { eq, asc } from "drizzle-orm";
 import {
   getRestaurantBySlug,
@@ -59,9 +60,28 @@ export default async function MeniuPage({
   const isAdmin = isPlatformStaff(role);
   const initiallyUnlocked = isAdmin || (await canEditMenuNow(session.user.id, restaurant.id, role));
 
+  // Any table's token opens the same customer menu — used for the live preview link.
+  const [firstTable] = await db
+    .select({ qrToken: restaurantTables.qrToken })
+    .from(restaurantTables)
+    .where(eq(restaurantTables.restaurantId, restaurant.id))
+    .orderBy(asc(restaurantTables.createdAt))
+    .limit(1);
+
   return (
     <div className="max-w-3xl">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Meniu</h1>
+      <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
+        <h1 className="text-2xl font-bold text-gray-900">Meniu</h1>
+        {firstTable && (
+          <Link
+            href={`/m/${firstTable.qrToken}`}
+            target="_blank"
+            className="text-sm font-semibold text-[#c84b1e] border border-[#c84b1e] px-4 py-2 rounded-lg hover:bg-[#c84b1e]/5 transition-colors"
+          >
+            Vezi meniul ca un client ↗
+          </Link>
+        )}
+      </div>
       <MenuManager
         restaurantId={restaurant.id}
         initialCategories={data}

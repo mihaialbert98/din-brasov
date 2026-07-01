@@ -572,6 +572,10 @@ export const restaurants = pgTable(
     phone: text("phone"),
     logoUrl: text("logo_url"),
     coverUrl: text("cover_url"),
+    // QR business-card: optional custom template image (else the default brand card),
+    // and whether to overlay the restaurant name (off when the name is baked in).
+    cardTemplateUrl: text("card_template_url"),
+    cardOverlayName: boolean("card_overlay_name").notNull().default(true),
     placeId: text("place_id").references(() => places.id), // optional link to a Localuri place
     status: text("status").notNull().default("active"), // active | suspended
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
