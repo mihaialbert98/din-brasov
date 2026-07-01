@@ -29,7 +29,7 @@ export async function GET(
     .where(eq(restaurants.id, id))
     .limit(1);
   const [table] = await db
-    .select({ qrToken: restaurantTables.qrToken })
+    .select({ qrToken: restaurantTables.qrToken, label: restaurantTables.label })
     .from(restaurantTables)
     .where(and(eq(restaurantTables.id, tableId), eq(restaurantTables.restaurantId, id)))
     .limit(1);
@@ -50,6 +50,7 @@ export async function GET(
   const png = await renderCard({
     restaurantName: rest.name,
     menuUrl: absoluteUrl(`/m/${table.qrToken}`),
+    tableLabel: table.label,
     template,
     overlayName: rest.cardOverlayName,
   });

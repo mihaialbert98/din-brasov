@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 interface ServiceRequest {
   id: string;
   type: "call_waiter" | "request_check";
+  paymentMethod: "cash" | "card" | null;
   createdAt: string;
   tableLabel: string;
 }
@@ -13,6 +14,17 @@ const TYPE_LABEL: Record<ServiceRequest["type"], string> = {
   call_waiter: "Cheamă ospătarul",
   request_check: "Nota, vă rog",
 };
+
+const PAY_LABEL: Record<string, string> = { cash: "numerar", card: "card" };
+
+/** e.g. "Nota, vă rog (card)" for a check with a chosen payment method. */
+function requestLabel(r: ServiceRequest): string {
+  const base = TYPE_LABEL[r.type];
+  if (r.type === "request_check" && r.paymentMethod) {
+    return `${base} (${PAY_LABEL[r.paymentMethod] ?? r.paymentMethod})`;
+  }
+  return base;
+}
 
 function timeAgo(iso: string): string {
   const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
@@ -108,7 +120,7 @@ export default function ServiceBoard({ restaurantId }: { restaurantId: string })
           <div>
             <p className="font-semibold text-gray-900">{r.tableLabel}</p>
             <p className="text-sm text-gray-600">
-              {TYPE_LABEL[r.type]} <span className="text-gray-400">· {timeAgo(r.createdAt)}</span>
+              {requestLabel(r)} <span className="text-gray-400">· {timeAgo(r.createdAt)}</span>
             </p>
           </div>
           <button

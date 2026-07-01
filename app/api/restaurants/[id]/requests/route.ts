@@ -19,6 +19,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     .select({
       id: serviceRequests.id,
       type: serviceRequests.type,
+      paymentMethod: serviceRequests.paymentMethod,
       createdAt: serviceRequests.createdAt,
       tableLabel: restaurantTables.label,
     })

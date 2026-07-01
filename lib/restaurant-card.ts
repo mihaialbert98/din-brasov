@@ -26,12 +26,15 @@ const QR = { x: 1180, y: 430, size: 300 };
 
 // Name band: centered horizontally within this box, vertically centered.
 const NAME = { x: 470, y: 520, w: 640, h: 90, color: "#1a1a1a" };
+// Table label pill in a corner (top-right). Tune with the real template.
+const LABEL = { x: 40, y: 40, w: 220, h: 52 };
+
+const escSvg = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 /** SVG text block that auto-fits the name width (serif, brand dark). */
 function nameSvg(name: string): Buffer {
-  const safe = name
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  const safe = escSvg(name);
   // Rough auto-fit: shrink font as the name grows so long names still fit NAME.w.
   const fontSize = Math.max(28, Math.min(64, Math.floor((NAME.w * 1.7) / Math.max(6, safe.length))));
   return Buffer.from(`
@@ -45,9 +48,23 @@ function nameSvg(name: string): Buffer {
     </svg>`);
 }
 
+/** Table label as a brand-colored rounded pill (corner of the card). */
+function labelSvg(label: string): Buffer {
+  const safe = escSvg(label);
+  return Buffer.from(`
+    <svg width="${LABEL.w}" height="${LABEL.h}" xmlns="http://www.w3.org/2000/svg">
+      <rect width="100%" height="100%" rx="26" fill="#c84b1e"/>
+      <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle"
+            font-family="-apple-system, Segoe UI, Roboto, sans-serif" font-weight="700"
+            font-size="26" fill="#ffffff">${safe}</text>
+    </svg>`);
+}
+
 export interface CardOptions {
   restaurantName: string;
   menuUrl: string;
+  /** Table label drawn as a corner pill (e.g. "Masa 5"). */
+  tableLabel?: string;
   /** Absolute path or Buffer of a custom template (else the default brand card). */
   template?: Buffer;
   /** Skip drawing the name (custom templates may already include it). */
@@ -95,6 +112,9 @@ export async function renderCard(opts: CardOptions): Promise<Buffer> {
   ];
   if (overlayName) {
     composites.push({ input: nameSvg(opts.restaurantName), left: NAME.x, top: NAME.y });
+  }
+  if (opts.tableLabel) {
+    composites.push({ input: labelSvg(opts.tableLabel), left: LABEL.x, top: LABEL.y });
   }
 
   return sharp(base).composite(composites).png().toBuffer();

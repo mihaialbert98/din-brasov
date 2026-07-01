@@ -11,7 +11,15 @@ import { db } from "@/lib/db";
 import { restaurantTables, restaurants, serviceRequests } from "@/lib/db/schema";
 import { checkServiceRequestLimit } from "@/lib/rate-limit";
 
-const schema = z.object({ type: z.enum(["call_waiter", "request_check"]) });
+const schema = z
+  .object({
+    type: z.enum(["call_waiter", "request_check"]),
+    paymentMethod: z.enum(["cash", "card"]).optional(),
+  })
+  // The check request must specify how the diner wants to pay.
+  .refine((d) => d.type !== "request_check" || !!d.paymentMethod, {
+    message: "Alege modalitatea de plată.",
+  });
 
 export async function POST(req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -21,10 +29,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     return NextResponse.json({ error: "Cerere invalidă." }, { status: 400 });
   }
 
-  // Resolve table → restaurant from the token; restaurant must be active.
+  // Resolve table → restaurant from the token; restaurant must be active AND the
+  // table itself must not be disabled.
   const [ctx] = await db
     .select({
       tableId: restaurantTables.id,
+      tableActive: restaurantTables.isActive,
       restaurantId: restaurants.id,
       status: restaurants.status,
     })
@@ -35,6 +45,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
 
   if (!ctx || ctx.status !== "active") {
     return NextResponse.json({ error: "Masă indisponibilă." }, { status: 404 });
+  }
+  if (!ctx.tableActive) {
+    return NextResponse.json({ error: "Masa este momentan indisponibilă." }, { status: 409 });
   }
 
   if (!(await checkServiceRequestLimit(ctx.tableId))) {
@@ -59,9 +72,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     .limit(1);
 
   if (open) {
+    // Refresh timestamp + update the chosen payment method (diner may switch cash↔card).
     await db
       .update(serviceRequests)
-      .set({ createdAt: new Date() })
+      .set({ createdAt: new Date(), paymentMethod: parsed.data.paymentMethod ?? null })
       .where(eq(serviceRequests.id, open.id));
     return NextResponse.json({ ok: true });
   }
@@ -70,6 +84,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     restaurantId: ctx.restaurantId,
     tableId: ctx.tableId,
     type: parsed.data.type,
+    paymentMethod: parsed.data.paymentMethod ?? null,
   });
 
   return NextResponse.json({ ok: true }, { status: 201 });

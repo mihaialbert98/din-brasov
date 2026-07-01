@@ -9,6 +9,9 @@ import {
 import { eq, and, asc } from "drizzle-orm";
 import ServiceButtons from "@/components/restaurant/ServiceButtons";
 
+// Always render fresh so menu edits appear on the next scan of the same QR.
+export const dynamic = "force-dynamic";
+
 type Props = { params: Promise<{ token: string }> };
 
 /** Resolve table → restaurant from the unguessable QR token. */
@@ -17,6 +20,7 @@ async function getMenuContext(token: string) {
     .select({
       tableId: restaurantTables.id,
       tableLabel: restaurantTables.label,
+      tableActive: restaurantTables.isActive,
       restaurantId: restaurants.id,
       restaurantName: restaurants.name,
       restaurantStatus: restaurants.status,
@@ -115,7 +119,7 @@ export default async function ScannedMenuPage({ params }: Props) {
         <span className="font-semibold">Din Brașov</span>
       </footer>
 
-      <ServiceButtons token={token} />
+      <ServiceButtons token={token} disabled={!ctx.tableActive} />
     </div>
   );
 }

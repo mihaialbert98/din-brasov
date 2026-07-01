@@ -656,6 +656,9 @@ export const restaurantTables = pgTable(
       .references(() => restaurants.id, { onDelete: "cascade" }),
     label: text("label").notNull(), // e.g. "Masa 7"
     qrToken: text("qr_token").notNull().unique().$defaultFn(() => crypto.randomUUID()),
+    // Owner can temporarily disable a table (under repair / not in use). A disabled
+    // table still shows the menu but the service buttons are off.
+    isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => [index("restaurant_tables_restaurant_idx").on(t.restaurantId)]
@@ -672,6 +675,7 @@ export const serviceRequests = pgTable(
       .notNull()
       .references(() => restaurantTables.id, { onDelete: "cascade" }),
     type: text("type").notNull(), // call_waiter | request_check
+    paymentMethod: text("payment_method"), // cash | card — only for request_check
     // Transient live queue: a row exists only while the call is OPEN. The waiter
     // accepting it DELETES the row (no status/history kept).
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),

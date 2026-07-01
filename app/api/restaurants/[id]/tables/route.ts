@@ -1,10 +1,12 @@
-/** Owner table management — add N tables at once, auto-labeled "Masa <next>…". */
+/**
+ * Add N tables at once, auto-labeled "Masa <next>…". PLATFORM-STAFF ONLY — table
+ * provisioning + card printing is a Din Brașov job; owners can only enable/disable
+ * existing tables.
+ */
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { restaurantTables } from "@/lib/db/schema";
-import { canManageRestaurant } from "@/lib/restaurant-permissions";
+import { isPlatformStaff } from "@/lib/restaurant-permissions";
 import { addNumberedTables } from "@/lib/restaurant-tables";
 
 const schema = z.object({ count: z.number().int().min(1).max(100) });
@@ -14,8 +16,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const session = await auth();
   const role = (session?.user as any)?.role as string | undefined;
   if (!session?.user?.id) return NextResponse.json({ error: "Neautorizat" }, { status: 401 });
-  if (!(await canManageRestaurant(session.user.id, id, role))) {
-    return NextResponse.json({ error: "Neautorizat" }, { status: 403 });
+  if (!isPlatformStaff(role)) {
+    return NextResponse.json(
+      { error: "Doar echipa Din Brașov poate adăuga mese." },
+      { status: 403 }
+    );
   }
 
   const parsed = schema.safeParse(await req.json().catch(() => ({})));
