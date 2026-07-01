@@ -61,3 +61,12 @@ select {
   outline: 3px solid var(--color-sky);
   outline-offset: 2px;
 }
+
+/* Hide horizontal scrollbar on the menu category nav (still scrollable) */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}

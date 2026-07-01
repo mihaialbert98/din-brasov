@@ -8,6 +8,7 @@ import {
 } from "@/lib/db/schema";
 import { eq, and, asc } from "drizzle-orm";
 import ServiceButtons from "@/components/restaurant/ServiceButtons";
+import MenuView, { type MenuViewCategory } from "@/components/restaurant/MenuView";
 
 // Always render fresh so menu edits appear on the next scan of the same QR.
 export const dynamic = "force-dynamic";
@@ -57,67 +58,44 @@ export default async function ScannedMenuPage({ params }: Props) {
       .orderBy(asc(menuItems.position)),
   ]);
 
-  const grouped = categories
+  const grouped: MenuViewCategory[] = categories
     .map((c) => ({
-      ...c,
-      items: items.filter((it) => it.categoryId === c.id),
+      id: c.id,
+      name: c.name,
+      items: items
+        .filter((it) => it.categoryId === c.id)
+        .map((it) => ({
+          id: it.id,
+          name: it.name,
+          description: it.description,
+          price: it.price,
+          imageUrl: it.imageUrl,
+          allergens: it.allergens ? (JSON.parse(it.allergens) as string[]) : [],
+        })),
     }))
     .filter((c) => c.items.length > 0); // hide empty categories from diners
 
   return (
-    <div className="max-w-md mx-auto px-4 py-6 pb-28">
-      <header className="text-center mb-6">
-        {ctx.logoUrl && (
-          <img src={ctx.logoUrl} alt="" className="w-16 h-16 rounded-full object-cover mx-auto mb-2" />
-        )}
-        <h1 className="text-2xl font-bold font-serif text-gray-900">{ctx.restaurantName}</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{ctx.tableLabel}</p>
-      </header>
-
+    <div className="min-h-screen bg-[#f4f1ec]">
       {grouped.length === 0 ? (
-        <p className="text-center text-gray-400 text-sm mt-12">Meniul nu este disponibil momentan.</p>
+        <>
+          <header className="bg-[#c84b1e] text-white pt-8 pb-8 px-5 text-center">
+            {ctx.logoUrl && (
+              <img src={ctx.logoUrl} alt="" className="w-20 h-20 rounded-full object-cover mx-auto mb-3 ring-4 ring-white/30" />
+            )}
+            <h1 className="text-3xl font-serif font-bold">{ctx.restaurantName}</h1>
+            <p className="mt-1 text-sm text-white/80 uppercase tracking-wider">{ctx.tableLabel}</p>
+          </header>
+          <p className="text-center text-gray-400 text-sm mt-16 px-4">Meniul nu este disponibil momentan.</p>
+        </>
       ) : (
-        <div className="space-y-8">
-          {grouped.map((cat) => (
-            <section key={cat.id}>
-              <h2 className="text-lg font-bold text-gray-900 border-b-2 border-[#c84b1e] pb-1 mb-3 inline-block">
-                {cat.name}
-              </h2>
-              <ul className="space-y-3">
-                {cat.items.map((it) => {
-                  const allergens = it.allergens ? (JSON.parse(it.allergens) as string[]) : [];
-                  return (
-                    <li key={it.id} className="bg-white rounded-xl shadow-sm p-3 flex gap-3">
-                      {it.imageUrl && (
-                        <img src={it.imageUrl} alt="" className="w-20 h-20 rounded-lg object-cover flex-shrink-0" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-baseline justify-between gap-2">
-                          <span className="font-semibold text-gray-900">{it.name}</span>
-                          {it.price && (
-                            <span className="text-[#c84b1e] font-semibold whitespace-nowrap">{it.price} RON</span>
-                          )}
-                        </div>
-                        {it.description && (
-                          <p className="text-sm text-gray-500 mt-0.5">{it.description}</p>
-                        )}
-                        {allergens.length > 0 && (
-                          <p className="text-xs text-gray-400 mt-1">Alergeni: {allergens.join(", ")}</p>
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          ))}
-        </div>
+        <MenuView
+          restaurantName={ctx.restaurantName}
+          tableLabel={ctx.tableLabel}
+          logoUrl={ctx.logoUrl}
+          categories={grouped}
+        />
       )}
-
-      <footer className="text-center text-xs text-gray-400 mt-10">
-        Meniu digital prin{" "}
-        <span className="font-semibold">Din Brașov</span>
-      </footer>
 
       <ServiceButtons token={token} disabled={!ctx.tableActive} />
     </div>
