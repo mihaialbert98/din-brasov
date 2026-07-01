@@ -70,3 +70,43 @@ select {
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
+
+/* ─── Customer smart-menu theme tokens ─────────────────────────────────────────
+ * Centralized design tokens for the diner-facing menu. Neutral surfaces + a
+ * single brand accent. Multi-restaurant ready: override --brand (and optionally
+ * --brand-contrast) per restaurant via an inline style on the .menu-theme root —
+ * every accent below follows automatically. Defaults to the Din Brașov brand. */
+.menu-theme {
+  --brand: #c84b1e;
+  --brand-hover: #b03f16;
+  --brand-soft: color-mix(in srgb, var(--brand) 10%, #ffffff);
+  --brand-contrast: #ffffff; /* text/icon color on top of --brand */
+
+  --menu-bg: #f6f5f3;         /* neutral page background */
+  --menu-surface: #ffffff;    /* cards */
+  --menu-text: #1c1917;       /* primary text (warm near-black) */
+  --menu-muted: #78716c;      /* secondary text */
+  --menu-faint: #a8a29e;      /* tertiary / metadata */
+  --menu-border: #ece9e6;     /* hairline dividers */
+
+  --menu-radius: 16px;        /* cards */
+  --menu-radius-sm: 12px;     /* images, inner elements */
+  --menu-radius-pill: 999px;
+
+  --menu-shadow: 0 1px 2px rgba(28, 25, 23, 0.04), 0 4px 12px rgba(28, 25, 23, 0.05);
+  --menu-shadow-sm: 0 1px 2px rgba(28, 25, 23, 0.06);
+
+  background: var(--menu-bg);
+  color: var(--menu-text);
+}
+
+/* Respect reduced-motion across the menu surface */
+@media (prefers-reduced-motion: reduce) {
+  .menu-theme *,
+  .menu-theme *::before,
+  .menu-theme *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -26,6 +26,7 @@ async function getMenuContext(token: string) {
       restaurantName: restaurants.name,
       restaurantStatus: restaurants.status,
       logoUrl: restaurants.logoUrl,
+      coverUrl: restaurants.coverUrl,
     })
     .from(restaurantTables)
     .innerJoin(restaurants, eq(restaurantTables.restaurantId, restaurants.id))
@@ -76,23 +77,37 @@ export default async function ScannedMenuPage({ params }: Props) {
     .filter((c) => c.items.length > 0); // hide empty categories from diners
 
   return (
-    <div className="min-h-screen bg-[#f4f1ec]">
+    // .menu-theme carries the design tokens. A restaurant's brand color can be
+    // injected here (style={{ '--brand': ... }}) without touching any component;
+    // defaults to the platform brand.
+    <div className="menu-theme min-h-screen">
       {grouped.length === 0 ? (
         <>
-          <header className="bg-[#c84b1e] text-white pt-8 pb-8 px-5 text-center">
+          <header className="px-5 pt-8 pb-8 text-center" style={{ background: "var(--brand)" }}>
             {ctx.logoUrl && (
-              <img src={ctx.logoUrl} alt="" className="w-20 h-20 rounded-full object-cover mx-auto mb-3 ring-4 ring-white/30" />
+              <img
+                src={ctx.logoUrl}
+                alt=""
+                className="w-[72px] h-[72px] rounded-2xl object-cover mx-auto mb-3 ring-2 ring-white/70 shadow-md"
+              />
             )}
-            <h1 className="text-3xl font-serif font-bold">{ctx.restaurantName}</h1>
-            <p className="mt-1 text-sm text-white/80 uppercase tracking-wider">{ctx.tableLabel}</p>
+            <h1 className="text-2xl sm:text-3xl font-serif font-bold" style={{ color: "var(--brand-contrast)" }}>
+              {ctx.restaurantName}
+            </h1>
+            <p className="mt-1 text-[13px] font-medium tracking-wide" style={{ color: "color-mix(in srgb, var(--brand-contrast) 85%, transparent)" }}>
+              {ctx.tableLabel}
+            </p>
           </header>
-          <p className="text-center text-gray-400 text-sm mt-16 px-4">Meniul nu este disponibil momentan.</p>
+          <p className="text-center text-sm mt-16 px-4" style={{ color: "var(--menu-faint)" }}>
+            Meniul nu este disponibil momentan.
+          </p>
         </>
       ) : (
         <MenuView
           restaurantName={ctx.restaurantName}
           tableLabel={ctx.tableLabel}
           logoUrl={ctx.logoUrl}
+          coverUrl={ctx.coverUrl}
           categories={grouped}
         />
       )}

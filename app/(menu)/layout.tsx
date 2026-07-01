@@ -7,5 +7,6 @@ export const metadata: Metadata = {
 };
 
 export default function MenuLayout({ children }: { children: React.ReactNode }) {
-  return <div className="min-h-screen bg-[#f4f1ec]">{children}</div>;
+  // Background is driven by the .menu-theme token on the page root.
+  return <div className="min-h-screen">{children}</div>;
 }

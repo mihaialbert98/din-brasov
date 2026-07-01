@@ -43,10 +43,20 @@ export default function ServiceButtons({
     }
   }
 
+  // Shared control styling — consistent height, radius, weight, states.
+  const btnBase =
+    "flex-1 font-semibold text-[15px] h-12 rounded-xl transition-colors duration-150 disabled:opacity-55 disabled:cursor-not-allowed";
+  const barStyle: React.CSSProperties = {
+    background: "var(--menu-surface)",
+    borderTop: "1px solid var(--menu-border)",
+    boxShadow: "0 -2px 12px rgba(28,25,23,0.06)",
+    paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
+  };
+
   if (disabled) {
     return (
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-4 text-center">
-        <p className="max-w-md mx-auto text-sm text-gray-500">
+      <div className="fixed bottom-0 left-0 right-0 px-4 pt-4 text-center" style={barStyle}>
+        <p className="max-w-md mx-auto text-sm" style={{ color: "var(--menu-muted)" }}>
           Masa este momentan indisponibilă.
         </p>
       </div>
@@ -54,28 +64,33 @@ export default function ServiceButtons({
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-3 shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
+    <div className="fixed bottom-0 left-0 right-0 px-4 pt-3" style={barStyle}>
       <div className="max-w-md mx-auto">
         {choosingPay ? (
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-600 flex-shrink-0">Plătești cu:</span>
+          <div className="flex items-center gap-2.5">
+            <span className="text-[13px] font-medium flex-shrink-0" style={{ color: "var(--menu-muted)" }}>
+              Plătești cu:
+            </span>
             <button
               onClick={() => send("request_check", "cash")}
               disabled={pending !== null}
-              className="flex-1 bg-gray-900 text-white font-semibold py-3 rounded-xl hover:bg-gray-700 transition-colors disabled:opacity-60"
+              className={btnBase}
+              style={{ background: "var(--menu-text)", color: "var(--menu-surface)" }}
             >
               Numerar
             </button>
             <button
               onClick={() => send("request_check", "card")}
               disabled={pending !== null}
-              className="flex-1 bg-gray-900 text-white font-semibold py-3 rounded-xl hover:bg-gray-700 transition-colors disabled:opacity-60"
+              className={btnBase}
+              style={{ background: "var(--menu-text)", color: "var(--menu-surface)" }}
             >
               Card
             </button>
             <button
               onClick={() => setChoosingPay(false)}
-              className="text-sm text-gray-400 hover:text-gray-600 flex-shrink-0"
+              className="flex-shrink-0 w-9 h-9 rounded-full grid place-items-center transition-colors"
+              style={{ color: "var(--menu-muted)", background: "var(--menu-bg)", minHeight: "auto" }}
               aria-label="Anulează"
             >
               ✕
@@ -86,21 +101,27 @@ export default function ServiceButtons({
             <button
               onClick={() => send("call_waiter")}
               disabled={pending !== null}
-              className="flex-1 bg-[#c84b1e] text-white font-semibold py-3 rounded-xl hover:bg-[#d9603a] transition-colors disabled:opacity-60"
+              className={btnBase}
+              style={{ background: "var(--brand)", color: "var(--brand-contrast)" }}
             >
-              {sent === "call_waiter" ? "✓ Vine imediat" : pending === "call_waiter" ? "..." : "Cheamă ospătarul"}
+              {sent === "call_waiter" ? "✓ Vine imediat" : pending === "call_waiter" ? "…" : "Cheamă ospătarul"}
             </button>
             <button
               onClick={() => { setChoosingPay(true); setError(null); }}
               disabled={pending !== null}
-              className="flex-1 bg-gray-900 text-white font-semibold py-3 rounded-xl hover:bg-gray-700 transition-colors disabled:opacity-60"
+              className={btnBase}
+              style={{ background: "var(--menu-text)", color: "var(--menu-surface)" }}
             >
               {sent === "request_check" ? "✓ Nota vine" : "Nota, vă rog"}
             </button>
           </div>
         )}
       </div>
-      {error && <p className="max-w-md mx-auto text-center text-xs text-red-600 mt-2">{error}</p>}
+      {error && (
+        <p className="max-w-md mx-auto text-center text-xs mt-2" style={{ color: "#dc2626" }}>
+          {error}
+        </p>
+      )}
     </div>
   );
 }
