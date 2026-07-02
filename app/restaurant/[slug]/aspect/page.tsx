@@ -7,6 +7,8 @@ import { sql } from "drizzle-orm";
 import {
   getRestaurantBySlug,
   canManageRestaurant,
+  canEditMenuNow,
+  isPlatformStaff,
 } from "@/lib/restaurant-permissions";
 import AppearanceSettings from "@/components/restaurant/AppearanceSettings";
 
@@ -24,6 +26,10 @@ export default async function AspectPage({
 
   const role = (session.user as any)?.role as string | undefined;
   if (!(await canManageRestaurant(session.user.id, restaurant.id, role))) notFound();
+
+  // Same 2FA gate as menu editing: admins bypass; owners need an active unlock window.
+  const isAdmin = isPlatformStaff(role);
+  const initiallyUnlocked = isAdmin || (await canEditMenuNow(session.user.id, restaurant.id, role));
 
   const [current] = await db
     .select({ menuDesign: restaurants.menuDesign, menuTheme: restaurants.menuTheme })
@@ -51,6 +57,8 @@ export default async function AspectPage({
         initialTheme={current?.menuTheme ?? "terracotta"}
         totalItems={total}
         itemsWithPhoto={withPhoto}
+        requiresUnlock={!isAdmin}
+        initiallyUnlocked={initiallyUnlocked}
       />
     </div>
   );
