@@ -7,7 +7,10 @@ import { db } from "@/lib/db";
 import { menuCategories } from "@/lib/db/schema";
 import { authorizeMenuEdit } from "@/lib/restaurant-permissions";
 
-const patchSchema = z.object({ name: z.string().min(1).max(120) });
+const patchSchema = z.object({
+  name: z.string().min(1).max(120),
+  nameEn: z.string().max(120).optional(),
+});
 
 async function authorize(restaurantId: string) {
   const session = await auth();
@@ -28,7 +31,11 @@ export async function PATCH(
 
   await db
     .update(menuCategories)
-    .set({ name: parsed.data.name, updatedAt: new Date() })
+    .set({
+      name: parsed.data.name,
+      nameEn: parsed.data.nameEn?.trim() || null,
+      updatedAt: new Date(),
+    })
     .where(and(eq(menuCategories.id, categoryId), eq(menuCategories.restaurantId, id)));
 
   return NextResponse.json({ ok: true });

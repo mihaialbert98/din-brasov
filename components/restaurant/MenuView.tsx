@@ -3,18 +3,44 @@
 import { useEffect, useRef, useState } from "react";
 import type { MenuDesignId } from "@/lib/menu-themes";
 
+export type MenuLang = "ro" | "en";
+
 export interface MenuViewItem {
   id: string;
   name: string;
+  nameEn: string | null;
   description: string | null;
+  descriptionEn: string | null;
   price: string | null;
   imageUrl: string | null;
-  allergens: string[];
+  allergens: string; // free text (RO)
+  allergensEn: string;
+  calories: number | null;
 }
 export interface MenuViewCategory {
   id: string;
   name: string;
+  nameEn: string | null;
   items: MenuViewItem[];
+}
+
+// ── Language helpers (EN falls back to RO when a translation is missing) ──────
+const catName = (c: MenuViewCategory, lang: MenuLang) =>
+  lang === "en" && c.nameEn ? c.nameEn : c.name;
+const itemName = (it: MenuViewItem, lang: MenuLang) =>
+  lang === "en" && it.nameEn ? it.nameEn : it.name;
+const itemDesc = (it: MenuViewItem, lang: MenuLang) =>
+  lang === "en" && it.descriptionEn ? it.descriptionEn : it.description;
+const itemAllergens = (it: MenuViewItem, lang: MenuLang) =>
+  lang === "en" && it.allergensEn ? it.allergensEn : it.allergens;
+
+/** Metadata line: allergens + optional kcal, joined. */
+function itemMeta(it: MenuViewItem, lang: MenuLang): string {
+  const parts: string[] = [];
+  const a = itemAllergens(it, lang);
+  if (a) parts.push(a);
+  if (it.calories != null) parts.push(`${it.calories} kcal`);
+  return parts.join(" · ");
 }
 
 export default function MenuView({
@@ -24,6 +50,8 @@ export default function MenuView({
   logoUrl,
   coverUrl,
   categories,
+  lang,
+  onLangChange,
 }: {
   design: MenuDesignId;
   restaurantName: string;
@@ -31,8 +59,11 @@ export default function MenuView({
   logoUrl: string | null;
   coverUrl?: string | null;
   categories: MenuViewCategory[];
+  lang: MenuLang;
+  onLangChange: (l: MenuLang) => void;
 }) {
   const [activeId, setActiveId] = useState(categories[0]?.id ?? "");
+  const [sheetItem, setSheetItem] = useState<MenuViewItem | null>(null);
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const chipRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const clickScrolling = useRef(false);
@@ -67,22 +98,47 @@ export default function MenuView({
     window.setTimeout(() => { clickScrolling.current = false; }, 600);
   }
 
-  const isElegant = design === "elegant";
   const isModern = design === "modern";
+  const isElegant = design === "elegant";
   const isCompact = design === "compact";
+  const open = (it: MenuViewItem) => setSheetItem(it);
 
   return (
     <>
-      {/* ── Hero (shared, tuned per design) ─────────────────────────────────── */}
-      <Hero
-        design={design}
-        restaurantName={restaurantName}
-        tableLabel={tableLabel}
-        logoUrl={logoUrl}
-        coverUrl={coverUrl}
-      />
+      {/* ── Hero + language toggle ──────────────────────────────────────────── */}
+      <div className="relative">
+        <Hero
+          design={design}
+          restaurantName={restaurantName}
+          tableLabel={tableLabel}
+          logoUrl={logoUrl}
+          coverUrl={coverUrl}
+        />
+        <div
+          className="absolute top-3 right-3 z-10 flex rounded-full overflow-hidden backdrop-blur-sm"
+          style={{ background: "rgba(0,0,0,0.28)" }}
+          role="group"
+          aria-label="Limbă / Language"
+        >
+          {(["ro", "en"] as const).map((l) => (
+            <button
+              key={l}
+              onClick={() => onLangChange(l)}
+              aria-pressed={lang === l}
+              className="px-2.5 h-8 text-[11px] font-bold uppercase tracking-wide transition-colors"
+              style={
+                lang === l
+                  ? { background: "rgba(255,255,255,0.92)", color: "#1c1917", minHeight: "auto" }
+                  : { color: "rgba(255,255,255,0.85)", minHeight: "auto" }
+              }
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+      </div>
 
-      {/* ── Sticky category nav (shared) ────────────────────────────────────── */}
+      {/* ── Sticky category nav ─────────────────────────────────────────────── */}
       {categories.length > 1 && (
         <nav
           className="sticky top-0 z-20 border-b"
@@ -100,7 +156,7 @@ export default function MenuView({
                   className="relative whitespace-nowrap text-[12px] font-semibold uppercase tracking-[0.09em] px-3 py-3.5 transition-colors duration-200"
                   style={{ color: active ? "var(--menu-heading)" : "var(--menu-faint)" }}
                 >
-                  {c.name}
+                  {catName(c, lang)}
                   <span
                     className="absolute left-3 right-3 bottom-2 h-[2px] rounded-full transition-opacity duration-200"
                     style={{ background: "var(--brand)", opacity: active ? 1 : 0 }}
@@ -121,16 +177,22 @@ export default function MenuView({
             ref={(el) => { sectionRefs.current[cat.id] = el; }}
             className={`scroll-mt-16 ${ci === 0 ? "" : isCompact ? "mt-8" : "mt-12"}`}
           >
-            <SectionHeading name={cat.name} design={design} />
-
-            {isModern && <ModernList items={cat.items} />}
-            {isElegant && <ElegantList items={cat.items} />}
-            {isCompact && <CompactList items={cat.items} />}
+            <SectionHeading name={catName(cat, lang)} design={design} />
+            {isModern && <ModernList items={cat.items} lang={lang} onOpen={open} />}
+            {isElegant && <ElegantList items={cat.items} lang={lang} onOpen={open} />}
+            {isCompact && <CompactList items={cat.items} lang={lang} onOpen={open} />}
           </section>
         ))}
 
-        <Footer />
+        <footer className="text-center mt-14" style={{ color: "var(--menu-faint)" }}>
+          <p className="text-[10px] uppercase tracking-[0.18em] font-medium">
+            Meniu digital prin <span style={{ color: "var(--menu-muted)" }}>Din Brașov</span>
+          </p>
+        </footer>
       </div>
+
+      {/* ── Item detail sheet ───────────────────────────────────────────────── */}
+      {sheetItem && <ItemSheet item={sheetItem} lang={lang} onClose={() => setSheetItem(null)} />}
     </>
   );
 }
@@ -150,11 +212,9 @@ function Hero({
   logoUrl: string | null;
   coverUrl?: string | null;
 }) {
-  const serif = design !== "compact"; // Compact uses the sans face for a cleaner, denser feel
+  const serif = design !== "compact";
   const nameClass = `${serif ? "font-serif font-medium" : "font-sans font-bold"} leading-tight`;
 
-  // Cover photo hero for Modern (photo-forward) and Elegant (atmospheric, deeper
-  // overlay + ornament). Compact stays on the slim brand band — density first.
   if (coverUrl && design !== "compact") {
     const elegant = design === "elegant";
     return (
@@ -242,7 +302,6 @@ function SectionHeading({ name, design }: { name: string; design: MenuDesignId }
       </h2>
     );
   }
-  // modern
   return (
     <div className="flex items-center gap-3 mb-4">
       <h2 className="font-serif font-bold text-[20px] tracking-tight" style={{ color: "var(--menu-heading)" }}>
@@ -255,31 +314,39 @@ function SectionHeading({ name, design }: { name: string; design: MenuDesignId }
 
 // ── Modern: photo-forward cards ───────────────────────────────────────────────
 
-function ModernList({ items }: { items: MenuViewItem[] }) {
+function ModernList({ items, lang, onOpen }: { items: MenuViewItem[]; lang: MenuLang; onOpen: (it: MenuViewItem) => void }) {
   return (
     <ul
       className="rounded-2xl overflow-hidden divide-y"
       style={{ background: "var(--menu-surface)", boxShadow: "var(--menu-shadow)", borderColor: "var(--menu-border)" }}
     >
       {items.map((it) => (
-        <li key={it.id} className="p-3.5 sm:p-4 flex gap-4" style={{ borderColor: "var(--menu-border)" }}>
-          {it.imageUrl && (
-            <div className="w-[88px] h-[88px] sm:w-24 sm:h-24 flex-shrink-0 overflow-hidden rounded-xl" style={{ background: "var(--menu-border)" }}>
-              <img src={it.imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
-            </div>
-          )}
-          <div className="flex-1 min-w-0 flex flex-col">
-            <div className="flex items-start justify-between gap-3">
-              <h3 className="font-semibold text-[15px] leading-snug break-words" style={{ color: "var(--menu-heading)" }}>{it.name}</h3>
-              {it.price && (
-                <span className="font-bold text-[15px] whitespace-nowrap tabular-nums pl-1" style={{ color: "var(--brand)" }}>{it.price} lei</span>
+        <li key={it.id} style={{ borderColor: "var(--menu-border)" }}>
+          <button
+            onClick={() => onOpen(it)}
+            className="w-full text-left p-3.5 sm:p-4 flex gap-4 transition-opacity active:opacity-70"
+            style={{ minHeight: "auto" }}
+          >
+            {it.imageUrl && (
+              <div className="w-[88px] h-[88px] sm:w-24 sm:h-24 flex-shrink-0 overflow-hidden rounded-xl" style={{ background: "var(--menu-border)" }}>
+                <img src={it.imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+              </div>
+            )}
+            <div className="flex-1 min-w-0 flex flex-col">
+              <div className="flex items-start justify-between gap-3">
+                <h3 className="font-semibold text-[15px] leading-snug break-words" style={{ color: "var(--menu-heading)" }}>{itemName(it, lang)}</h3>
+                {it.price && (
+                  <span className="font-bold text-[15px] whitespace-nowrap tabular-nums pl-1" style={{ color: "var(--brand)" }}>{it.price} lei</span>
+                )}
+              </div>
+              {itemDesc(it, lang) && (
+                <p className="text-[13px] mt-1 leading-relaxed line-clamp-3" style={{ color: "var(--menu-muted)" }}>{itemDesc(it, lang)}</p>
+              )}
+              {itemMeta(it, lang) && (
+                <p className="text-[11px] mt-2" style={{ color: "var(--menu-faint)" }}>{itemMeta(it, lang)}</p>
               )}
             </div>
-            {it.description && (
-              <p className="text-[13px] mt-1 leading-relaxed line-clamp-3" style={{ color: "var(--menu-muted)" }}>{it.description}</p>
-            )}
-            <Allergens list={it.allergens} variant="chips" className="mt-2" />
-          </div>
+          </button>
         </li>
       ))}
     </ul>
@@ -288,24 +355,32 @@ function ModernList({ items }: { items: MenuViewItem[] }) {
 
 // ── Elegant: airy rows, serif names, dotted price leaders ─────────────────────
 
-function ElegantList({ items }: { items: MenuViewItem[] }) {
+function ElegantList({ items, lang, onOpen }: { items: MenuViewItem[]; lang: MenuLang; onOpen: (it: MenuViewItem) => void }) {
   return (
     <ul className="divide-y" style={{ borderColor: "var(--menu-border)" }}>
       {items.map((it) => (
-        <li key={it.id} className="py-5 first:pt-0" style={{ borderColor: "var(--menu-border)" }}>
-          <div className="flex items-baseline gap-2">
-            <h3 className="font-serif text-[17px] leading-snug break-words" style={{ color: "var(--menu-heading)", fontWeight: 500 }}>{it.name}</h3>
-            {it.price && (
-              <>
-                <span className="flex-1 min-w-3 self-end translate-y-[-3px]" style={{ borderBottom: "1.5px dotted var(--menu-leader)" }} aria-hidden />
-                <span className="text-[15px] whitespace-nowrap tabular-nums font-semibold" style={{ color: "var(--brand)" }}>{it.price} lei</span>
-              </>
+        <li key={it.id} style={{ borderColor: "var(--menu-border)" }}>
+          <button
+            onClick={() => onOpen(it)}
+            className="w-full text-left py-5 first:pt-0 transition-opacity active:opacity-70"
+            style={{ minHeight: "auto" }}
+          >
+            <div className="flex items-baseline gap-2">
+              <h3 className="font-serif text-[17px] leading-snug break-words" style={{ color: "var(--menu-heading)", fontWeight: 500 }}>{itemName(it, lang)}</h3>
+              {it.price && (
+                <>
+                  <span className="flex-1 min-w-3 self-end translate-y-[-3px]" style={{ borderBottom: "1.5px dotted var(--menu-leader)" }} aria-hidden />
+                  <span className="text-[15px] whitespace-nowrap tabular-nums font-semibold" style={{ color: "var(--brand)" }}>{it.price} lei</span>
+                </>
+              )}
+            </div>
+            {itemDesc(it, lang) && (
+              <p className="text-[13px] mt-1.5 leading-relaxed line-clamp-3" style={{ color: "var(--menu-muted)" }}>{itemDesc(it, lang)}</p>
             )}
-          </div>
-          {it.description && (
-            <p className="text-[13px] mt-1.5 leading-relaxed line-clamp-3" style={{ color: "var(--menu-muted)" }}>{it.description}</p>
-          )}
-          <Allergens list={it.allergens} variant="text" className="mt-2" />
+            {itemMeta(it, lang) && (
+              <p className="text-[11px] mt-2 uppercase tracking-[0.08em]" style={{ color: "var(--menu-faint)" }}>{itemMeta(it, lang)}</p>
+            )}
+          </button>
         </li>
       ))}
     </ul>
@@ -314,46 +389,127 @@ function ElegantList({ items }: { items: MenuViewItem[] }) {
 
 // ── Compact: dense text list, right-aligned prices ────────────────────────────
 
-function CompactList({ items }: { items: MenuViewItem[] }) {
+function CompactList({ items, lang, onOpen }: { items: MenuViewItem[]; lang: MenuLang; onOpen: (it: MenuViewItem) => void }) {
   return (
     <ul>
       {items.map((it) => (
-        <li key={it.id} className="py-2.5 flex items-baseline justify-between gap-3">
-          <div className="min-w-0">
-            <span className="font-semibold text-[14px]" style={{ color: "var(--menu-text)" }}>{it.name}</span>
-            {it.description && (
-              <span className="text-[13px] ml-2" style={{ color: "var(--menu-faint)" }}>{it.description}</span>
+        <li key={it.id}>
+          <button
+            onClick={() => onOpen(it)}
+            className="w-full text-left py-2.5 flex items-baseline justify-between gap-3 transition-opacity active:opacity-70"
+            style={{ minHeight: "auto" }}
+          >
+            <span className="min-w-0">
+              <span className="font-semibold text-[14px]" style={{ color: "var(--menu-text)" }}>{itemName(it, lang)}</span>
+              {itemDesc(it, lang) && (
+                <span className="text-[13px] ml-2" style={{ color: "var(--menu-faint)" }}>{itemDesc(it, lang)}</span>
+              )}
+            </span>
+            {it.price && (
+              <span className="font-semibold text-[14px] whitespace-nowrap tabular-nums flex-shrink-0" style={{ color: "var(--brand)" }}>{it.price} lei</span>
             )}
-            <Allergens list={it.allergens} variant="text" className="mt-0.5" />
-          </div>
-          {it.price && (
-            <span className="font-semibold text-[14px] whitespace-nowrap tabular-nums flex-shrink-0" style={{ color: "var(--brand)" }}>{it.price} lei</span>
-          )}
+          </button>
         </li>
       ))}
     </ul>
   );
 }
 
-// ── Shared bits ───────────────────────────────────────────────────────────────
+// ── Item detail bottom sheet ──────────────────────────────────────────────────
 
-function Allergens({ list, variant, className = "" }: { list: string[]; variant: "chips" | "text"; className?: string }) {
-  if (list.length === 0) return null;
-  if (variant === "chips") {
-    return (
-      <div className={`flex flex-wrap gap-1.5 ${className}`}>
-        {list.map((a) => (
-          <span key={a} className="text-[11px] leading-none px-2 py-1 rounded-full" style={{ color: "var(--menu-muted)", background: "var(--menu-paper)" }}>{a}</span>
-        ))}
-      </div>
-    );
-  }
+function ItemSheet({ item, lang, onClose }: { item: MenuViewItem; lang: MenuLang; onClose: () => void }) {
+  // Close on Escape; lock body scroll while open.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  const meta = itemMeta(item, lang);
+  const t = (ro: string, en: string) => (lang === "en" ? en : ro);
+
   return (
-    <p className={`text-[11px] uppercase tracking-[0.08em] ${className}`} style={{ color: "var(--menu-faint)" }}>
-      {list.join(" · ")}
-    </p>
+    <div className="fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label={itemName(item, lang)}>
+      <button className="absolute inset-0 bg-black/45 cursor-default" style={{ minHeight: "auto" }} onClick={onClose} aria-label={t("Închide", "Close")} />
+      <div
+        className="absolute bottom-0 inset-x-0 max-w-lg mx-auto rounded-t-3xl overflow-hidden shadow-2xl"
+        style={{ background: "var(--menu-surface)", paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
+      >
+        {item.imageUrl ? (
+          <div className="relative h-52 sm:h-60">
+            <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+            <button
+              onClick={onClose}
+              className="absolute top-3 right-3 w-9 h-9 rounded-full grid place-items-center bg-black/40 text-white backdrop-blur-sm"
+              style={{ minHeight: "auto" }}
+              aria-label={t("Închide", "Close")}
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <div className="flex justify-end pt-3 pr-3">
+            <button
+              onClick={onClose}
+              className="w-9 h-9 rounded-full grid place-items-center"
+              style={{ minHeight: "auto", background: "var(--menu-paper)", color: "var(--menu-muted)" }}
+              aria-label={t("Închide", "Close")}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        <div className="px-6 pt-5">
+          <div className="flex items-start justify-between gap-4">
+            <h3 className="font-serif text-[20px] leading-snug" style={{ color: "var(--menu-heading)", fontWeight: 500 }}>
+              {itemName(item, lang)}
+            </h3>
+            {item.price && (
+              <span className="text-[17px] font-bold whitespace-nowrap tabular-nums" style={{ color: "var(--brand)" }}>
+                {item.price} lei
+              </span>
+            )}
+          </div>
+
+          {itemDesc(item, lang) && (
+            <p className="text-[14px] mt-3 leading-relaxed" style={{ color: "var(--menu-muted)" }}>
+              {itemDesc(item, lang)}
+            </p>
+          )}
+
+          {(meta || item.calories != null) && (
+            <div className="mt-4 pt-4 border-t space-y-1.5" style={{ borderColor: "var(--menu-border)" }}>
+              {itemAllergens(item, lang) && (
+                <p className="text-[12px]" style={{ color: "var(--menu-faint)" }}>
+                  <span className="font-semibold uppercase tracking-wide text-[11px]" style={{ color: "var(--menu-muted)" }}>
+                    {t("Alergeni", "Allergens")}:
+                  </span>{" "}
+                  {itemAllergens(item, lang)}
+                </p>
+              )}
+              {item.calories != null && (
+                <p className="text-[12px]" style={{ color: "var(--menu-faint)" }}>
+                  <span className="font-semibold uppercase tracking-wide text-[11px]" style={{ color: "var(--menu-muted)" }}>
+                    {t("Calorii", "Calories")}:
+                  </span>{" "}
+                  {item.calories} kcal
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
+
+// ── Shared bits ───────────────────────────────────────────────────────────────
 
 function Ornament({ onBrand = false }: { onBrand?: boolean }) {
   const line = onBrand ? "color-mix(in srgb, var(--brand-contrast) 45%, transparent)" : "var(--menu-border)";
@@ -364,15 +520,5 @@ function Ornament({ onBrand = false }: { onBrand?: boolean }) {
       <span className="w-1 h-1 rotate-45" style={{ background: dot }} />
       <span className="h-px w-8" style={{ background: line }} />
     </div>
-  );
-}
-
-function Footer() {
-  return (
-    <footer className="text-center mt-14" style={{ color: "var(--menu-faint)" }}>
-      <p className="text-[10px] uppercase tracking-[0.18em] font-medium">
-        Meniu digital prin <span style={{ color: "var(--menu-muted)" }}>Din Brașov</span>
-      </p>
-    </footer>
   );
 }

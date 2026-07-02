@@ -10,10 +10,15 @@ import { authorizeMenuEdit } from "@/lib/restaurant-permissions";
 const createSchema = z.object({
   categoryId: z.string().min(1),
   name: z.string().min(1).max(200),
+  nameEn: z.string().max(200).optional(),
   description: z.string().max(2000).optional(),
+  descriptionEn: z.string().max(2000).optional(),
   price: z.string().max(40).optional(),
   imageUrl: z.string().url().optional().or(z.literal("")),
-  allergens: z.array(z.string().max(40)).max(20).optional(),
+  // Free text, e.g. "gluten, ouă, lapte" (legacy rows may hold a JSON array).
+  allergens: z.string().max(300).optional(),
+  allergensEn: z.string().max(300).optional(),
+  calories: z.number().int().min(0).max(10000).optional(),
   isAvailable: z.boolean().optional(),
 });
 
@@ -51,10 +56,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       restaurantId: id,
       categoryId: d.categoryId,
       name: d.name,
+      nameEn: d.nameEn?.trim() || null,
       description: d.description ?? null,
+      descriptionEn: d.descriptionEn?.trim() || null,
       price: d.price ?? null,
       imageUrl: d.imageUrl || null,
-      allergens: d.allergens?.length ? JSON.stringify(d.allergens) : null,
+      allergens: d.allergens?.trim() || null,
+      allergensEn: d.allergensEn?.trim() || null,
+      calories: d.calories ?? null,
       isAvailable: d.isAvailable ?? true,
       position: Number(maxPos) + 1,
     })

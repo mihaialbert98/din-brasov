@@ -10,10 +10,15 @@ import { authorizeMenuEdit } from "@/lib/restaurant-permissions";
 const patchSchema = z.object({
   categoryId: z.string().min(1).optional(),
   name: z.string().min(1).max(200).optional(),
+  nameEn: z.string().max(200).optional(),
   description: z.string().max(2000).optional(),
+  descriptionEn: z.string().max(2000).optional(),
   price: z.string().max(40).optional(),
   imageUrl: z.string().url().optional().or(z.literal("")),
-  allergens: z.array(z.string().max(40)).max(20).optional(),
+  // Free text (legacy rows may hold a JSON array — normalized on read).
+  allergens: z.string().max(300).optional(),
+  allergensEn: z.string().max(300).optional(),
+  calories: z.number().int().min(0).max(10000).nullable().optional(),
   isAvailable: z.boolean().optional(),
 });
 
@@ -48,10 +53,14 @@ export async function PATCH(
   const patch: Record<string, unknown> = { updatedAt: new Date() };
   if (d.categoryId !== undefined) patch.categoryId = d.categoryId;
   if (d.name !== undefined) patch.name = d.name;
+  if (d.nameEn !== undefined) patch.nameEn = d.nameEn.trim() || null;
   if (d.description !== undefined) patch.description = d.description || null;
+  if (d.descriptionEn !== undefined) patch.descriptionEn = d.descriptionEn.trim() || null;
   if (d.price !== undefined) patch.price = d.price || null;
   if (d.imageUrl !== undefined) patch.imageUrl = d.imageUrl || null;
-  if (d.allergens !== undefined) patch.allergens = d.allergens.length ? JSON.stringify(d.allergens) : null;
+  if (d.allergens !== undefined) patch.allergens = d.allergens.trim() || null;
+  if (d.allergensEn !== undefined) patch.allergensEn = d.allergensEn.trim() || null;
+  if (d.calories !== undefined) patch.calories = d.calories;
   if (d.isAvailable !== undefined) patch.isAvailable = d.isAvailable;
 
   await db

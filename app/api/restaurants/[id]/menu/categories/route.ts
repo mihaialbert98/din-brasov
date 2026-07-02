@@ -7,7 +7,10 @@ import { db } from "@/lib/db";
 import { menuCategories } from "@/lib/db/schema";
 import { canManageRestaurant, authorizeMenuEdit } from "@/lib/restaurant-permissions";
 
-const createSchema = z.object({ name: z.string().min(1).max(120) });
+const createSchema = z.object({
+  name: z.string().min(1).max(120),
+  nameEn: z.string().max(120).optional(),
+});
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -27,7 +30,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const [created] = await db
     .insert(menuCategories)
-    .values({ restaurantId: id, name: parsed.data.name, position: Number(maxPos) + 1 })
+    .values({
+      restaurantId: id,
+      name: parsed.data.name,
+      nameEn: parsed.data.nameEn?.trim() || null,
+      position: Number(maxPos) + 1,
+    })
     .returning({ id: menuCategories.id });
 
   return NextResponse.json({ ok: true, id: created!.id }, { status: 201 });

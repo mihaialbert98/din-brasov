@@ -8,8 +8,10 @@ import {
 } from "@/lib/db/schema";
 import { eq, and, asc } from "drizzle-orm";
 import ServiceButtons from "@/components/restaurant/ServiceButtons";
-import MenuView, { type MenuViewCategory } from "@/components/restaurant/MenuView";
+import MenuShell from "@/components/restaurant/MenuShell";
+import { type MenuViewCategory } from "@/components/restaurant/MenuView";
 import { resolveTheme, themeStyle } from "@/lib/menu-themes";
+import { allergensToText } from "@/lib/text";
 
 // Always render fresh so menu edits appear on the next scan of the same QR.
 export const dynamic = "force-dynamic";
@@ -66,15 +68,20 @@ export default async function ScannedMenuPage({ params }: Props) {
     .map((c) => ({
       id: c.id,
       name: c.name,
+      nameEn: c.nameEn,
       items: items
         .filter((it) => it.categoryId === c.id)
         .map((it) => ({
           id: it.id,
           name: it.name,
+          nameEn: it.nameEn,
           description: it.description,
+          descriptionEn: it.descriptionEn,
           price: it.price,
           imageUrl: it.imageUrl,
-          allergens: it.allergens ? (JSON.parse(it.allergens) as string[]) : [],
+          allergens: allergensToText(it.allergens),
+          allergensEn: it.allergensEn ?? "",
+          calories: it.calories,
         })),
     }))
     .filter((c) => c.items.length > 0); // hide empty categories from diners
@@ -106,9 +113,12 @@ export default async function ScannedMenuPage({ params }: Props) {
           <p className="text-center text-sm mt-16 px-4" style={{ color: "var(--menu-faint)" }}>
             Meniul nu este disponibil momentan.
           </p>
+          <ServiceButtons token={token} disabled={!ctx.tableActive} />
         </>
       ) : (
-        <MenuView
+        <MenuShell
+          token={token}
+          tableActive={ctx.tableActive}
           design={design.id}
           restaurantName={ctx.restaurantName}
           tableLabel={ctx.tableLabel}
@@ -117,8 +127,6 @@ export default async function ScannedMenuPage({ params }: Props) {
           categories={grouped}
         />
       )}
-
-      <ServiceButtons token={token} disabled={!ctx.tableActive} />
     </div>
   );
 }

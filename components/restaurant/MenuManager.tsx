@@ -4,24 +4,23 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import ImageField from "@/components/admin/ImageField";
 
-// EU/ANPC 14 major allergens (Reg. 1169/2011, Order 201/2022).
-const ALLERGENS = [
-  "Gluten", "Crustacee", "Ouă", "Pește", "Arahide", "Soia", "Lapte",
-  "Fructe cu coajă", "Țelină", "Muștar", "Susan", "Sulfiți", "Lupin", "Moluște",
-];
-
 export interface MenuItemData {
   id: string;
   name: string;
+  nameEn: string | null;
   description: string | null;
+  descriptionEn: string | null;
   price: string | null;
   imageUrl: string | null;
-  allergens: string[];
+  allergens: string; // free text, e.g. "gluten, ouă, lapte"
+  allergensEn: string;
+  calories: number | null;
   isAvailable: boolean;
 }
 export interface MenuCategoryData {
   id: string;
   name: string;
+  nameEn: string | null;
   items: MenuItemData[];
 }
 
@@ -38,6 +37,7 @@ export default function MenuManager({
 }) {
   const router = useRouter();
   const [newCategory, setNewCategory] = useState("");
+  const [newCategoryEn, setNewCategoryEn] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Which category is showing its item form, and the item being edited (or null = new).
@@ -119,14 +119,19 @@ export default function MenuManager({
   async function addCategory() {
     const name = newCategory.trim();
     if (!name) return;
-    const r = await call(`${base}/categories`, "POST", { name });
-    if (r) { setNewCategory(""); router.refresh(); }
+    const r = await call(`${base}/categories`, "POST", {
+      name,
+      nameEn: newCategoryEn.trim() || undefined,
+    });
+    if (r) { setNewCategory(""); setNewCategoryEn(""); router.refresh(); }
   }
 
-  async function renameCategory(id: string, current: string) {
-    const name = prompt("Nume categorie:", current)?.trim();
-    if (!name || name === current) return;
-    const r = await call(`${base}/categories/${id}`, "PATCH", { name });
+  async function renameCategory(cat: MenuCategoryData) {
+    const name = prompt("Nume categorie (română):", cat.name)?.trim();
+    if (!name) return;
+    const nameEn = prompt("Nume categorie (engleză, opțional):", cat.nameEn ?? "")?.trim();
+    if (name === cat.name && (nameEn ?? "") === (cat.nameEn ?? "")) return;
+    const r = await call(`${base}/categories/${cat.id}`, "PATCH", { name, nameEn: nameEn || undefined });
     if (r) router.refresh();
   }
 
@@ -151,10 +156,14 @@ export default function MenuManager({
     const { categoryId, item } = itemForm!;
     const body = {
       name: form.name,
+      nameEn: form.nameEn,
       description: form.description || undefined,
+      descriptionEn: form.descriptionEn,
       price: form.price || undefined,
       imageUrl: form.imageUrl || undefined,
       allergens: form.allergens,
+      allergensEn: form.allergensEn,
+      calories: form.calories,
       isAvailable: form.isAvailable,
     };
     const r = item
@@ -215,13 +224,20 @@ export default function MenuManager({
 
       {/* Add category */}
       {!locked && (
-      <div className="bg-white rounded-xl shadow-sm p-4 flex gap-2">
+      <div className="bg-white rounded-xl shadow-sm p-4 flex gap-2 flex-wrap">
         <input
           value={newCategory}
           onChange={(e) => setNewCategory(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && addCategory()}
           placeholder="Categorie nouă (ex: Băuturi)"
-          className="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 text-base focus:outline-none focus:border-[#c84b1e]"
+          className="flex-1 min-w-[180px] border border-gray-300 rounded-lg px-4 py-2.5 text-base focus:outline-none focus:border-[#c84b1e]"
+        />
+        <input
+          value={newCategoryEn}
+          onChange={(e) => setNewCategoryEn(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && addCategory()}
+          placeholder="English name (opțional)"
+          className="flex-1 min-w-[180px] border border-gray-300 rounded-lg px-4 py-2.5 text-base focus:outline-none focus:border-[#c84b1e]"
         />
         <button
           onClick={addCategory}
@@ -240,10 +256,13 @@ export default function MenuManager({
       {initialCategories.map((cat) => (
         <div key={cat.id} className="bg-white rounded-xl shadow-sm p-5">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-lg text-gray-900">{cat.name}</h2>
+            <h2 className="font-semibold text-lg text-gray-900">
+              {cat.name}
+              {cat.nameEn && <span className="ml-2 text-sm font-normal text-gray-400">/ {cat.nameEn}</span>}
+            </h2>
             {!locked && (
             <div className="flex gap-2 text-xs">
-              <button onClick={() => renameCategory(cat.id, cat.name)} className="text-gray-500 hover:underline">
+              <button onClick={() => renameCategory(cat)} className="text-gray-500 hover:underline">
                 Redenumește
               </button>
               <button onClick={() => deleteCategory(cat.id, cat.name)} className="text-red-500 hover:underline">
@@ -271,8 +290,12 @@ export default function MenuManager({
                       )}
                     </div>
                     {item.description && <p className="text-sm text-gray-500 line-clamp-2">{item.description}</p>}
-                    {item.allergens.length > 0 && (
-                      <p className="text-xs text-gray-400 mt-0.5">Alergeni: {item.allergens.join(", ")}</p>
+                    {(item.allergens || item.calories != null) && (
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {item.allergens && <>Alergeni: {item.allergens}</>}
+                        {item.allergens && item.calories != null && " · "}
+                        {item.calories != null && <>{item.calories} kcal</>}
+                      </p>
                     )}
                   </div>
                   {!locked && (
@@ -318,10 +341,14 @@ export default function MenuManager({
 
 interface ItemFormValues {
   name: string;
+  nameEn: string;
   description: string;
+  descriptionEn: string;
   price: string;
   imageUrl: string;
-  allergens: string[];
+  allergens: string;
+  allergensEn: string;
+  calories: number | null;
   isAvailable: boolean;
 }
 
@@ -337,20 +364,33 @@ function ItemFormModal({
   onSave: (v: ItemFormValues) => void;
 }) {
   const [name, setName] = useState(initial?.name ?? "");
+  const [nameEn, setNameEn] = useState(initial?.nameEn ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
+  const [descriptionEn, setDescriptionEn] = useState(initial?.descriptionEn ?? "");
   const [price, setPrice] = useState(initial?.price ?? "");
   const [imageUrl, setImageUrl] = useState(initial?.imageUrl ?? "");
-  const [allergens, setAllergens] = useState<string[]>(initial?.allergens ?? []);
+  const [allergens, setAllergens] = useState(initial?.allergens ?? "");
+  const [allergensEn, setAllergensEn] = useState(initial?.allergensEn ?? "");
+  const [calories, setCalories] = useState<string>(initial?.calories != null ? String(initial.calories) : "");
   const [isAvailable, setIsAvailable] = useState(initial?.isAvailable ?? true);
   const [formError, setFormError] = useState<string | null>(null);
 
-  function toggleAllergen(a: string) {
-    setAllergens((prev) => (prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]));
-  }
-
   function submit() {
     if (!name.trim()) { setFormError("Numele este obligatoriu."); return; }
-    onSave({ name: name.trim(), description, price, imageUrl, allergens, isAvailable });
+    const kcal = calories.trim() === "" ? null : parseInt(calories, 10);
+    if (kcal !== null && (isNaN(kcal) || kcal < 0)) { setFormError("Caloriile trebuie să fie un număr pozitiv."); return; }
+    onSave({
+      name: name.trim(),
+      nameEn: nameEn.trim(),
+      description,
+      descriptionEn: descriptionEn.trim(),
+      price,
+      imageUrl,
+      allergens: allergens.trim(),
+      allergensEn: allergensEn.trim(),
+      calories: kcal,
+      isAvailable,
+    });
   }
 
   const field =
@@ -363,15 +403,31 @@ function ItemFormModal({
 
         {formError && <p className="text-sm text-red-600">{formError}</p>}
 
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">Nume *</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} className={field} maxLength={200} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700">Nume (română) *</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} className={field} maxLength={200} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700">Name (English)</label>
+            <input value={nameEn} onChange={(e) => setNameEn(e.target.value)} className={field} maxLength={200} placeholder="opțional" />
+          </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-gray-700">Preț (RON)</label>
             <input value={price} onChange={(e) => setPrice(e.target.value)} className={field} maxLength={40} placeholder="ex: 24.90" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700">Calorii (kcal)</label>
+            <input
+              value={calories}
+              onChange={(e) => setCalories(e.target.value)}
+              className={field}
+              inputMode="numeric"
+              placeholder="opțional"
+            />
           </div>
           <label className="flex items-center gap-2 mt-6 cursor-pointer select-none">
             <input type="checkbox" checked={isAvailable} onChange={(e) => setIsAvailable(e.target.checked)} className="w-4 h-4 accent-[#c84b1e]" />
@@ -380,27 +436,35 @@ function ItemFormModal({
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">Descriere</label>
+          <label className="text-sm font-medium text-gray-700">Descriere (română)</label>
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className={`${field} resize-y`} maxLength={2000} />
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">Alergeni</label>
-          <div className="flex flex-wrap gap-2">
-            {ALLERGENS.map((a) => (
-              <button
-                key={a}
-                type="button"
-                onClick={() => toggleAllergen(a)}
-                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                  allergens.includes(a)
-                    ? "bg-[#c84b1e] text-white border-[#c84b1e]"
-                    : "border-gray-300 text-gray-600 hover:bg-gray-50"
-                }`}
-              >
-                {a}
-              </button>
-            ))}
+          <label className="text-sm font-medium text-gray-700">Description (English)</label>
+          <textarea value={descriptionEn} onChange={(e) => setDescriptionEn(e.target.value)} rows={2} className={`${field} resize-y`} maxLength={2000} placeholder="opțional" />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700">Alergeni</label>
+            <input
+              value={allergens}
+              onChange={(e) => setAllergens(e.target.value)}
+              className={field}
+              maxLength={300}
+              placeholder="ex: gluten, ouă, lapte"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700">Allergens (English)</label>
+            <input
+              value={allergensEn}
+              onChange={(e) => setAllergensEn(e.target.value)}
+              className={field}
+              maxLength={300}
+              placeholder="e.g. gluten, eggs, milk"
+            />
           </div>
         </div>
 

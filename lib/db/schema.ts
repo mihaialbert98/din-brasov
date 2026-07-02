@@ -617,6 +617,7 @@ export const menuCategories = pgTable(
       .notNull()
       .references(() => restaurants.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    nameEn: text("name_en"), // optional English name (customer menu language toggle)
     position: integer("position").notNull().default(0),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
@@ -635,11 +636,17 @@ export const menuItems = pgTable(
       .notNull()
       .references(() => menuCategories.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    nameEn: text("name_en"), // optional English name
     description: text("description"),
+    descriptionEn: text("description_en"), // optional English description
     price: text("price"),
     currency: text("currency").notNull().default("RON"),
     imageUrl: text("image_url"),
-    allergens: text("allergens"), // JSON array of allergen labels (ANPC 201/2022)
+    // Free text (e.g. "gluten, ouă, lapte"). Older rows may hold a JSON array —
+    // read through lib/text.ts:allergensToText() for back-compat.
+    allergens: text("allergens"),
+    allergensEn: text("allergens_en"), // optional English allergens text
+    calories: integer("calories"), // optional kcal per serving; shown when set
     isAvailable: boolean("is_available").notNull().default(true),
     position: integer("position").notNull().default(0),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),

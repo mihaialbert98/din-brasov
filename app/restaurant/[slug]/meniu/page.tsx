@@ -11,6 +11,7 @@ import {
   isPlatformStaff,
 } from "@/lib/restaurant-permissions";
 import MenuManager, { type MenuCategoryData } from "@/components/restaurant/MenuManager";
+import { allergensToText } from "@/lib/text";
 
 export default async function MeniuPage({
   params,
@@ -43,15 +44,20 @@ export default async function MeniuPage({
   const data: MenuCategoryData[] = categories.map((c) => ({
     id: c.id,
     name: c.name,
+    nameEn: c.nameEn,
     items: items
       .filter((it) => it.categoryId === c.id)
       .map((it) => ({
         id: it.id,
         name: it.name,
+        nameEn: it.nameEn,
         description: it.description,
+        descriptionEn: it.descriptionEn,
         price: it.price,
         imageUrl: it.imageUrl,
-        allergens: it.allergens ? (JSON.parse(it.allergens) as string[]) : [],
+        allergens: allergensToText(it.allergens),
+        allergensEn: it.allergensEn ?? "",
+        calories: it.calories,
         isAvailable: it.isAvailable,
       })),
   }));
