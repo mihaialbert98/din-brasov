@@ -83,18 +83,19 @@ export default async function ScannedMenuPage({ params }: Props) {
     <div className="menu-theme min-h-screen">
       {grouped.length === 0 ? (
         <>
-          <header className="px-5 pt-8 pb-8 text-center" style={{ background: "var(--brand)" }}>
+          <header className="px-6 pt-11 pb-9 text-center" style={{ background: "var(--brand)" }}>
             {ctx.logoUrl && (
               <img
                 src={ctx.logoUrl}
                 alt=""
-                className="w-[72px] h-[72px] rounded-2xl object-cover mx-auto mb-3 ring-2 ring-white/70 shadow-md"
+                className="w-[76px] h-[76px] rounded-full object-cover mx-auto mb-4 ring-1 shadow-md"
+                style={{ boxShadow: "0 0 0 1px color-mix(in srgb, var(--brand-contrast) 45%, transparent)" }}
               />
             )}
-            <h1 className="text-2xl sm:text-3xl font-serif font-bold" style={{ color: "var(--brand-contrast)" }}>
+            <h1 className="text-[26px] sm:text-3xl font-serif font-medium leading-tight" style={{ color: "var(--brand-contrast)" }}>
               {ctx.restaurantName}
             </h1>
-            <p className="mt-1 text-[13px] font-medium tracking-wide" style={{ color: "color-mix(in srgb, var(--brand-contrast) 85%, transparent)" }}>
+            <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.2em]" style={{ color: "color-mix(in srgb, var(--brand-contrast) 88%, transparent)" }}>
               {ctx.tableLabel}
             </p>
           </header>

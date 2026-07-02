@@ -60,7 +60,7 @@ export default function MenuView({
     clickScrolling.current = true;
     const el = sectionRefs.current[id];
     if (el) {
-      const y = el.getBoundingClientRect().top + window.scrollY - 84; // offset for sticky nav
+      const y = el.getBoundingClientRect().top + window.scrollY - 78; // offset for sticky nav
       window.scrollTo({ top: y, behavior: "smooth" });
     }
     window.setTimeout(() => { clickScrolling.current = false; }, 600);
@@ -68,55 +68,60 @@ export default function MenuView({
 
   return (
     <>
-      {/* Hero — cover image if available, else a calm branded band. */}
+      {/* ── Hero ────────────────────────────────────────────────────────────── */}
       <header className="relative overflow-hidden">
         {coverUrl ? (
-          <div className="relative h-44 sm:h-52">
+          <div className="relative h-52 sm:h-60">
             <img src={coverUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-black/10" />
-            <div className="absolute inset-x-0 bottom-0 px-5 pb-5 flex items-end gap-3">
+            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent" />
+            <div className="absolute inset-x-0 bottom-0 px-6 pb-6 text-center">
               {logoUrl && (
                 <img
                   src={logoUrl}
                   alt=""
-                  className="w-16 h-16 rounded-2xl object-cover ring-2 ring-white/80 shadow-md flex-shrink-0"
+                  className="w-16 h-16 rounded-full object-cover mx-auto mb-3 ring-1 ring-white/50 shadow-lg"
                 />
               )}
-              <div className="min-w-0">
-                <h1 className="font-serif font-bold text-white text-2xl sm:text-3xl leading-tight [text-shadow:0_1px_8px_rgba(0,0,0,0.5)] truncate">
-                  {restaurantName}
-                </h1>
-                <p className="text-white/85 text-[13px] font-medium tracking-wide">{tableLabel}</p>
-              </div>
+              <h1 className="font-serif font-medium text-white text-[26px] sm:text-3xl leading-tight [text-shadow:0_1px_10px_rgba(0,0,0,0.55)] px-2">
+                {restaurantName}
+              </h1>
+              <p className="mt-2 text-white/85 text-[11px] font-semibold uppercase tracking-[0.2em]">
+                {tableLabel}
+              </p>
             </div>
           </div>
         ) : (
-          <div className="px-5 pt-8 pb-7 text-center" style={{ background: "var(--brand)" }}>
+          <div className="px-6 pt-11 pb-9 text-center" style={{ background: "var(--brand)" }}>
             {logoUrl && (
               <img
                 src={logoUrl}
                 alt=""
-                className="w-[72px] h-[72px] rounded-2xl object-cover mx-auto mb-3 ring-2 ring-white/70 shadow-md"
-                style={{ background: "var(--brand-contrast)" }}
+                className="w-[76px] h-[76px] rounded-full object-cover mx-auto mb-4 ring-1 shadow-md"
+                style={{ boxShadow: "0 0 0 1px color-mix(in srgb, var(--brand-contrast) 45%, transparent)" }}
               />
             )}
-            <h1 className="font-serif font-bold text-2xl sm:text-3xl leading-tight" style={{ color: "var(--brand-contrast)" }}>
+            <h1 className="font-serif font-medium text-[26px] sm:text-3xl leading-tight" style={{ color: "var(--brand-contrast)" }}>
               {restaurantName}
             </h1>
-            <p className="mt-1 text-[13px] font-medium tracking-wide" style={{ color: "color-mix(in srgb, var(--brand-contrast) 85%, transparent)" }}>
+            <div className="mt-3 flex items-center justify-center gap-2.5" aria-hidden>
+              <span className="h-px w-6" style={{ background: "color-mix(in srgb, var(--brand-contrast) 45%, transparent)" }} />
+              <span className="w-1 h-1 rotate-45" style={{ background: "color-mix(in srgb, var(--brand-contrast) 60%, transparent)" }} />
+              <span className="h-px w-6" style={{ background: "color-mix(in srgb, var(--brand-contrast) 45%, transparent)" }} />
+            </div>
+            <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.2em]" style={{ color: "color-mix(in srgb, var(--brand-contrast) 88%, transparent)" }}>
               {tableLabel}
             </p>
           </div>
         )}
       </header>
 
-      {/* Sticky category nav */}
+      {/* ── Sticky category nav — understated underline active state ─────────── */}
       {categories.length > 1 && (
         <nav
           className="sticky top-0 z-20 border-b"
-          style={{ background: "color-mix(in srgb, var(--menu-bg) 92%, transparent)", borderColor: "var(--menu-border)", backdropFilter: "blur(8px)" }}
+          style={{ background: "color-mix(in srgb, var(--menu-paper) 90%, transparent)", borderColor: "var(--menu-border)", backdropFilter: "blur(10px)" }}
         >
-          <div className="flex gap-2 overflow-x-auto px-4 py-2.5 scrollbar-none max-w-2xl mx-auto">
+          <div className="flex gap-1 overflow-x-auto px-4 scrollbar-none max-w-2xl mx-auto">
             {categories.map((c) => {
               const active = activeId === c.id;
               return (
@@ -125,14 +130,14 @@ export default function MenuView({
                   ref={(el) => { chipRefs.current[c.id] = el; }}
                   onClick={() => scrollTo(c.id)}
                   aria-current={active ? "true" : undefined}
-                  className="whitespace-nowrap text-[13px] font-semibold px-3.5 py-1.5 rounded-full transition-colors duration-150"
-                  style={
-                    active
-                      ? { background: "var(--brand)", color: "var(--brand-contrast)" }
-                      : { background: "var(--menu-surface)", color: "var(--menu-muted)", boxShadow: "var(--menu-shadow-sm)" }
-                  }
+                  className="relative whitespace-nowrap text-[12px] font-semibold uppercase tracking-[0.09em] px-3 py-3.5 transition-colors duration-200"
+                  style={{ color: active ? "var(--menu-heading)" : "var(--menu-faint)" }}
                 >
                   {c.name}
+                  <span
+                    className="absolute left-3 right-3 bottom-2 h-[2px] rounded-full transition-opacity duration-200"
+                    style={{ background: "var(--brand)", opacity: active ? 1 : 0 }}
+                  />
                 </button>
               );
             })}
@@ -140,64 +145,70 @@ export default function MenuView({
         </nav>
       )}
 
-      {/* Sections */}
-      <div className="px-4 pt-5 pb-32 max-w-2xl mx-auto">
-        {categories.map((cat) => (
+      {/* ── Menu body ───────────────────────────────────────────────────────── */}
+      <div className="px-6 pt-9 pb-32 max-w-2xl mx-auto">
+        {categories.map((cat, ci) => (
           <section
             key={cat.id}
             id={cat.id}
             ref={(el) => { sectionRefs.current[cat.id] = el; }}
-            className="scroll-mt-20 mb-9"
+            className={`scroll-mt-16 ${ci === 0 ? "" : "mt-12"}`}
           >
-            <div className="flex items-center gap-3 mb-3">
-              <h2 className="font-serif font-bold text-[19px] tracking-tight" style={{ color: "var(--menu-text)" }}>
+            {/* Centered tracked eyebrow with a small diamond ornament */}
+            <div className="text-center mb-6">
+              <h2
+                className="font-serif text-[22px] leading-none"
+                style={{ color: "var(--menu-heading)", fontWeight: 500, letterSpacing: "0.01em" }}
+              >
                 {cat.name}
               </h2>
-              <span className="h-px flex-1" style={{ background: "var(--menu-border)" }} />
+              <div className="mt-3 flex items-center justify-center gap-2.5" aria-hidden>
+                <span className="h-px w-8" style={{ background: "var(--menu-border)" }} />
+                <span className="w-1 h-1 rotate-45" style={{ background: "var(--brand)" }} />
+                <span className="h-px w-8" style={{ background: "var(--menu-border)" }} />
+              </div>
             </div>
 
-            <ul
-              className="rounded-2xl overflow-hidden divide-y"
-              style={{ background: "var(--menu-surface)", boxShadow: "var(--menu-shadow)", borderColor: "var(--menu-border)" }}
-            >
+            {/* Airy separated rows on the paper background (no boxed card) */}
+            <ul className="divide-y" style={{ borderColor: "var(--menu-border)" }}>
               {cat.items.map((it) => (
-                <li key={it.id} className="p-3.5 sm:p-4 flex gap-3.5" style={{ borderColor: "var(--menu-border)" }}>
+                <li key={it.id} className="py-5 first:pt-0 flex gap-4" style={{ borderColor: "var(--menu-border)" }}>
                   {it.imageUrl && (
                     <div
-                      className="w-[84px] h-[84px] sm:w-24 sm:h-24 flex-shrink-0 overflow-hidden"
+                      className="w-[76px] h-[76px] sm:w-[88px] sm:h-[88px] flex-shrink-0 overflow-hidden"
                       style={{ borderRadius: "var(--menu-radius-sm)", background: "var(--menu-border)" }}
                     >
                       <img src={it.imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
                     </div>
                   )}
-                  <div className="flex-1 min-w-0 flex flex-col">
-                    <div className="flex items-start justify-between gap-3">
-                      <h3 className="font-semibold text-[15px] leading-snug break-words" style={{ color: "var(--menu-text)" }}>
+                  <div className="flex-1 min-w-0">
+                    {/* Dish name + leader dots + price on one baseline */}
+                    <div className="flex items-baseline gap-2">
+                      <h3 className="font-serif text-[17px] leading-snug break-words" style={{ color: "var(--menu-heading)", fontWeight: 500 }}>
                         {it.name}
                       </h3>
                       {it.price && (
-                        <span className="font-bold text-[15px] whitespace-nowrap tabular-nums pl-1" style={{ color: "var(--brand)" }}>
-                          {it.price} lei
-                        </span>
+                        <>
+                          <span
+                            className="flex-1 min-w-3 translate-y-[-3px] self-end"
+                            style={{ borderBottom: "1.5px dotted var(--menu-leader)" }}
+                            aria-hidden
+                          />
+                          <span className="text-[15px] whitespace-nowrap tabular-nums font-semibold" style={{ color: "var(--brand)" }}>
+                            {it.price} lei
+                          </span>
+                        </>
                       )}
                     </div>
                     {it.description && (
-                      <p className="text-[13px] mt-1 leading-relaxed line-clamp-3" style={{ color: "var(--menu-muted)" }}>
+                      <p className="text-[13px] mt-1.5 leading-relaxed line-clamp-3" style={{ color: "var(--menu-muted)" }}>
                         {it.description}
                       </p>
                     )}
                     {it.allergens.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {it.allergens.map((a) => (
-                          <span
-                            key={a}
-                            className="text-[11px] leading-none px-2 py-1 rounded-full"
-                            style={{ color: "var(--menu-muted)", background: "var(--menu-bg)" }}
-                          >
-                            {a}
-                          </span>
-                        ))}
-                      </div>
+                      <p className="text-[11px] mt-2 uppercase tracking-[0.08em]" style={{ color: "var(--menu-faint)" }}>
+                        {it.allergens.join(" · ")}
+                      </p>
                     )}
                   </div>
                 </li>
@@ -206,8 +217,15 @@ export default function MenuView({
           </section>
         ))}
 
-        <footer className="text-center text-[11px] mt-8" style={{ color: "var(--menu-faint)" }}>
-          Meniu digital prin <span className="font-semibold" style={{ color: "var(--menu-muted)" }}>Din Brașov</span>
+        <footer className="text-center mt-14" style={{ color: "var(--menu-faint)" }}>
+          <div className="flex items-center justify-center gap-2.5 mb-3" aria-hidden>
+            <span className="h-px w-6" style={{ background: "var(--menu-border)" }} />
+            <span className="w-1 h-1 rotate-45" style={{ background: "var(--menu-border)" }} />
+            <span className="h-px w-6" style={{ background: "var(--menu-border)" }} />
+          </div>
+          <p className="text-[10px] uppercase tracking-[0.18em] font-medium">
+            Meniu digital prin <span style={{ color: "var(--menu-muted)" }}>Din Brașov</span>
+          </p>
         </footer>
       </div>
     </>

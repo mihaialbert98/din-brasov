@@ -90,13 +90,19 @@ select {
   --menu-border: #ece9e6;     /* hairline dividers */
 
   --menu-radius: 16px;        /* cards */
-  --menu-radius-sm: 12px;     /* images, inner elements */
+  --menu-radius-sm: 10px;     /* images, inner elements */
   --menu-radius-pill: 999px;
 
   --menu-shadow: 0 1px 2px rgba(28, 25, 23, 0.04), 0 4px 12px rgba(28, 25, 23, 0.05);
   --menu-shadow-sm: 0 1px 2px rgba(28, 25, 23, 0.06);
 
-  background: var(--menu-bg);
+  /* Elevated menu tokens: a warm ivory paper, a soft brand tint for the price
+   * leader dots, and a refined heading color. Kept subtle for restrained luxury. */
+  --menu-paper: #faf9f7;      /* warm ivory page — calmer than pure grey */
+  --menu-heading: #2a2521;    /* deep warm brown-black for serif headings */
+  --menu-leader: color-mix(in srgb, var(--menu-text) 22%, transparent); /* dotted leader */
+
+  background: var(--menu-paper);
   color: var(--menu-text);
 }
 

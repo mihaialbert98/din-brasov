@@ -45,11 +45,13 @@ export default function ServiceButtons({
 
   // Shared control styling — consistent height, radius, weight, states.
   const btnBase =
-    "flex-1 font-semibold text-[15px] h-12 rounded-xl transition-colors duration-150 disabled:opacity-55 disabled:cursor-not-allowed";
+    "flex-1 font-semibold text-[14px] tracking-wide h-[52px] transition-colors duration-200 disabled:opacity-55 disabled:cursor-not-allowed";
+  const btnRadius = { borderRadius: "var(--menu-radius-sm)" };
   const barStyle: React.CSSProperties = {
-    background: "var(--menu-surface)",
+    background: "color-mix(in srgb, var(--menu-surface) 94%, transparent)",
     borderTop: "1px solid var(--menu-border)",
-    boxShadow: "0 -2px 12px rgba(28,25,23,0.06)",
+    boxShadow: "0 -1px 16px rgba(28,25,23,0.05)",
+    backdropFilter: "blur(10px)",
     paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
   };
 
@@ -75,7 +77,7 @@ export default function ServiceButtons({
               onClick={() => send("request_check", "cash")}
               disabled={pending !== null}
               className={btnBase}
-              style={{ background: "var(--menu-text)", color: "var(--menu-surface)" }}
+              style={{ background: "var(--menu-text)", color: "var(--menu-surface)", ...btnRadius }}
             >
               Numerar
             </button>
@@ -83,14 +85,14 @@ export default function ServiceButtons({
               onClick={() => send("request_check", "card")}
               disabled={pending !== null}
               className={btnBase}
-              style={{ background: "var(--menu-text)", color: "var(--menu-surface)" }}
+              style={{ background: "var(--menu-text)", color: "var(--menu-surface)", ...btnRadius }}
             >
               Card
             </button>
             <button
               onClick={() => setChoosingPay(false)}
               className="flex-shrink-0 w-9 h-9 rounded-full grid place-items-center transition-colors"
-              style={{ color: "var(--menu-muted)", background: "var(--menu-bg)", minHeight: "auto" }}
+              style={{ color: "var(--menu-muted)", background: "var(--menu-paper)", minHeight: "auto" }}
               aria-label="Anulează"
             >
               ✕
@@ -102,7 +104,7 @@ export default function ServiceButtons({
               onClick={() => send("call_waiter")}
               disabled={pending !== null}
               className={btnBase}
-              style={{ background: "var(--brand)", color: "var(--brand-contrast)" }}
+              style={{ background: "var(--brand)", color: "var(--brand-contrast)", ...btnRadius }}
             >
               {sent === "call_waiter" ? "✓ Vine imediat" : pending === "call_waiter" ? "…" : "Cheamă ospătarul"}
             </button>
@@ -110,7 +112,7 @@ export default function ServiceButtons({
               onClick={() => { setChoosingPay(true); setError(null); }}
               disabled={pending !== null}
               className={btnBase}
-              style={{ background: "var(--menu-text)", color: "var(--menu-surface)" }}
+              style={{ background: "var(--menu-text)", color: "var(--menu-surface)", ...btnRadius }}
             >
               {sent === "request_check" ? "✓ Nota vine" : "Nota, vă rog"}
             </button>
