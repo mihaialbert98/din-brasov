@@ -153,21 +153,42 @@ function Hero({
   const serif = design !== "compact"; // Compact uses the sans face for a cleaner, denser feel
   const nameClass = `${serif ? "font-serif font-medium" : "font-sans font-bold"} leading-tight`;
 
-  // Modern favors the cover image; all designs fall back to a brand band.
-  if (coverUrl && design === "modern") {
+  // Cover photo hero for Modern (photo-forward) and Elegant (atmospheric, deeper
+  // overlay + ornament). Compact stays on the slim brand band — density first.
+  if (coverUrl && design !== "compact") {
+    const elegant = design === "elegant";
     return (
       <header className="relative overflow-hidden">
-        <div className="relative h-52 sm:h-60">
+        <div className={`relative ${elegant ? "h-60 sm:h-72" : "h-52 sm:h-60"}`}>
           <img src={coverUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent" />
-          <div className="absolute inset-x-0 bottom-0 px-6 pb-6 text-center">
+          <div
+            className={`absolute inset-0 bg-gradient-to-t ${
+              elegant ? "from-black/80 via-black/40 to-black/15" : "from-black/75 via-black/30 to-transparent"
+            }`}
+          />
+          <div className={`absolute inset-x-0 bottom-0 px-6 text-center ${elegant ? "pb-7" : "pb-6"}`}>
             {logoUrl && (
-              <img src={logoUrl} alt="" className="w-16 h-16 rounded-full object-cover mx-auto mb-3 ring-1 ring-white/50 shadow-lg" />
+              <img
+                src={logoUrl}
+                alt=""
+                className={`rounded-full object-cover mx-auto shadow-lg ${
+                  elegant ? "w-[68px] h-[68px] mb-3 ring-1 ring-white/40" : "w-16 h-16 mb-3 ring-1 ring-white/50"
+                }`}
+              />
             )}
             <h1 className={`${nameClass} text-white text-[26px] sm:text-3xl [text-shadow:0_1px_10px_rgba(0,0,0,0.55)] px-2`}>
               {restaurantName}
             </h1>
-            <p className="mt-2 text-white/85 text-[11px] font-semibold uppercase tracking-[0.2em]">{tableLabel}</p>
+            {elegant && (
+              <div className="mt-3 flex items-center justify-center gap-2.5" aria-hidden>
+                <span className="h-px w-6 bg-white/45" />
+                <span className="w-1 h-1 rotate-45 bg-white/70" />
+                <span className="h-px w-6 bg-white/45" />
+              </div>
+            )}
+            <p className={`text-white/85 text-[11px] font-semibold uppercase tracking-[0.2em] ${elegant ? "mt-3" : "mt-2"}`}>
+              {tableLabel}
+            </p>
           </div>
         </div>
       </header>

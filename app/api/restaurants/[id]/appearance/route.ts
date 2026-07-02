@@ -16,6 +16,10 @@ import { getDesign, isValidDesign, isValidTheme } from "@/lib/menu-themes";
 const schema = z.object({
   design: z.string(),
   theme: z.string(),
+  // Branding images shown on the customer menu. undefined = leave unchanged,
+  // "" = clear. Cover is used by the Modern + Elegant heros.
+  coverUrl: z.string().url().or(z.literal("")).optional(),
+  logoUrl: z.string().url().or(z.literal("")).optional(),
 });
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -28,7 +32,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const parsed = schema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: "Date invalide." }, { status: 400 });
-  const { design, theme } = parsed.data;
+  const { design, theme, coverUrl, logoUrl } = parsed.data;
 
   if (!isValidDesign(design) || !isValidTheme(design, theme)) {
     return NextResponse.json({ error: "Design sau temă invalidă." }, { status: 400 });
@@ -53,10 +57,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
   }
 
-  await db
-    .update(restaurants)
-    .set({ menuDesign: design, menuTheme: theme, updatedAt: new Date() })
-    .where(eq(restaurants.id, id));
+  const patch: Record<string, unknown> = { menuDesign: design, menuTheme: theme, updatedAt: new Date() };
+  if (coverUrl !== undefined) patch.coverUrl = coverUrl || null;
+  if (logoUrl !== undefined) patch.logoUrl = logoUrl || null;
+
+  await db.update(restaurants).set(patch).where(eq(restaurants.id, id));
 
   return NextResponse.json({ ok: true, design, theme });
 }

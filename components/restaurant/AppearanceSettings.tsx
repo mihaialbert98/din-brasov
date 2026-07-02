@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import ImageField from "@/components/admin/ImageField";
 import { MENU_DESIGNS, getDesign, type MenuThemeTokens } from "@/lib/menu-themes";
 
 export default function AppearanceSettings({
@@ -10,6 +11,8 @@ export default function AppearanceSettings({
   initialTheme,
   totalItems,
   itemsWithPhoto,
+  initialLogoUrl,
+  initialCoverUrl,
   requiresUnlock = false,
   initiallyUnlocked = true,
 }: {
@@ -18,12 +21,16 @@ export default function AppearanceSettings({
   initialTheme: string;
   totalItems: number;
   itemsWithPhoto: number;
+  initialLogoUrl?: string | null;
+  initialCoverUrl?: string | null;
   requiresUnlock?: boolean; // false for platform admins (they bypass 2FA)
   initiallyUnlocked?: boolean;
 }) {
   const router = useRouter();
   const [design, setDesign] = useState(initialDesign);
   const [theme, setTheme] = useState(initialTheme);
+  const [logoUrl, setLogoUrl] = useState(initialLogoUrl ?? "");
+  const [coverUrl, setCoverUrl] = useState(initialCoverUrl ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [missing, setMissing] = useState<string[] | null>(null);
@@ -76,7 +83,11 @@ export default function AppearanceSettings({
     }
   }
 
-  const dirty = design !== initialDesign || theme !== initialTheme;
+  const dirty =
+    design !== initialDesign ||
+    theme !== initialTheme ||
+    logoUrl !== (initialLogoUrl ?? "") ||
+    coverUrl !== (initialCoverUrl ?? "");
   const missingPhotos = Math.max(0, totalItems - itemsWithPhoto);
 
   function pickDesign(id: string) {
@@ -101,7 +112,7 @@ export default function AppearanceSettings({
       const res = await fetch(`/api/restaurants/${restaurantId}/appearance`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ design, theme }),
+        body: JSON.stringify({ design, theme, coverUrl, logoUrl }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -257,6 +268,38 @@ export default function AppearanceSettings({
           })}
         </div>
       </section>
+
+      {/* Branding images — logo (all designs) + cover photo (Modern & Elegant heros) */}
+      {!locked && (
+        <section>
+          <h2 className="text-sm font-semibold text-gray-700 mb-1">Imagini restaurant</h2>
+          <p className="text-xs text-gray-500 mb-3">
+            Logo-ul apare în antetul meniului. Imaginea de copertă este afișată sus, în locul benzii
+            colorate, pentru designurile <strong>Modern</strong> și <strong>Elegant</strong> (Compact nu o
+            folosește). Alege o fotografie atmosferică, de calitate.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div>
+              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Logo</p>
+              <ImageField
+                endpoint="menuItemImage"
+                value={logoUrl}
+                onChange={(url) => { setLogoUrl(url); setSaved(false); }}
+                onError={(msg) => setError(msg)}
+              />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Imagine de copertă</p>
+              <ImageField
+                endpoint="menuItemImage"
+                value={coverUrl}
+                onChange={(url) => { setCoverUrl(url); setSaved(false); }}
+                onError={(msg) => setError(msg)}
+              />
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Save */}
       <div className="flex items-center gap-3 pt-1">

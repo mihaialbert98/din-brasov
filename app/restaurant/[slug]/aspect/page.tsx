@@ -57,6 +57,8 @@ export default async function AspectPage({
         initialTheme={current?.menuTheme ?? "terracotta"}
         totalItems={total}
         itemsWithPhoto={withPhoto}
+        initialLogoUrl={restaurant.logoUrl}
+        initialCoverUrl={restaurant.coverUrl}
         requiresUnlock={!isAdmin}
         initiallyUnlocked={initiallyUnlocked}
       />
