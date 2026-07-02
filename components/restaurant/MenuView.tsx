@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { MenuDesignId } from "@/lib/menu-themes";
 
 export interface MenuViewItem {
   id: string;
@@ -17,12 +18,14 @@ export interface MenuViewCategory {
 }
 
 export default function MenuView({
+  design,
   restaurantName,
   tableLabel,
   logoUrl,
   coverUrl,
   categories,
 }: {
+  design: MenuDesignId;
   restaurantName: string;
   tableLabel: string;
   logoUrl: string | null;
@@ -34,7 +37,6 @@ export default function MenuView({
   const chipRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const clickScrolling = useRef(false);
 
-  // Scroll-spy: highlight the category whose section is currently in view.
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -50,7 +52,6 @@ export default function MenuView({
     return () => observer.disconnect();
   }, [categories]);
 
-  // Keep the active chip scrolled into view within the horizontal nav.
   useEffect(() => {
     chipRefs.current[activeId]?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
   }, [activeId]);
@@ -60,62 +61,28 @@ export default function MenuView({
     clickScrolling.current = true;
     const el = sectionRefs.current[id];
     if (el) {
-      const y = el.getBoundingClientRect().top + window.scrollY - 78; // offset for sticky nav
+      const y = el.getBoundingClientRect().top + window.scrollY - 78;
       window.scrollTo({ top: y, behavior: "smooth" });
     }
     window.setTimeout(() => { clickScrolling.current = false; }, 600);
   }
 
+  const isElegant = design === "elegant";
+  const isModern = design === "modern";
+  const isCompact = design === "compact";
+
   return (
     <>
-      {/* ── Hero ────────────────────────────────────────────────────────────── */}
-      <header className="relative overflow-hidden">
-        {coverUrl ? (
-          <div className="relative h-52 sm:h-60">
-            <img src={coverUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent" />
-            <div className="absolute inset-x-0 bottom-0 px-6 pb-6 text-center">
-              {logoUrl && (
-                <img
-                  src={logoUrl}
-                  alt=""
-                  className="w-16 h-16 rounded-full object-cover mx-auto mb-3 ring-1 ring-white/50 shadow-lg"
-                />
-              )}
-              <h1 className="font-serif font-medium text-white text-[26px] sm:text-3xl leading-tight [text-shadow:0_1px_10px_rgba(0,0,0,0.55)] px-2">
-                {restaurantName}
-              </h1>
-              <p className="mt-2 text-white/85 text-[11px] font-semibold uppercase tracking-[0.2em]">
-                {tableLabel}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="px-6 pt-11 pb-9 text-center" style={{ background: "var(--brand)" }}>
-            {logoUrl && (
-              <img
-                src={logoUrl}
-                alt=""
-                className="w-[76px] h-[76px] rounded-full object-cover mx-auto mb-4 ring-1 shadow-md"
-                style={{ boxShadow: "0 0 0 1px color-mix(in srgb, var(--brand-contrast) 45%, transparent)" }}
-              />
-            )}
-            <h1 className="font-serif font-medium text-[26px] sm:text-3xl leading-tight" style={{ color: "var(--brand-contrast)" }}>
-              {restaurantName}
-            </h1>
-            <div className="mt-3 flex items-center justify-center gap-2.5" aria-hidden>
-              <span className="h-px w-6" style={{ background: "color-mix(in srgb, var(--brand-contrast) 45%, transparent)" }} />
-              <span className="w-1 h-1 rotate-45" style={{ background: "color-mix(in srgb, var(--brand-contrast) 60%, transparent)" }} />
-              <span className="h-px w-6" style={{ background: "color-mix(in srgb, var(--brand-contrast) 45%, transparent)" }} />
-            </div>
-            <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.2em]" style={{ color: "color-mix(in srgb, var(--brand-contrast) 88%, transparent)" }}>
-              {tableLabel}
-            </p>
-          </div>
-        )}
-      </header>
+      {/* ── Hero (shared, tuned per design) ─────────────────────────────────── */}
+      <Hero
+        design={design}
+        restaurantName={restaurantName}
+        tableLabel={tableLabel}
+        logoUrl={logoUrl}
+        coverUrl={coverUrl}
+      />
 
-      {/* ── Sticky category nav — understated underline active state ─────────── */}
+      {/* ── Sticky category nav (shared) ────────────────────────────────────── */}
       {categories.length > 1 && (
         <nav
           className="sticky top-0 z-20 border-b"
@@ -146,88 +113,245 @@ export default function MenuView({
       )}
 
       {/* ── Menu body ───────────────────────────────────────────────────────── */}
-      <div className="px-6 pt-9 pb-32 max-w-2xl mx-auto">
+      <div className={`max-w-2xl mx-auto pb-32 ${isCompact ? "px-4 pt-6" : "px-6 pt-9"}`}>
         {categories.map((cat, ci) => (
           <section
             key={cat.id}
             id={cat.id}
             ref={(el) => { sectionRefs.current[cat.id] = el; }}
-            className={`scroll-mt-16 ${ci === 0 ? "" : "mt-12"}`}
+            className={`scroll-mt-16 ${ci === 0 ? "" : isCompact ? "mt-8" : "mt-12"}`}
           >
-            {/* Centered tracked eyebrow with a small diamond ornament */}
-            <div className="text-center mb-6">
-              <h2
-                className="font-serif text-[22px] leading-none"
-                style={{ color: "var(--menu-heading)", fontWeight: 500, letterSpacing: "0.01em" }}
-              >
-                {cat.name}
-              </h2>
-              <div className="mt-3 flex items-center justify-center gap-2.5" aria-hidden>
-                <span className="h-px w-8" style={{ background: "var(--menu-border)" }} />
-                <span className="w-1 h-1 rotate-45" style={{ background: "var(--brand)" }} />
-                <span className="h-px w-8" style={{ background: "var(--menu-border)" }} />
-              </div>
-            </div>
+            <SectionHeading name={cat.name} design={design} />
 
-            {/* Airy separated rows on the paper background (no boxed card) */}
-            <ul className="divide-y" style={{ borderColor: "var(--menu-border)" }}>
-              {cat.items.map((it) => (
-                <li key={it.id} className="py-5 first:pt-0 flex gap-4" style={{ borderColor: "var(--menu-border)" }}>
-                  {it.imageUrl && (
-                    <div
-                      className="w-[76px] h-[76px] sm:w-[88px] sm:h-[88px] flex-shrink-0 overflow-hidden"
-                      style={{ borderRadius: "var(--menu-radius-sm)", background: "var(--menu-border)" }}
-                    >
-                      <img src={it.imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    {/* Dish name + leader dots + price on one baseline */}
-                    <div className="flex items-baseline gap-2">
-                      <h3 className="font-serif text-[17px] leading-snug break-words" style={{ color: "var(--menu-heading)", fontWeight: 500 }}>
-                        {it.name}
-                      </h3>
-                      {it.price && (
-                        <>
-                          <span
-                            className="flex-1 min-w-3 translate-y-[-3px] self-end"
-                            style={{ borderBottom: "1.5px dotted var(--menu-leader)" }}
-                            aria-hidden
-                          />
-                          <span className="text-[15px] whitespace-nowrap tabular-nums font-semibold" style={{ color: "var(--brand)" }}>
-                            {it.price} lei
-                          </span>
-                        </>
-                      )}
-                    </div>
-                    {it.description && (
-                      <p className="text-[13px] mt-1.5 leading-relaxed line-clamp-3" style={{ color: "var(--menu-muted)" }}>
-                        {it.description}
-                      </p>
-                    )}
-                    {it.allergens.length > 0 && (
-                      <p className="text-[11px] mt-2 uppercase tracking-[0.08em]" style={{ color: "var(--menu-faint)" }}>
-                        {it.allergens.join(" · ")}
-                      </p>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
+            {isModern && <ModernList items={cat.items} />}
+            {isElegant && <ElegantList items={cat.items} />}
+            {isCompact && <CompactList items={cat.items} />}
           </section>
         ))}
 
-        <footer className="text-center mt-14" style={{ color: "var(--menu-faint)" }}>
-          <div className="flex items-center justify-center gap-2.5 mb-3" aria-hidden>
-            <span className="h-px w-6" style={{ background: "var(--menu-border)" }} />
-            <span className="w-1 h-1 rotate-45" style={{ background: "var(--menu-border)" }} />
-            <span className="h-px w-6" style={{ background: "var(--menu-border)" }} />
-          </div>
-          <p className="text-[10px] uppercase tracking-[0.18em] font-medium">
-            Meniu digital prin <span style={{ color: "var(--menu-muted)" }}>Din Brașov</span>
-          </p>
-        </footer>
+        <Footer />
       </div>
     </>
+  );
+}
+
+// ── Hero ────────────────────────────────────────────────────────────────────
+
+function Hero({
+  design,
+  restaurantName,
+  tableLabel,
+  logoUrl,
+  coverUrl,
+}: {
+  design: MenuDesignId;
+  restaurantName: string;
+  tableLabel: string;
+  logoUrl: string | null;
+  coverUrl?: string | null;
+}) {
+  const serif = design !== "compact"; // Compact uses the sans face for a cleaner, denser feel
+  const nameClass = `${serif ? "font-serif font-medium" : "font-sans font-bold"} leading-tight`;
+
+  // Modern favors the cover image; all designs fall back to a brand band.
+  if (coverUrl && design === "modern") {
+    return (
+      <header className="relative overflow-hidden">
+        <div className="relative h-52 sm:h-60">
+          <img src={coverUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 px-6 pb-6 text-center">
+            {logoUrl && (
+              <img src={logoUrl} alt="" className="w-16 h-16 rounded-full object-cover mx-auto mb-3 ring-1 ring-white/50 shadow-lg" />
+            )}
+            <h1 className={`${nameClass} text-white text-[26px] sm:text-3xl [text-shadow:0_1px_10px_rgba(0,0,0,0.55)] px-2`}>
+              {restaurantName}
+            </h1>
+            <p className="mt-2 text-white/85 text-[11px] font-semibold uppercase tracking-[0.2em]">{tableLabel}</p>
+          </div>
+        </div>
+      </header>
+    );
+  }
+
+  return (
+    <header className={`text-center ${design === "compact" ? "px-6 pt-8 pb-6" : "px-6 pt-11 pb-9"}`} style={{ background: "var(--brand)" }}>
+      {logoUrl && (
+        <img
+          src={logoUrl}
+          alt=""
+          className={`${design === "compact" ? "w-16 h-16 mb-3" : "w-[76px] h-[76px] mb-4"} rounded-full object-cover mx-auto shadow-md`}
+          style={{ boxShadow: "0 0 0 1px color-mix(in srgb, var(--brand-contrast) 45%, transparent)" }}
+        />
+      )}
+      <h1 className={`${nameClass} text-[26px] sm:text-3xl`} style={{ color: "var(--brand-contrast)" }}>
+        {restaurantName}
+      </h1>
+      {design === "elegant" && <Ornament onBrand />}
+      <p
+        className={`text-[11px] font-semibold uppercase tracking-[0.2em] ${design === "elegant" ? "mt-3" : "mt-2"}`}
+        style={{ color: "color-mix(in srgb, var(--brand-contrast) 88%, transparent)" }}
+      >
+        {tableLabel}
+      </p>
+    </header>
+  );
+}
+
+// ── Section heading (per design) ──────────────────────────────────────────────
+
+function SectionHeading({ name, design }: { name: string; design: MenuDesignId }) {
+  if (design === "elegant") {
+    return (
+      <div className="text-center mb-6">
+        <h2 className="font-serif text-[22px] leading-none" style={{ color: "var(--menu-heading)", fontWeight: 500, letterSpacing: "0.01em" }}>
+          {name}
+        </h2>
+        <Ornament />
+      </div>
+    );
+  }
+  if (design === "compact") {
+    return (
+      <h2
+        className="text-[13px] font-bold uppercase tracking-[0.12em] pb-2 mb-2 border-b"
+        style={{ color: "var(--brand)", borderColor: "var(--menu-border)" }}
+      >
+        {name}
+      </h2>
+    );
+  }
+  // modern
+  return (
+    <div className="flex items-center gap-3 mb-4">
+      <h2 className="font-serif font-bold text-[20px] tracking-tight" style={{ color: "var(--menu-heading)" }}>
+        {name}
+      </h2>
+      <span className="h-px flex-1" style={{ background: "var(--menu-border)" }} />
+    </div>
+  );
+}
+
+// ── Modern: photo-forward cards ───────────────────────────────────────────────
+
+function ModernList({ items }: { items: MenuViewItem[] }) {
+  return (
+    <ul
+      className="rounded-2xl overflow-hidden divide-y"
+      style={{ background: "var(--menu-surface)", boxShadow: "var(--menu-shadow)", borderColor: "var(--menu-border)" }}
+    >
+      {items.map((it) => (
+        <li key={it.id} className="p-3.5 sm:p-4 flex gap-4" style={{ borderColor: "var(--menu-border)" }}>
+          {it.imageUrl && (
+            <div className="w-[88px] h-[88px] sm:w-24 sm:h-24 flex-shrink-0 overflow-hidden rounded-xl" style={{ background: "var(--menu-border)" }}>
+              <img src={it.imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+            </div>
+          )}
+          <div className="flex-1 min-w-0 flex flex-col">
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="font-semibold text-[15px] leading-snug break-words" style={{ color: "var(--menu-heading)" }}>{it.name}</h3>
+              {it.price && (
+                <span className="font-bold text-[15px] whitespace-nowrap tabular-nums pl-1" style={{ color: "var(--brand)" }}>{it.price} lei</span>
+              )}
+            </div>
+            {it.description && (
+              <p className="text-[13px] mt-1 leading-relaxed line-clamp-3" style={{ color: "var(--menu-muted)" }}>{it.description}</p>
+            )}
+            <Allergens list={it.allergens} variant="chips" className="mt-2" />
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// ── Elegant: airy rows, serif names, dotted price leaders ─────────────────────
+
+function ElegantList({ items }: { items: MenuViewItem[] }) {
+  return (
+    <ul className="divide-y" style={{ borderColor: "var(--menu-border)" }}>
+      {items.map((it) => (
+        <li key={it.id} className="py-5 first:pt-0" style={{ borderColor: "var(--menu-border)" }}>
+          <div className="flex items-baseline gap-2">
+            <h3 className="font-serif text-[17px] leading-snug break-words" style={{ color: "var(--menu-heading)", fontWeight: 500 }}>{it.name}</h3>
+            {it.price && (
+              <>
+                <span className="flex-1 min-w-3 self-end translate-y-[-3px]" style={{ borderBottom: "1.5px dotted var(--menu-leader)" }} aria-hidden />
+                <span className="text-[15px] whitespace-nowrap tabular-nums font-semibold" style={{ color: "var(--brand)" }}>{it.price} lei</span>
+              </>
+            )}
+          </div>
+          {it.description && (
+            <p className="text-[13px] mt-1.5 leading-relaxed line-clamp-3" style={{ color: "var(--menu-muted)" }}>{it.description}</p>
+          )}
+          <Allergens list={it.allergens} variant="text" className="mt-2" />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// ── Compact: dense text list, right-aligned prices ────────────────────────────
+
+function CompactList({ items }: { items: MenuViewItem[] }) {
+  return (
+    <ul>
+      {items.map((it) => (
+        <li key={it.id} className="py-2.5 flex items-baseline justify-between gap-3">
+          <div className="min-w-0">
+            <span className="font-semibold text-[14px]" style={{ color: "var(--menu-text)" }}>{it.name}</span>
+            {it.description && (
+              <span className="text-[13px] ml-2" style={{ color: "var(--menu-faint)" }}>{it.description}</span>
+            )}
+            <Allergens list={it.allergens} variant="text" className="mt-0.5" />
+          </div>
+          {it.price && (
+            <span className="font-semibold text-[14px] whitespace-nowrap tabular-nums flex-shrink-0" style={{ color: "var(--brand)" }}>{it.price} lei</span>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// ── Shared bits ───────────────────────────────────────────────────────────────
+
+function Allergens({ list, variant, className = "" }: { list: string[]; variant: "chips" | "text"; className?: string }) {
+  if (list.length === 0) return null;
+  if (variant === "chips") {
+    return (
+      <div className={`flex flex-wrap gap-1.5 ${className}`}>
+        {list.map((a) => (
+          <span key={a} className="text-[11px] leading-none px-2 py-1 rounded-full" style={{ color: "var(--menu-muted)", background: "var(--menu-paper)" }}>{a}</span>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <p className={`text-[11px] uppercase tracking-[0.08em] ${className}`} style={{ color: "var(--menu-faint)" }}>
+      {list.join(" · ")}
+    </p>
+  );
+}
+
+function Ornament({ onBrand = false }: { onBrand?: boolean }) {
+  const line = onBrand ? "color-mix(in srgb, var(--brand-contrast) 45%, transparent)" : "var(--menu-border)";
+  const dot = onBrand ? "color-mix(in srgb, var(--brand-contrast) 60%, transparent)" : "var(--brand)";
+  return (
+    <div className="mt-3 flex items-center justify-center gap-2.5" aria-hidden>
+      <span className="h-px w-8" style={{ background: line }} />
+      <span className="w-1 h-1 rotate-45" style={{ background: dot }} />
+      <span className="h-px w-8" style={{ background: line }} />
+    </div>
+  );
+}
+
+function Footer() {
+  return (
+    <footer className="text-center mt-14" style={{ color: "var(--menu-faint)" }}>
+      <p className="text-[10px] uppercase tracking-[0.18em] font-medium">
+        Meniu digital prin <span style={{ color: "var(--menu-muted)" }}>Din Brașov</span>
+      </p>
+    </footer>
   );
 }

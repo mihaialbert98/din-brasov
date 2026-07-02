@@ -576,6 +576,10 @@ export const restaurants = pgTable(
     // and whether to overlay the restaurant name (off when the name is baked in).
     cardTemplateUrl: text("card_template_url"),
     cardOverlayName: boolean("card_overlay_name").notNull().default(true),
+    // Customer menu appearance: which layout (modern | elegant | compact) and which
+    // curated color theme within it. Validated against lib/menu-themes.ts.
+    menuDesign: text("menu_design").notNull().default("elegant"),
+    menuTheme: text("menu_theme").notNull().default("terracotta"),
     placeId: text("place_id").references(() => places.id), // optional link to a Localuri place
     status: text("status").notNull().default("active"), // active | suspended
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),

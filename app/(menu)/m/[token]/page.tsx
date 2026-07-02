@@ -9,6 +9,7 @@ import {
 import { eq, and, asc } from "drizzle-orm";
 import ServiceButtons from "@/components/restaurant/ServiceButtons";
 import MenuView, { type MenuViewCategory } from "@/components/restaurant/MenuView";
+import { resolveTheme, themeStyle } from "@/lib/menu-themes";
 
 // Always render fresh so menu edits appear on the next scan of the same QR.
 export const dynamic = "force-dynamic";
@@ -27,6 +28,8 @@ async function getMenuContext(token: string) {
       restaurantStatus: restaurants.status,
       logoUrl: restaurants.logoUrl,
       coverUrl: restaurants.coverUrl,
+      menuDesign: restaurants.menuDesign,
+      menuTheme: restaurants.menuTheme,
     })
     .from(restaurantTables)
     .innerJoin(restaurants, eq(restaurantTables.restaurantId, restaurants.id))
@@ -76,11 +79,12 @@ export default async function ScannedMenuPage({ params }: Props) {
     }))
     .filter((c) => c.items.length > 0); // hide empty categories from diners
 
+  // Resolve the restaurant's chosen design + theme; theme tokens are applied as
+  // CSS custom properties on the .menu-theme root, so every component follows.
+  const { design, theme } = resolveTheme(ctx.menuDesign, ctx.menuTheme);
+
   return (
-    // .menu-theme carries the design tokens. A restaurant's brand color can be
-    // injected here (style={{ '--brand': ... }}) without touching any component;
-    // defaults to the platform brand.
-    <div className="menu-theme min-h-screen">
+    <div className="menu-theme min-h-screen" style={themeStyle(theme) as React.CSSProperties}>
       {grouped.length === 0 ? (
         <>
           <header className="px-6 pt-11 pb-9 text-center" style={{ background: "var(--brand)" }}>
@@ -105,6 +109,7 @@ export default async function ScannedMenuPage({ params }: Props) {
         </>
       ) : (
         <MenuView
+          design={design.id}
           restaurantName={ctx.restaurantName}
           tableLabel={ctx.tableLabel}
           logoUrl={ctx.logoUrl}

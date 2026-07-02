@@ -37,6 +37,7 @@ export default async function RestaurantLayout({
   const nav = [
     { href: `/restaurant/${slug}`, label: "Prezentare" },
     { href: `/restaurant/${slug}/meniu`, label: "Meniu" },
+    { href: `/restaurant/${slug}/aspect`, label: "Aspect meniu" },
     { href: `/restaurant/${slug}/mese`, label: "Mese & QR" },
     { href: `/restaurant/${slug}/serviciu`, label: "Serviciu" },
   ];
