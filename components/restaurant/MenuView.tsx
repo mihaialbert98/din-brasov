@@ -437,12 +437,14 @@ function ItemSheet({ item, lang, onClose }: { item: MenuViewItem; lang: MenuLang
     <div className="fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label={itemName(item, lang)}>
       <button className="absolute inset-0 bg-black/45 cursor-default" style={{ minHeight: "auto" }} onClick={onClose} aria-label={t("Închide", "Close")} />
       <div
-        className="absolute bottom-0 inset-x-0 max-w-lg mx-auto rounded-t-3xl overflow-hidden shadow-2xl"
-        style={{ background: "var(--menu-surface)", paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
+        className="absolute bottom-0 inset-x-0 max-w-lg mx-auto rounded-t-3xl overflow-y-auto shadow-2xl"
+        style={{ background: "var(--menu-surface)", maxHeight: "92vh", paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
       >
         {item.imageUrl ? (
-          <div className="relative h-52 sm:h-60">
-            <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+          // 3:2 frame — a correctly-sized 3:2 photo fills it with no cropping;
+          // other ratios cover gracefully. Container background avoids flashes.
+          <div className="relative w-full aspect-[3/2]" style={{ background: "var(--menu-border)" }}>
+            <img src={item.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
             <button
               onClick={onClose}
               className="absolute top-3 right-3 w-9 h-9 rounded-full grid place-items-center bg-black/40 text-white backdrop-blur-sm"
