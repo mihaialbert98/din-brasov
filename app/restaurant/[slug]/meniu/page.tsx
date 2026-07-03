@@ -58,6 +58,7 @@ export default async function MeniuPage({
         allergens: allergensToText(it.allergens),
         allergensEn: it.allergensEn ?? "",
         calories: it.calories,
+        isVegan: it.isVegan,
         isAvailable: it.isAvailable,
       })),
   }));

@@ -82,6 +82,7 @@ export default async function ScannedMenuPage({ params }: Props) {
           allergens: allergensToText(it.allergens),
           allergensEn: it.allergensEn ?? "",
           calories: it.calories,
+          isVegan: it.isVegan,
         })),
     }))
     .filter((c) => c.items.length > 0); // hide empty categories from diners

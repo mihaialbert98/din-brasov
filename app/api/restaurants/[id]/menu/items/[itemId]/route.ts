@@ -19,6 +19,7 @@ const patchSchema = z.object({
   allergens: z.string().max(300).optional(),
   allergensEn: z.string().max(300).optional(),
   calories: z.number().int().min(0).max(10000).nullable().optional(),
+  isVegan: z.boolean().optional(),
   isAvailable: z.boolean().optional(),
 });
 
@@ -61,6 +62,7 @@ export async function PATCH(
   if (d.allergens !== undefined) patch.allergens = d.allergens.trim() || null;
   if (d.allergensEn !== undefined) patch.allergensEn = d.allergensEn.trim() || null;
   if (d.calories !== undefined) patch.calories = d.calories;
+  if (d.isVegan !== undefined) patch.isVegan = d.isVegan;
   if (d.isAvailable !== undefined) patch.isAvailable = d.isAvailable;
 
   await db

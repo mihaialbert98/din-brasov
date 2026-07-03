@@ -19,6 +19,7 @@ const createSchema = z.object({
   allergens: z.string().max(300).optional(),
   allergensEn: z.string().max(300).optional(),
   calories: z.number().int().min(0).max(10000).optional(),
+  isVegan: z.boolean().optional(),
   isAvailable: z.boolean().optional(),
 });
 
@@ -64,6 +65,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       allergens: d.allergens?.trim() || null,
       allergensEn: d.allergensEn?.trim() || null,
       calories: d.calories ?? null,
+      isVegan: d.isVegan ?? false,
       isAvailable: d.isAvailable ?? true,
       position: Number(maxPos) + 1,
     })

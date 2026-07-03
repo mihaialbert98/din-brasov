@@ -647,6 +647,7 @@ export const menuItems = pgTable(
     allergens: text("allergens"),
     allergensEn: text("allergens_en"), // optional English allergens text
     calories: integer("calories"), // optional kcal per serving; shown when set
+    isVegan: boolean("is_vegan").notNull().default(false), // shows a "Vegan" badge
     isAvailable: boolean("is_available").notNull().default(true),
     position: integer("position").notNull().default(0),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),

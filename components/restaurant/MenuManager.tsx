@@ -15,6 +15,7 @@ export interface MenuItemData {
   allergens: string; // free text, e.g. "gluten, ouă, lapte"
   allergensEn: string;
   calories: number | null;
+  isVegan: boolean;
   isAvailable: boolean;
 }
 export interface MenuCategoryData {
@@ -164,6 +165,7 @@ export default function MenuManager({
       allergens: form.allergens,
       allergensEn: form.allergensEn,
       calories: form.calories,
+      isVegan: form.isVegan,
       isAvailable: form.isAvailable,
     };
     const r = item
@@ -285,6 +287,9 @@ export default function MenuManager({
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-gray-900">{item.name}</span>
                       {item.price && <span className="text-sm text-[#c84b1e] font-medium">{item.price} RON</span>}
+                      {item.isVegan && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">Vegan</span>
+                      )}
                       {!item.isAvailable && (
                         <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Indisponibil</span>
                       )}
@@ -349,6 +354,7 @@ interface ItemFormValues {
   allergens: string;
   allergensEn: string;
   calories: number | null;
+  isVegan: boolean;
   isAvailable: boolean;
 }
 
@@ -372,6 +378,7 @@ function ItemFormModal({
   const [allergens, setAllergens] = useState(initial?.allergens ?? "");
   const [allergensEn, setAllergensEn] = useState(initial?.allergensEn ?? "");
   const [calories, setCalories] = useState<string>(initial?.calories != null ? String(initial.calories) : "");
+  const [isVegan, setIsVegan] = useState(initial?.isVegan ?? false);
   const [isAvailable, setIsAvailable] = useState(initial?.isAvailable ?? true);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -389,6 +396,7 @@ function ItemFormModal({
       allergens: allergens.trim(),
       allergensEn: allergensEn.trim(),
       calories: kcal,
+      isVegan,
       isAvailable,
     });
   }
@@ -434,6 +442,12 @@ function ItemFormModal({
             <span className="text-sm text-gray-700">Disponibil</span>
           </label>
         </div>
+
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <input type="checkbox" checked={isVegan} onChange={(e) => setIsVegan(e.target.checked)} className="w-4 h-4 accent-green-600" />
+          <span className="text-sm text-gray-700">Vegan</span>
+          <span className="text-xs text-gray-400">— afișează o etichetă „Vegan" pe meniu</span>
+        </label>
 
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-gray-700">Descriere (română)</label>
