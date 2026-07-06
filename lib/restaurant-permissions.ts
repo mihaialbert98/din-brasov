@@ -137,3 +137,18 @@ export async function getRestaurantBySlug(slug: string) {
     .limit(1);
   return row ?? null;
 }
+
+/**
+ * Resolve a restaurant by its shared staff-board token. The unguessable token is
+ * the credential (no login) — same trust model as the diner's per-table menu
+ * token. Returns null for an unknown or suspended restaurant.
+ */
+export async function getRestaurantByStaffToken(token: string) {
+  const [row] = await db
+    .select({ id: restaurants.id, name: restaurants.name, status: restaurants.status })
+    .from(restaurants)
+    .where(eq(restaurants.staffToken, token))
+    .limit(1);
+  if (!row || row.status !== "active") return null;
+  return row;
+}

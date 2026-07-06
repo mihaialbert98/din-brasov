@@ -33,7 +33,12 @@ function timeAgo(iso: string): string {
   return `acum ${m} min`;
 }
 
-export default function ServiceBoard({ restaurantId }: { restaurantId: string }) {
+/**
+ * `basePath` is the API prefix that exposes `/requests` (GET pending) and
+ * `/requests/{id}/ack` (POST). The logged-in owner board passes
+ * `/api/restaurants/{id}`; the public staff-link board passes `/api/s/{token}`.
+ */
+export default function ServiceBoard({ basePath }: { basePath: string }) {
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [acking, setAcking] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -41,7 +46,7 @@ export default function ServiceBoard({ restaurantId }: { restaurantId: string })
 
   const fetchRequests = useCallback(async () => {
     try {
-      const res = await fetch(`/api/restaurants/${restaurantId}/requests?status=pending`, {
+      const res = await fetch(`${basePath}/requests?status=pending`, {
         cache: "no-store",
       });
       if (!res.ok) return;
@@ -74,7 +79,7 @@ export default function ServiceBoard({ restaurantId }: { restaurantId: string })
     } catch {
       /* retry next poll */
     }
-  }, [restaurantId]);
+  }, [basePath]);
 
   useEffect(() => {
     fetchRequests();
@@ -88,7 +93,7 @@ export default function ServiceBoard({ restaurantId }: { restaurantId: string })
   async function ack(id: string) {
     setAcking(id);
     try {
-      const res = await fetch(`/api/restaurants/${restaurantId}/requests/${id}/ack`, {
+      const res = await fetch(`${basePath}/requests/${id}/ack`, {
         method: "POST",
       });
       if (res.ok) {

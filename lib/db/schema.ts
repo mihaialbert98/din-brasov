@@ -8,6 +8,7 @@ import {
   timestamp,
   customType,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 const tsvector = customType<{ data: string }>({
   dataType() {
@@ -580,6 +581,14 @@ export const restaurants = pgTable(
     // curated color theme within it. Validated against lib/menu-themes.ts.
     menuDesign: text("menu_design").notNull().default("elegant"),
     menuTheme: text("menu_theme").notNull().default("terracotta"),
+    // Unguessable shared staff-board token — waiters open /s/{staffToken} to reach
+    // the live service board without a login. Regenerated to revoke old links.
+    // DB-level default (gen_random_uuid) so existing rows backfill on migration.
+    staffToken: text("staff_token")
+      .notNull()
+      .unique()
+      .$defaultFn(() => crypto.randomUUID())
+      .default(sql`gen_random_uuid()`),
     placeId: text("place_id").references(() => places.id), // optional link to a Localuri place
     status: text("status").notNull().default("active"), // active | suspended
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
