@@ -18,20 +18,20 @@ import QRCode from "qrcode";
 // Base template is 1540×980. The QR placeholder is the dashed box on the right;
 // the name goes in the "Numele Restaurantului" band. Tune if the design changes.
 const TEMPLATE_PATH = path.join(process.cwd(), "public", "card-template.png");
-// Real template geometry (measured from public/card-template.png @ 1559×1009).
-export const TEMPLATE_W = 1559;
-export const TEMPLATE_H = 1009;
+// Real template geometry (measured from public/card-template.png @ 1561×1008).
+export const TEMPLATE_W = 1561;
+export const TEMPLATE_H = 1008;
 
 // The template ships with baked-in placeholder text ("Numele Restaurantului",
 // "Loc pentru codul QR"), so each overlay first paints a cover rect in the card's
-// near-white background color, then draws the real content on top.
-const BG = "#fefdfb"; // sampled card background
+// cream background color, then draws the real content on top.
+const BG = "#fdf4ea"; // sampled card background
 
-// QR: centered inside the dashed frame (frame ≈ x1153–1512, y490–828).
-const QR = { cx: 1333, cy: 636, size: 300 };
+// QR: centered inside the dashed frame (frame ≈ x1192–1527, y428–816).
+const QR = { cx: 1359, cy: 622, size: 300 };
 
-// Name band: covers the placeholder text (bbox x524–1097, y527–570), centered.
-const NAME = { cx: 810, cy: 548, w: 620, h: 84, color: "#1a1a1a" };
+// Name band: covers the placeholder text (bbox x552–1143, y334–387), centered.
+const NAME = { cx: 847, cy: 360, w: 640, h: 86, color: "#2a2320" };
 
 // Table label pill, top-left corner of the card.
 const LABEL = { x: 44, y: 40, w: 210, h: 56 };
