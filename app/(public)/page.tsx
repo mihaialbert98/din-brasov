@@ -86,8 +86,8 @@ export default async function HomePage() {
           </div>
 
           <div className="flex-shrink-0 hidden md:block">
-            <span className="block w-[220px] h-[220px] rounded-full overflow-hidden drop-shadow-2xl">
-              <img src="/logo.png" alt="Din Brașov" width={220} height={220} className="w-full h-full object-cover scale-115" />
+            <span className="block w-[260px] h-[260px] rounded-full overflow-hidden drop-shadow-2xl">
+              <img src="/logo.png" alt="Din Brașov" width={260} height={260} className="w-full h-full object-cover" />
             </span>
           </div>
         </div>

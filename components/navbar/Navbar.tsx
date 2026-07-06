@@ -62,7 +62,7 @@ export async function Navbar() {
               alt="Din Brașov"
               width={40}
               height={40}
-              className="w-full h-full object-cover scale-115"
+              className="w-full h-full object-cover"
             />
           </span>
           <span className="font-bold text-xl tracking-tight">

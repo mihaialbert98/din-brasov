@@ -28,7 +28,7 @@ export function Footer() {
                   alt="Din Brașov"
                   width={40}
                   height={40}
-                  className="w-full h-full object-cover scale-115"
+                  className="w-full h-full object-cover"
                 />
               </span>
               <span className="font-bold text-lg text-white">
