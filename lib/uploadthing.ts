@@ -45,6 +45,19 @@ export const uploadRouter = {
     .onUploadComplete(async ({ metadata, file }) => {
       return { url: file.ufsUrl };
     }),
+
+  // For restaurant menu-item photos — any authenticated user. The per-restaurant
+  // ownership check happens when the URL is saved (menu-item API verifies the
+  // caller manages the target restaurant); a bare uploaded URL is harmless.
+  menuItemImage: f({ image: { maxFileSize: "8MB", maxFileCount: 1 } })
+    .middleware(async () => {
+      const session = await auth();
+      if (!session?.user?.id) throw new Error("Neautorizat");
+      return { userId: session.user.id };
+    })
+    .onUploadComplete(async ({ metadata, file }) => {
+      return { url: file.ufsUrl };
+    }),
 } satisfies FileRouter;
 
 export type UploadRouter = typeof uploadRouter;

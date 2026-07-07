@@ -13,6 +13,7 @@ import ListingRules from "@/components/marketplace/ListingRules";
 import DeleteOwnListingButton from "@/components/profil/DeleteOwnListingButton";
 import UnfavouriteButton from "@/components/profil/UnfavouriteButton";
 import NewsletterPreferences from "@/components/profil/NewsletterPreferences";
+import { getUserRestaurants } from "@/lib/restaurant-permissions";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Profilul meu" };
@@ -143,6 +144,9 @@ export default async function ProfilPage() {
           wantsExperiences: subscriber.wantsExperiences,
         }
       : { wantsNews: false, wantsEvents: false, wantsPlaces: false, wantsExperiences: false };
+
+  // Restaurants this user belongs to (owner or waiter) — entry point to the panel.
+  const myRestaurants = await getUserRestaurants(userId);
 
   return (
     <div className="w-full max-w-2xl">
@@ -305,6 +309,49 @@ export default async function ProfilPage() {
           </ul>
         )}
       </div>
+
+      {/* Restaurants I manage. Shown if I have any, or if I hold the restaurant_admin
+          role (so a newly-granted admin sees where their dashboard will appear). */}
+      {(myRestaurants.length > 0 || me?.role === "restaurant_admin") && (
+        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+          <h2 className="font-semibold text-lg mb-4">Restaurantele mele</h2>
+          {myRestaurants.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              Ai rolul de administrator de restaurant, dar încă nu ți-a fost atribuit niciun restaurant.
+              Echipa Din Brașov îți va activa restaurantul în curând.
+            </p>
+          ) : (
+          <ul className="divide-y">
+            {myRestaurants.map((r) => (
+              <li key={r.id} className="py-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <Link
+                    href={`/restaurant/${r.slug}`}
+                    className="font-medium text-gray-900 hover:underline line-clamp-1"
+                  >
+                    {r.name}
+                  </Link>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-xs text-gray-500">
+                      Proprietar
+                    </span>
+                    {r.status === "suspended" && (
+                      <span className="text-xs text-red-600">Suspendat</span>
+                    )}
+                  </div>
+                </div>
+                <Link
+                  href={`/restaurant/${r.slug}`}
+                  className="text-sm text-[#c84b1e] font-medium hover:underline flex-shrink-0"
+                >
+                  Deschide →
+                </Link>
+              </li>
+            ))}
+          </ul>
+          )}
+        </div>
+      )}
 
       {/* Newsletter preferences */}
       <NewsletterPreferences initial={newsletterPrefs} />

@@ -55,3 +55,6 @@ scraper/.env
 
 # Promo brief (local only)
 PROMO-BRIEF.md
+
+# Local QA notes (not committed)
+QA-restaurant-smart-menu.md

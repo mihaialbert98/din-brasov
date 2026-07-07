@@ -8,6 +8,7 @@ import {
   timestamp,
   customType,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 const tsvector = customType<{ data: string }>({
   dataType() {
@@ -556,6 +557,178 @@ export const syncJobs = pgTable("sync_jobs", {
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });
 
+// ─── Restaurant smart-menu + table service ────────────────────────────────────
+// A restaurant has an owner (and optionally waiter staff) via restaurant_members.
+// Each physical table has an unguessable qrToken; scanning /m/{token} opens that
+// restaurant's menu and lets the diner call a waiter / ask for the check.
+
+export const restaurants = pgTable(
+  "restaurants",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    name: text("name").notNull(),
+    slug: text("slug").notNull().unique(),
+    description: text("description"),
+    address: text("address"),
+    phone: text("phone"),
+    logoUrl: text("logo_url"),
+    coverUrl: text("cover_url"),
+    // QR business-card: optional custom template image (else the default brand card),
+    // and whether to overlay the restaurant name (off when the name is baked in).
+    cardTemplateUrl: text("card_template_url"),
+    cardOverlayName: boolean("card_overlay_name").notNull().default(true),
+    // Customer menu appearance: which layout (modern | elegant | compact) and which
+    // curated color theme within it. Validated against lib/menu-themes.ts.
+    menuDesign: text("menu_design").notNull().default("elegant"),
+    menuTheme: text("menu_theme").notNull().default("terracotta"),
+    // Unguessable shared staff-board token — waiters open /s/{staffToken} to reach
+    // the live service board without a login. Regenerated to revoke old links.
+    // DB-level default (gen_random_uuid) so existing rows backfill on migration.
+    staffToken: text("staff_token")
+      .notNull()
+      .unique()
+      .$defaultFn(() => crypto.randomUUID())
+      .default(sql`gen_random_uuid()`),
+    placeId: text("place_id").references(() => places.id), // optional link to a Localuri place
+    status: text("status").notNull().default("active"), // active | suspended
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("restaurants_status_idx").on(t.status)]
+);
+
+export const restaurantMembers = pgTable(
+  "restaurant_members",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    memberRole: text("member_role").notNull(), // owner | waiter
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    // One membership row per (restaurant, user).
+    index("restaurant_members_unique_idx").on(t.restaurantId, t.userId),
+    index("restaurant_members_user_idx").on(t.userId),
+    index("restaurant_members_restaurant_idx").on(t.restaurantId),
+  ]
+);
+
+export const menuCategories = pgTable(
+  "menu_categories",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    nameEn: text("name_en"), // optional English name (customer menu language toggle)
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("menu_categories_restaurant_idx").on(t.restaurantId)]
+);
+
+export const menuItems = pgTable(
+  "menu_items",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    categoryId: text("category_id")
+      .notNull()
+      .references(() => menuCategories.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    nameEn: text("name_en"), // optional English name
+    description: text("description"),
+    descriptionEn: text("description_en"), // optional English description
+    price: text("price"),
+    currency: text("currency").notNull().default("RON"),
+    imageUrl: text("image_url"),
+    // Free text (e.g. "gluten, ouă, lapte"). Older rows may hold a JSON array —
+    // read through lib/text.ts:allergensToText() for back-compat.
+    allergens: text("allergens"),
+    allergensEn: text("allergens_en"), // optional English allergens text
+    calories: integer("calories"), // optional kcal per serving; shown when set
+    isVegan: boolean("is_vegan").notNull().default(false), // shows a "Vegan" badge
+    isAvailable: boolean("is_available").notNull().default(true),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("menu_items_restaurant_idx").on(t.restaurantId),
+    index("menu_items_category_idx").on(t.categoryId),
+  ]
+);
+
+export const restaurantTables = pgTable(
+  "restaurant_tables",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    label: text("label").notNull(), // e.g. "Masa 7"
+    qrToken: text("qr_token").notNull().unique().$defaultFn(() => crypto.randomUUID()),
+    // Owner can temporarily disable a table (under repair / not in use). A disabled
+    // table still shows the menu but the service buttons are off.
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("restaurant_tables_restaurant_idx").on(t.restaurantId)]
+);
+
+export const serviceRequests = pgTable(
+  "service_requests",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    tableId: text("table_id")
+      .notNull()
+      .references(() => restaurantTables.id, { onDelete: "cascade" }),
+    type: text("type").notNull(), // call_waiter | request_check
+    paymentMethod: text("payment_method"), // cash | card — only for request_check
+    // Transient live queue: a row exists only while the call is OPEN. The waiter
+    // accepting it DELETES the row (no status/history kept).
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("service_requests_restaurant_idx").on(t.restaurantId),
+    index("service_requests_table_idx").on(t.tableId),
+  ]
+);
+
+// Email-code 2FA for menu edits. The owner requests a code (emailed), verifies it,
+// and gets a short unlock window during which menu mutations are allowed. Protects
+// the shared service screen from unauthorised edits. One row per (restaurant, user).
+export const restaurantEditUnlocks = pgTable(
+  "restaurant_edit_unlocks",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    codeHash: text("code_hash"), // sha256 of the current 6-digit code
+    codeExpiresAt: timestamp("code_expires_at", { mode: "date" }), // code valid until
+    attempts: integer("attempts").notNull().default(0), // wrong-code attempts on current code
+    unlockedUntil: timestamp("unlocked_until", { mode: "date" }), // edit window granted on verify
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("restaurant_edit_unlocks_unique_idx").on(t.restaurantId, t.userId)]
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type NewsItem = typeof newsItems.$inferSelect;
@@ -586,3 +759,16 @@ export type Payment = typeof payments.$inferSelect;
 export type PaidSlot = typeof paidSlots.$inferSelect;
 export type Sponsor = typeof sponsors.$inferSelect;
 export type SponsorLead = typeof sponsorLeads.$inferSelect;
+export type Restaurant = typeof restaurants.$inferSelect;
+export type NewRestaurant = typeof restaurants.$inferInsert;
+export type RestaurantMember = typeof restaurantMembers.$inferSelect;
+export type NewRestaurantMember = typeof restaurantMembers.$inferInsert;
+export type MenuCategory = typeof menuCategories.$inferSelect;
+export type NewMenuCategory = typeof menuCategories.$inferInsert;
+export type MenuItem = typeof menuItems.$inferSelect;
+export type NewMenuItem = typeof menuItems.$inferInsert;
+export type RestaurantTable = typeof restaurantTables.$inferSelect;
+export type NewRestaurantTable = typeof restaurantTables.$inferInsert;
+export type ServiceRequest = typeof serviceRequests.$inferSelect;
+export type NewServiceRequest = typeof serviceRequests.$inferInsert;
+export type RestaurantEditUnlock = typeof restaurantEditUnlocks.$inferSelect;

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 function InstagramIcon({ className }: { className?: string }) {
   return (
@@ -23,12 +24,12 @@ export function Footer() {
             {/* Logo + wordmark */}
             <div className="flex items-center gap-3 mb-3">
               <span className="block w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
-                <img
+                <Image
                   src="/logo.png"
                   alt="Din Brașov"
                   width={40}
                   height={40}
-                  className="w-full h-full object-cover scale-115"
+                  className="w-full h-full object-cover scale-105"
                 />
               </span>
               <span className="font-bold text-lg text-white">

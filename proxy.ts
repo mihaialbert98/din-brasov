@@ -6,7 +6,7 @@ const ADMIN_PATHS = ["/admin"];
 const STAFF_PATHS = ["/admin/anunturi/nou-asistat"];
 // Paths only admin can access
 const ADMIN_ONLY_PATHS = ["/admin/utilizatori"];
-const AUTH_PATHS = ["/profil", "/anunturi/nou"];
+const AUTH_PATHS = ["/profil", "/anunturi/nou", "/restaurant"];
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
@@ -51,5 +51,5 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ["/admin/:path*", "/profil/:path*", "/anunturi/nou"],
+  matcher: ["/admin/:path*", "/profil/:path*", "/anunturi/nou", "/restaurant/:path*"],
 };

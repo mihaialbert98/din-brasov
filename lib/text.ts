@@ -21,3 +21,22 @@ export function normalizeTitle(s: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+/**
+ * Menu-item allergens as display text. Allergens are stored as free text
+ * ("gluten, ouă, lapte"), but older rows hold a JSON array from the previous
+ * chip-based editor — normalize both to a plain comma-separated string.
+ */
+export function allergensToText(raw: string | null | undefined): string {
+  if (!raw) return "";
+  const t = raw.trim();
+  if (t.startsWith("[")) {
+    try {
+      const arr = JSON.parse(t);
+      if (Array.isArray(arr)) return arr.filter(Boolean).join(", ");
+    } catch {
+      /* fall through — treat as plain text */
+    }
+  }
+  return t;
+}
