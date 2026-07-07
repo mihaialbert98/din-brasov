@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
+import { AlertTriangle, Check } from "lucide-react";
 
 const CATEGORIES = ["Electronice", "Mobilă", "Haine", "Auto", "Imobiliare", "Sport", "Servicii", "Joburi", "Altele"];
 const CONDITIONS = [
@@ -104,10 +105,11 @@ export default function EditeazaAnuntPage() {
   if (error && !listingId) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-10">
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-          ⚠️ {error}
+        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" aria-hidden />
+          {error}
         </div>
-        <Link href="/profil" className="mt-4 inline-block text-sm text-[#c84b1e] hover:underline">
+        <Link href="/profil" className="mt-4 inline-block text-sm text-accent hover:underline">
           ← Înapoi la profil
         </Link>
       </div>
@@ -127,7 +129,7 @@ export default function EditeazaAnuntPage() {
               <button
                 onClick={() => setConfirmDelete(false)}
                 disabled={deleting}
-                className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg text-sm hover:bg-gray-50"
+                className="flex-1 border border-hairline text-gray-700 py-2 rounded-lg text-sm hover:bg-gray-50"
               >
                 Anulează
               </button>
@@ -144,16 +146,17 @@ export default function EditeazaAnuntPage() {
       )}
 
       <div className="flex items-center gap-3 mb-8">
-        <Link href="/profil" className="text-gray-400 hover:text-gray-700 transition-colors">
-          ← Înapoi
+        <Link href="/profil" className="text-faint hover:text-ink transition-colors">
+          Înapoi
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900">Editează anunțul</h1>
+        <h1 className="text-2xl font-semibold font-serif text-ink">Editează anunțul</h1>
       </div>
 
       <form onSubmit={handleSave} className="bg-white rounded-xl shadow-sm p-6 space-y-5">
         {error && (
-          <div role="alert" className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-            ⚠️ {error}
+          <div role="alert" className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" aria-hidden />
+            {error}
           </div>
         )}
 
@@ -162,7 +165,7 @@ export default function EditeazaAnuntPage() {
           <input
             type="text" value={title} onChange={(e) => setTitle(e.target.value)}
             required minLength={3} maxLength={200}
-            className="border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-900 bg-white focus:outline-none focus:border-[#c84b1e] focus:ring-1 focus:ring-[#c84b1e]"
+            className="border border-hairline rounded-lg px-4 py-3 text-base text-ink bg-white focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
           />
         </div>
 
@@ -171,7 +174,7 @@ export default function EditeazaAnuntPage() {
           <textarea
             value={description} onChange={(e) => setDescription(e.target.value)}
             required minLength={10} maxLength={5000} rows={5}
-            className="border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-900 bg-white focus:outline-none focus:border-[#c84b1e] focus:ring-1 focus:ring-[#c84b1e] resize-y"
+            className="border border-hairline rounded-lg px-4 py-3 text-base text-ink bg-white focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent resize-y"
           />
         </div>
 
@@ -180,7 +183,7 @@ export default function EditeazaAnuntPage() {
             <label className="font-medium text-gray-700">Categorie *</label>
             <select
               value={category} onChange={(e) => setCategory(e.target.value)} required
-              className="border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-900 bg-white focus:outline-none focus:border-[#c84b1e]"
+              className="border border-hairline rounded-lg px-4 py-3 text-base text-ink bg-white focus:outline-none focus:border-accent"
             >
               <option value="" disabled>Alege categoria</option>
               {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -190,7 +193,7 @@ export default function EditeazaAnuntPage() {
             <label className="font-medium text-gray-700">Stare</label>
             <select
               value={condition} onChange={(e) => setCondition(e.target.value)}
-              className="border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-900 bg-white focus:outline-none focus:border-[#c84b1e]"
+              className="border border-hairline rounded-lg px-4 py-3 text-base text-ink bg-white focus:outline-none focus:border-accent"
             >
               {CONDITIONS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
             </select>
@@ -203,7 +206,7 @@ export default function EditeazaAnuntPage() {
             <input
               type="text" value={price} onChange={(e) => setPrice(e.target.value)} maxLength={20}
               placeholder="Lasă gol pentru negociabil"
-              className="border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-900 bg-white focus:outline-none focus:border-[#c84b1e]"
+              className="border border-hairline rounded-lg px-4 py-3 text-base text-ink bg-white focus:outline-none focus:border-accent"
             />
           </div>
           <div className="flex flex-col gap-1">
@@ -211,7 +214,7 @@ export default function EditeazaAnuntPage() {
             <input
               type="text" value={location} onChange={(e) => setLocation(e.target.value)} maxLength={200}
               placeholder="ex: Brașov, Schei"
-              className="border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-900 bg-white focus:outline-none focus:border-[#c84b1e]"
+              className="border border-hairline rounded-lg px-4 py-3 text-base text-ink bg-white focus:outline-none focus:border-accent"
             />
           </div>
         </div>
@@ -220,12 +223,12 @@ export default function EditeazaAnuntPage() {
           <label className="font-medium text-gray-700">Telefon de contact</label>
           <input
             type="tel" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} maxLength={20}
-            className="border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-900 bg-white focus:outline-none focus:border-[#c84b1e]"
+            className="border border-hairline rounded-lg px-4 py-3 text-base text-ink bg-white focus:outline-none focus:border-accent"
           />
         </div>
 
         {saved && (
-          <p className="text-sm text-green-700 font-medium">✓ Modificările au fost salvate.</p>
+          <p className="flex items-center gap-1.5 text-sm text-green-700 font-medium"><Check className="w-4 h-4 flex-shrink-0" aria-hidden /> Modificările au fost salvate.</p>
         )}
 
         <div className="flex gap-3 pt-2">
@@ -240,7 +243,7 @@ export default function EditeazaAnuntPage() {
           <button
             type="submit"
             disabled={saving}
-            className="bg-[#c84b1e] text-white font-semibold px-6 py-2.5 rounded-lg hover:bg-[#d9603a] transition-colors disabled:opacity-60"
+            className="bg-accent text-white font-semibold px-6 py-2.5 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-60"
           >
             {saving ? "Se salvează..." : "Salvează"}
           </button>

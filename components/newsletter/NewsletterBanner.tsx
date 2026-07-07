@@ -11,6 +11,7 @@
  */
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { getStoredConsent } from "@/components/cookie-consent/CookieBanner";
 
@@ -28,6 +29,7 @@ function recentlyDismissed(): boolean {
 }
 
 export function NewsletterBanner() {
+  const { data: session } = useSession();
   const [visible, setVisible] = useState(false);
   const [email, setEmail] = useState("");
   const [wantsNews, setWantsNews] = useState(false);
@@ -44,7 +46,59 @@ export function NewsletterBanner() {
   // After a successful subscribe we don't nag with the pill at all.
   const [subscribed, setSubscribed] = useState(false);
 
+  // For logged-in users we load their existing newsletter preferences so we can:
+  //  1. hide sections they already receive (only offer what's missing),
+  //  2. suppress the banner + pill entirely once they receive ALL sections.
+  // `prefsReady` gates the reveal so we never flash the banner before we know.
+  const isLoggedIn = !!session?.user;
+  const [prefsReady, setPrefsReady] = useState(false);
+  const [alreadyNews, setAlreadyNews] = useState(false);
+  const [alreadyEvents, setAlreadyEvents] = useState(false);
+  const [alreadyPlaces, setAlreadyPlaces] = useState(false);
+  const [alreadyExperiences, setAlreadyExperiences] = useState(false);
+
+  const subscribedToAll =
+    isLoggedIn && alreadyNews && alreadyEvents && alreadyPlaces && alreadyExperiences;
+
+  // Sections still available to add (logged-in: only the missing ones; logged-out
+  // or unknown: all four).
+  const availableSections = [
+    { key: "news", label: "Știri", already: alreadyNews, checked: wantsNews, set: setWantsNews },
+    { key: "events", label: "Evenimente", already: alreadyEvents, checked: wantsEvents, set: setWantsEvents },
+    { key: "places", label: "Localuri noi", already: alreadyPlaces, checked: wantsPlaces, set: setWantsPlaces },
+    { key: "experiences", label: "Experiențe noi", already: alreadyExperiences, checked: wantsExperiences, set: setWantsExperiences },
+  ].filter((s) => !(isLoggedIn && s.already));
+
+  // Load the logged-in user's current preferences once. Anonymous users skip this.
   useEffect(() => {
+    if (!isLoggedIn) {
+      setPrefsReady(true);
+      return;
+    }
+    let cancelled = false;
+    fetch("/api/newsletter/preferences")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d) return;
+        setAlreadyNews(!!d.prefs?.wantsNews);
+        setAlreadyEvents(!!d.prefs?.wantsEvents);
+        setAlreadyPlaces(!!d.prefs?.wantsPlaces);
+        setAlreadyExperiences(!!d.prefs?.wantsExperiences);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setPrefsReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    // Wait until we know the user's existing preferences before deciding.
+    if (!prefsReady) return;
+    // Fully subscribed → nothing left to offer: no modal, no pill.
+    if (subscribedToAll) return;
     // Only consider showing once a cookie choice has been made.
     const reveal = () => {
       if (!getStoredConsent()) return;
@@ -56,7 +110,14 @@ export function NewsletterBanner() {
     };
     const timer = setTimeout(reveal, SHOW_DELAY_MS);
     return () => clearTimeout(timer);
-  }, []);
+  }, [prefsReady, subscribedToAll]);
+
+  // Prefill the email for logged-in users so they don't have to retype it. Only
+  // fills an empty field, so it never overwrites an address the user typed.
+  useEffect(() => {
+    const sessionEmail = session?.user?.email;
+    if (sessionEmail) setEmail((prev) => (prev ? prev : sessionEmail));
+  }, [session?.user?.email]);
 
   function dismiss() {
     localStorage.setItem(DISMISS_KEY, String(Date.now()));
@@ -85,11 +146,10 @@ export function NewsletterBanner() {
     };
   }, [visible]);
 
+  // Select only the sections still on offer (for logged-in users, the ones they
+  // don't already receive).
   function selectAll() {
-    setWantsNews(true);
-    setWantsEvents(true);
-    setWantsPlaces(true);
-    setWantsExperiences(true);
+    availableSections.forEach((s) => s.set(true));
   }
 
   async function submit(e: React.FormEvent) {
@@ -103,20 +163,51 @@ export function NewsletterBanner() {
 
     setLoading(true);
     try {
-      const res = await fetch("/api/newsletter/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, wantsNews, wantsEvents, wantsPlaces, wantsExperiences, website, bannerVersion: BANNER_VERSION }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(data.error ?? "A apărut o eroare. Încearcă din nou.");
-        setLoading(false);
-        return;
+      if (isLoggedIn) {
+        // Account-based: update preferences directly (pre-verified by the account,
+        // no confirmation email). Merge the newly chosen sections with the ones the
+        // user already receives so nothing is dropped.
+        const res = await fetch("/api/newsletter/preferences", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            wantsNews: alreadyNews || wantsNews,
+            wantsEvents: alreadyEvents || wantsEvents,
+            wantsPlaces: alreadyPlaces || wantsPlaces,
+            wantsExperiences: alreadyExperiences || wantsExperiences,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setError(data.error ?? "A apărut o eroare. Încearcă din nou.");
+          setLoading(false);
+          return;
+        }
+        localStorage.setItem(DISMISS_KEY, String(Date.now()));
+        // Reflect the new state so the "all subscribed" suppression kicks in.
+        if (wantsNews) setAlreadyNews(true);
+        if (wantsEvents) setAlreadyEvents(true);
+        if (wantsPlaces) setAlreadyPlaces(true);
+        if (wantsExperiences) setAlreadyExperiences(true);
+        setDone(true);
+        setSubscribed(true);
+      } else {
+        // Anonymous: double opt-in via the verification email.
+        const res = await fetch("/api/newsletter/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, wantsNews, wantsEvents, wantsPlaces, wantsExperiences, website, bannerVersion: BANNER_VERSION }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setError(data.error ?? "A apărut o eroare. Încearcă din nou.");
+          setLoading(false);
+          return;
+        }
+        localStorage.setItem(DISMISS_KEY, String(Date.now()));
+        setDone(true);
+        setSubscribed(true);
       }
-      localStorage.setItem(DISMISS_KEY, String(Date.now()));
-      setDone(true);
-      setSubscribed(true);
     } catch {
       setError("A apărut o eroare. Încearcă din nou.");
     } finally {
@@ -126,8 +217,9 @@ export function NewsletterBanner() {
 
   if (!visible) {
     // After dismissal, keep a subtle re-entry pill in the corner — but never
-    // nag someone who already subscribed in this session.
-    if (showPill && !subscribed) {
+    // nag someone who already subscribed in this session, nor a logged-in user
+    // who already receives every section (nothing left to offer them).
+    if (showPill && !subscribed && !subscribedToAll) {
       return (
         <button
           onClick={reopen}
@@ -165,10 +257,21 @@ export function NewsletterBanner() {
         {done ? (
           <div className="text-center py-4">
             <div className="text-4xl mb-3" aria-hidden>🎉</div>
-            <h2 className="font-bold text-xl mb-2">Aproape gata!</h2>
-            <p className="text-gray-300 text-sm">
-              Ți-am trimis un email de confirmare. Verifică-ți inbox-ul (și folderul Spam) și apasă pe linkul de confirmare.
-            </p>
+            {isLoggedIn ? (
+              <>
+                <h2 className="font-bold text-xl mb-2">Gata!</h2>
+                <p className="text-gray-300 text-sm">
+                  Preferințele tale au fost salvate. Vei primi noutățile alese direct pe email.
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 className="font-bold text-xl mb-2">Aproape gata!</h2>
+                <p className="text-gray-300 text-sm">
+                  Ți-am trimis un email de confirmare. Verifică-ți inbox-ul (și folderul Spam) și apasă pe linkul de confirmare.
+                </p>
+              </>
+            )}
           </div>
         ) : (
           <form onSubmit={submit}>
@@ -186,46 +289,58 @@ export function NewsletterBanner() {
 
             <div className="text-center mb-5">
               <div className="text-4xl mb-2" aria-hidden>📬</div>
-              <h2 className="font-bold text-xl mb-1">Primește ce contează din Brașov</h2>
-              <p className="text-gray-300 text-sm">
-                Știri, evenimente, localuri și experiențe noi — direct pe email, fără spam.
-              </p>
+              {isLoggedIn && availableSections.length < 4 ? (
+                <>
+                  <h2 className="font-bold text-xl mb-1">Mai vrei și restul?</h2>
+                  <p className="text-gray-300 text-sm">
+                    Ești deja abonat la o parte. Adaugă și celelalte secțiuni pe care vrei să le primești.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h2 className="font-bold text-xl mb-1">Primește ce contează din Brașov</h2>
+                  <p className="text-gray-300 text-sm">
+                    Știri, evenimente, localuri și experiențe noi — direct pe email, fără spam.
+                  </p>
+                </>
+              )}
             </div>
 
             <div className="space-y-4">
-              <div>
-                <label htmlFor="nl-email" className="sr-only">Adresă de email</label>
-                <input
-                  id="nl-email"
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="adresa@email.ro"
-                  className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-[#c84b1e] focus:ring-1 focus:ring-[#c84b1e]"
-                />
-              </div>
+              {/* Logged-in users subscribe with their account email — no field to
+                  fill. Anonymous visitors must provide (and later confirm) one. */}
+              {!isLoggedIn && (
+                <div>
+                  <label htmlFor="nl-email" className="sr-only">Adresă de email</label>
+                  <input
+                    id="nl-email"
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="adresa@email.ro"
+                    className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-[#c84b1e] focus:ring-1 focus:ring-[#c84b1e]"
+                  />
+                </div>
+              )}
 
               <fieldset>
                 <div className="flex items-center justify-between mb-2">
                   <legend className="text-sm text-gray-400">Vreau să primesc:</legend>
-                  <button
-                    type="button"
-                    onClick={selectAll}
-                    className="text-xs text-[#6bb5d4] underline hover:no-underline"
-                  >
-                    Selectează tot
-                  </button>
+                  {availableSections.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={selectAll}
+                      className="text-xs text-[#6bb5d4] underline hover:no-underline"
+                    >
+                      Selectează tot
+                    </button>
+                  )}
                 </div>
                 <div className="grid grid-cols-1 gap-2">
-                  {[
-                    { label: "Știri", checked: wantsNews, set: setWantsNews },
-                    { label: "Evenimente", checked: wantsEvents, set: setWantsEvents },
-                    { label: "Localuri noi", checked: wantsPlaces, set: setWantsPlaces },
-                    { label: "Experiențe noi", checked: wantsExperiences, set: setWantsExperiences },
-                  ].map((c) => (
+                  {availableSections.map((c) => (
                     <label
-                      key={c.label}
+                      key={c.key}
                       className="flex items-center gap-3 text-sm cursor-pointer select-none bg-white/5 hover:bg-white/10 transition-colors rounded-lg px-4 py-2.5"
                     >
                       <input
@@ -252,11 +367,16 @@ export function NewsletterBanner() {
             {error && <p className="text-red-400 text-sm mt-3 text-center">{error}</p>}
 
             <p className="text-gray-500 text-xs mt-4 text-center">
-              Ai cont? Preferințele se salvează automat la{" "}
-              <Link href="/cont-nou" className="text-[#6bb5d4] underline hover:no-underline">
-                crearea contului
-              </Link>
-              . Te poți dezabona oricând.{" "}
+              {!session && (
+                <>
+                  Ai cont? Preferințele se salvează automat la{" "}
+                  <Link href="/cont-nou" className="text-[#6bb5d4] underline hover:no-underline">
+                    crearea contului
+                  </Link>
+                  .{" "}
+                </>
+              )}
+              Te poți dezabona oricând.{" "}
               <Link href="/despre#gdpr" className="text-[#6bb5d4] underline hover:no-underline">
                 Politica de confidențialitate
               </Link>

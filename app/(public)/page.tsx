@@ -1,17 +1,20 @@
 import Link from "next/link";
 import Image from "next/image";
 import type { Metadata } from "next";
+import { Phone } from "lucide-react";
 import { searchNews, searchEvents, searchListings, searchPlaces, searchExperiences } from "@/lib/search";
 import NewsCard from "@/components/ui/NewsCard";
 import EventCard from "@/components/ui/EventCard";
 import PlaceCard from "@/components/ui/PlaceCard";
 import ListingCard from "@/components/ui/ListingCard";
 import ExperienceCard from "@/components/ui/ExperienceCard";
+import SectionHeader from "@/components/ui/SectionHeader";
 import JsonLd from "@/components/seo/JsonLd";
 import { organizationJsonLd, websiteJsonLd, pageMetadata } from "@/lib/seo";
 import FoundingMemberBanner from "@/components/promo/FoundingMemberBanner";
 import { getFoundingSpotsLeft } from "@/lib/permissions";
 import { auth } from "@/lib/auth";
+import { CULTURE_CATEGORY, CULTURE_HREF } from "@/lib/categories";
 
 const homeTitle = "Din Brașov — știri, evenimente, localuri și anunțuri";
 export const metadata: Metadata = {
@@ -26,12 +29,13 @@ export const metadata: Metadata = {
 };
 
 export default async function HomePage() {
-  const [latestNews, upcomingEvents, recentPlaces, recentListings, recentExperiences, session, spotsLeft] = await Promise.all([
-    searchNews("", { page: 1 }).catch(() => []),
-    searchEvents("", { page: 1 }).catch(() => []),
-    searchPlaces("", { page: 1 }).catch(() => []),
+  const [latestNews, upcomingEvents, cultureEvents, recentPlaces, recentListings, recentExperiences, session, spotsLeft] = await Promise.all([
+    searchNews("", { page: 1 }).then((r) => r.items).catch(() => []),
+    searchEvents("", { page: 1 }).then((r) => r.items).catch(() => []),
+    searchEvents("", { page: 1, category: CULTURE_CATEGORY }).then((r) => r.items).catch(() => []),
+    searchPlaces("", { page: 1 }).then((r) => r.items).catch(() => []),
     searchListings("", { page: 1 }).then((r) => r.listings).catch(() => []),
-    searchExperiences("", { page: 1 }).catch(() => []),
+    searchExperiences("", { page: 1 }).then((r) => r.items).catch(() => []),
     auth().catch(() => null),
     getFoundingSpotsLeft().catch(() => 0),
   ]);
@@ -43,17 +47,18 @@ export default async function HomePage() {
     <div>
       <JsonLd data={[organizationJsonLd(), websiteJsonLd()]} />
       {/* Hero */}
-      <section className="relative bg-[#1a1a1a] text-white overflow-hidden" aria-label="Introducere">
-        <div className="absolute right-0 top-0 w-[320px] sm:w-[480px] h-[320px] sm:h-[480px] rounded-full bg-[#c84b1e] opacity-20 translate-x-1/3 -translate-y-1/3 pointer-events-none" aria-hidden />
-        <div className="absolute right-8 sm:right-16 top-4 sm:top-8 w-[240px] sm:w-[380px] h-[240px] sm:h-[380px] rounded-full border-2 border-[#6bb5d4] opacity-15 translate-x-1/3 -translate-y-1/3 pointer-events-none" aria-hidden />
+      <section className="relative bg-ink text-white overflow-hidden" aria-label="Introducere">
+        {/* Quiet, off-corner brand accents — kept subtle so the type leads. */}
+        <div className="absolute right-0 top-0 w-[320px] sm:w-[480px] h-[320px] sm:h-[480px] rounded-full bg-accent opacity-[0.12] translate-x-1/3 -translate-y-1/3 pointer-events-none blur-2xl" aria-hidden />
+        <div className="absolute right-8 sm:right-16 top-4 sm:top-8 w-[240px] sm:w-[380px] h-[240px] sm:h-[380px] rounded-full border border-sky/20 translate-x-1/3 -translate-y-1/3 pointer-events-none" aria-hidden />
 
-        <div className="relative max-w-5xl mx-auto px-4 py-20 flex flex-col md:flex-row items-center gap-10">
+        <div className="relative max-w-5xl mx-auto px-4 py-20 md:py-24 flex flex-col md:flex-row items-center gap-12">
           <div className="flex-1 text-center md:text-left">
             <a
               href="https://www.instagram.com/din_brasov/"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-[#6bb5d4] hover:text-white transition-colors text-sm font-medium tracking-wide mb-3"
+              className="inline-flex items-center gap-2 text-sky hover:text-white transition-colors text-sm font-medium tracking-wide mb-5"
               aria-label="Urmărește @din_brasov pe Instagram"
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4" aria-hidden="true">
@@ -61,33 +66,36 @@ export default async function HomePage() {
               </svg>
               @din_brasov
             </a>
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold mb-4 leading-tight">
-              Din <span className="text-[#c84b1e]">Brașov</span>
+            <h1 className="font-serif text-5xl sm:text-6xl md:text-7xl font-semibold mb-5 leading-[1.05] tracking-tight">
+              Din <span className="text-accent">Brașov</span>
             </h1>
-            <p className="text-lg sm:text-xl text-gray-300 mb-10 max-w-md">
-              Tot ce se întâmplă în Brașov — știri, evenimente, localuri și anunțuri.
+            <p className="text-lg sm:text-xl text-white/70 mb-10 max-w-md mx-auto md:mx-0 leading-relaxed">
+              Orașul nostru, într-un singur loc — știri locale, evenimente, localuri și anunțuri de la brașoveni.
             </p>
             <div className="flex flex-wrap justify-center md:justify-start gap-3">
-              <Link href="/stiri" className="bg-[#c84b1e] text-white font-semibold px-6 py-3 rounded-xl hover:bg-[#d9603a] transition-colors">
-                Știri
+              <Link href="/stiri" className="bg-accent text-white font-semibold px-6 py-3 rounded-xl hover:bg-accent-hover transition-colors">
+                Citește știrile
               </Link>
-              <Link href="/evenimente" className="bg-white/10 text-white font-semibold px-6 py-3 rounded-xl hover:bg-white/20 transition-colors border border-white/20">
+              <Link href="/evenimente" className="bg-white/10 text-white font-medium px-5 py-3 rounded-xl hover:bg-white/15 transition-colors border border-white/15">
                 Evenimente
               </Link>
-              <Link href="/localuri" className="bg-white/10 text-white font-semibold px-6 py-3 rounded-xl hover:bg-white/20 transition-colors border border-white/20">
+              <Link href={CULTURE_HREF} className="bg-white/10 text-white font-medium px-5 py-3 rounded-xl hover:bg-white/15 transition-colors border border-white/15">
+                Cultură
+              </Link>
+              <Link href="/localuri" className="bg-white/10 text-white font-medium px-5 py-3 rounded-xl hover:bg-white/15 transition-colors border border-white/15">
                 Localuri
               </Link>
-              <Link href="/experiente" className="bg-white/10 text-white font-semibold px-6 py-3 rounded-xl hover:bg-white/20 transition-colors border border-white/20">
+              <Link href="/experiente" className="bg-white/10 text-white font-medium px-5 py-3 rounded-xl hover:bg-white/15 transition-colors border border-white/15">
                 Experiențe
               </Link>
-              <Link href="/anunturi" className="bg-[#6bb5d4] text-[#1a1a1a] font-semibold px-6 py-3 rounded-xl hover:bg-[#4a9ab8] hover:text-white transition-colors">
+              <Link href="/anunturi" className="bg-white/10 text-white font-medium px-5 py-3 rounded-xl hover:bg-white/15 transition-colors border border-white/15">
                 Anunțuri
               </Link>
             </div>
           </div>
 
           <div className="flex-shrink-0 hidden md:block">
-            <span className="block w-[260px] h-[260px] rounded-full overflow-hidden drop-shadow-2xl">
+            <span className="block w-[260px] h-[260px] rounded-full overflow-hidden ring-1 ring-white/10 shadow-2xl">
               <Image src="/logo.png" alt="Din Brașov" width={260} height={260} priority className="w-full h-full object-cover scale-105" />
             </span>
           </div>
@@ -97,33 +105,28 @@ export default async function HomePage() {
       {/* Founding-member promo (logged-out visitors, while spots remain) */}
       {showFounding && <FoundingMemberBanner spotsLeft={spotsLeft} />}
 
-      {/* Assisted listings CTA */}
-      <section className="bg-[#e8d9c5] border-y border-[#c84b1e]/20 py-8 px-4">
-        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center gap-4 text-center md:text-left">
-          <div className="text-5xl" aria-hidden>📞</div>
+      {/* Assisted listings CTA — aimed at elderly callers without internet. */}
+      <section className="bg-cream border-y border-accent/15 py-8 px-4">
+        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center gap-5 text-center md:text-left">
+          <div className="flex-shrink-0 flex h-16 w-16 items-center justify-center rounded-2xl bg-accent/10 text-accent" aria-hidden>
+            <Phone className="h-8 w-8" />
+          </div>
           <div>
-            <h2 className="text-xl font-bold text-[#1a1a1a] mb-1">Ai nevoie de ajutor in publicare anuntului?</h2>
-            <p className="text-gray-700 text-lg mb-2">Sună-ne și noi publicăm anunțul în locul tău, gratuit.</p>
-            <a href="tel:+40770936013" className="text-xl sm:text-3xl font-bold text-[#c84b1e] hover:underline" aria-label="Sună pentru ajutor cu anunțul">
+            <h2 className="font-serif text-xl font-semibold text-ink mb-1">Ai nevoie de ajutor la publicarea anunțului?</h2>
+            <p className="text-ink/70 text-lg mb-2">Sună-ne și publicăm anunțul în locul tău, gratuit.</p>
+            <a href="tel:+40770936013" className="inline-flex items-center gap-2 text-2xl sm:text-3xl font-bold text-accent hover:text-accent-hover transition-colors tabular-nums" aria-label="Sună pentru ajutor cu anunțul">
               0770 936 013
             </a>
           </div>
         </div>
       </section>
 
-      <div className="max-w-5xl mx-auto px-4 py-12 space-y-16">
+      <div className="max-w-5xl mx-auto px-4 py-16 space-y-20">
         {/* Latest news */}
         <section aria-label="Ultimele știri">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-[#1a1a1a]">
-              <span className="border-b-4 border-[#c84b1e] pb-1">Ultimele știri</span>
-            </h2>
-            <Link href="/stiri" className="text-[#c84b1e] font-semibold hover:underline text-sm">
-              Vezi toate →
-            </Link>
-          </div>
+          <SectionHeader title="Ultimele știri" href="/stiri" />
           {latestNews.length === 0 ? (
-            <p className="text-gray-500">Nu există știri momentan.</p>
+            <p className="text-muted">Nu există știri momentan.</p>
           ) : (
             <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
               {latestNews.slice(0, 3).map((item) => (
@@ -135,16 +138,9 @@ export default async function HomePage() {
 
         {/* Upcoming events */}
         <section aria-label="Evenimente viitoare">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-[#1a1a1a]">
-              <span className="border-b-4 border-[#6bb5d4] pb-1">Evenimente</span>
-            </h2>
-            <Link href="/evenimente" className="text-[#c84b1e] font-semibold hover:underline text-sm">
-              Vezi toate →
-            </Link>
-          </div>
+          <SectionHeader title="Evenimente" href="/evenimente" />
           {upcomingEvents.length === 0 ? (
-            <p className="text-gray-500">Nu există evenimente programate.</p>
+            <p className="text-muted">Nu există evenimente programate.</p>
           ) : (
             <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
               {upcomingEvents.slice(0, 3).map((ev) => (
@@ -154,18 +150,23 @@ export default async function HomePage() {
           )}
         </section>
 
+        {/* Cultural events — only shown when there are any (no empty row). */}
+        {cultureEvents.length > 0 && (
+          <section aria-label="Evenimente culturale">
+            <SectionHeader title="Cultură" href={CULTURE_HREF} />
+            <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
+              {cultureEvents.slice(0, 3).map((ev) => (
+                <EventCard key={ev.id} event={ev} compact />
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Recent places */}
         <section aria-label="Localuri noi">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-[#1a1a1a]">
-              <span className="border-b-4 border-[#c84b1e] pb-1">Localuri noi</span>
-            </h2>
-            <Link href="/localuri" className="text-[#c84b1e] font-semibold hover:underline text-sm">
-              Vezi toate →
-            </Link>
-          </div>
+          <SectionHeader title="Localuri noi" href="/localuri" />
           {recentPlaces.length === 0 ? (
-            <p className="text-gray-500">Nu există localuri adăugate recent.</p>
+            <p className="text-muted">Nu există localuri adăugate recent.</p>
           ) : (
             <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
               {recentPlaces.slice(0, 3).map((place) => (
@@ -177,16 +178,9 @@ export default async function HomePage() {
 
         {/* Recent experiences */}
         <section aria-label="Experiențe">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-[#1a1a1a]">
-              <span className="border-b-4 border-[#6bb5d4] pb-1">Experiențe</span>
-            </h2>
-            <Link href="/experiente" className="text-[#c84b1e] font-semibold hover:underline text-sm">
-              Vezi toate →
-            </Link>
-          </div>
+          <SectionHeader title="Experiențe" href="/experiente" />
           {recentExperiences.length === 0 ? (
-            <p className="text-gray-500">Nu există experiențe disponibile momentan.</p>
+            <p className="text-muted">Nu există experiențe disponibile momentan.</p>
           ) : (
             <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
               {recentExperiences.slice(0, 3).map((exp) => (
@@ -198,16 +192,9 @@ export default async function HomePage() {
 
         {/* Recent listings */}
         <section aria-label="Anunțuri recente">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-[#1a1a1a]">
-              <span className="border-b-4 border-[#6bb5d4] pb-1">Anunțuri recente</span>
-            </h2>
-            <Link href="/anunturi" className="text-[#c84b1e] font-semibold hover:underline text-sm">
-              Vezi toate →
-            </Link>
-          </div>
+          <SectionHeader title="Anunțuri recente" href="/anunturi" />
           {recentListings.length === 0 ? (
-            <p className="text-gray-500">Nu există anunțuri momentan.</p>
+            <p className="text-muted">Nu există anunțuri momentan.</p>
           ) : (
             <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
               {recentListings.slice(0, 3).map((listing) => (

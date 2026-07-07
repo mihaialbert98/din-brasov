@@ -85,8 +85,8 @@ export default function ExperiencesTable({ items }: Props) {
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+        <table className="w-full text-sm min-w-[560px]">
           <thead className="bg-gray-50 border-b">
             <tr>
               <th className="p-3 w-10">

@@ -1,89 +1,80 @@
 import type { Metadata } from "next";
+import { Compass } from "lucide-react";
 import { db } from "@/lib/db";
 import { experiences } from "@/lib/db/schema";
-import { eq, desc } from "drizzle-orm";
-import Link from "next/link";
+import { eq } from "drizzle-orm";
+import { searchExperiences } from "@/lib/search";
 import CategoryFilter from "@/components/ui/CategoryFilter";
+import ExperienceCard from "@/components/ui/ExperienceCard";
+import PageHeader from "@/components/ui/PageHeader";
+import EmptyState from "@/components/ui/EmptyState";
+import Pagination from "@/components/ui/Pagination";
 
 export const metadata: Metadata = {
   title: "Experiențe în Brașov",
   description: "Descoperă activități și experiențe unice în Brașov — aventură, cultură, gastronomie și mai mult.",
 };
 
-const CATEGORY_COLORS: Record<string, string> = {
-  "Aventură": "bg-orange-100 text-orange-700",
-  "Sport": "bg-blue-100 text-blue-700",
-  "Cultură": "bg-purple-100 text-purple-700",
-  "Gastronomie": "bg-yellow-100 text-yellow-700",
-  "Natură": "bg-green-100 text-green-700",
-  "Altele": "bg-gray-100 text-gray-700",
-};
-
 export default async function ExperientePage({
   searchParams,
 }: {
-  searchParams: Promise<{ categorie?: string }>;
+  searchParams: Promise<{ categorie?: string; pagina?: string }>;
 }) {
   const params = await searchParams;
+  const category = params.categorie;
+  const page = Math.max(1, parseInt(params.pagina ?? "1"));
 
-  const allExperiences = await db
-    .select().from(experiences)
-    .where(eq(experiences.status, "published"))
-    .orderBy(desc(experiences.createdAt))
-    .catch(() => []);
+  const [result, allCategories] = await Promise.all([
+    searchExperiences("", { page, category }).catch(() => ({ items: [], total: 0, pageSize: 20 })),
+    // Category list spans all published experiences, not just the current page.
+    db
+      .select({ category: experiences.category })
+      .from(experiences)
+      .where(eq(experiences.status, "published"))
+      .catch(() => []),
+  ]);
 
-  const filtered = params.categorie
-    ? allExperiences.filter((e) => e.category === params.categorie)
-    : allExperiences;
+  const { items, total, pageSize } = result;
+  const totalPages = Math.ceil(total / pageSize);
+  const categories = [...new Set(allCategories.map((e) => e.category).filter(Boolean))] as string[];
 
-  const categories = [...new Set(allExperiences.map((e) => e.category).filter(Boolean))] as string[];
+  function buildHref(p: number) {
+    const sp = new URLSearchParams();
+    if (category) sp.set("categorie", category);
+    if (p > 1) sp.set("pagina", String(p));
+    const qs = sp.toString();
+    return `/experiente${qs ? `?${qs}` : ""}`;
+  }
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-10">
-      <h1 className="text-3xl font-bold font-serif text-[#1a4731] mb-2">Experiențe în Brașov</h1>
-      <p className="text-gray-500 mb-8">Activități și aventuri pe care le poți trăi în Brașov</p>
+      <PageHeader
+        title="Experiențe în Brașov"
+        subtitle="Activități și aventuri pe care le poți trăi chiar aici, în oraș și în împrejurimi."
+      />
 
       {categories.length > 0 && (
         <CategoryFilter
           categories={categories}
-          active={params.categorie}
+          active={category}
           basePath="/experiente"
-          activeColor="terracotta"
         />
       )}
 
-      {filtered.length === 0 ? (
-        <p className="text-gray-500 text-center py-20">Nu există experiențe disponibile momentan.</p>
+      {items.length === 0 ? (
+        <EmptyState
+          icon={<Compass className="h-7 w-7" aria-hidden />}
+          message="Nu există experiențe disponibile momentan."
+        />
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.map((exp) => (
-            <Link
-              key={exp.id}
-              href={`/experiente/${exp.slug}`}
-              className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow overflow-hidden group"
-            >
-              {exp.imageUrl ? (
-                <img src={exp.imageUrl} alt={exp.title} className="w-full h-44 object-cover group-hover:scale-115 transition-transform duration-300" />
-              ) : (
-                <div className="w-full h-44 bg-gradient-to-br from-[#e8d9c5] to-[#c84b1e]/20 flex items-center justify-center">
-                  <span className="text-4xl">🎯</span>
-                </div>
-              )}
-              <div className="p-4">
-                {exp.category && (
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CATEGORY_COLORS[exp.category] ?? "bg-gray-100 text-gray-700"}`}>
-                    {exp.category}
-                  </span>
-                )}
-                <h2 className="font-semibold text-gray-900 mt-2 line-clamp-2">{exp.title}</h2>
-                <p className="text-sm text-gray-500 mt-1 line-clamp-2">{exp.description}</p>
-                <span className="inline-block mt-3 text-sm font-semibold text-[#c84b1e]">
-                  Descoperă →
-                </span>
-              </div>
-            </Link>
-          ))}
-        </div>
+        <>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {items.map((exp) => (
+              <ExperienceCard key={exp.id} experience={exp} />
+            ))}
+          </div>
+          <Pagination currentPage={page} totalPages={totalPages} buildHref={buildHref} />
+        </>
       )}
     </div>
   );

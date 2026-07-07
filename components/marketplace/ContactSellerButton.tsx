@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { Mail, CheckCircle2 } from "lucide-react";
 
 export function ContactSellerButton({
   listingId,
@@ -72,9 +73,10 @@ export function ContactSellerButton({
     <>
       <button
         onClick={handleOpen}
-        className="flex items-center gap-2 bg-white/20 hover:bg-white/30 text-white font-semibold px-4 py-2 rounded-lg transition-colors text-sm"
+        className="flex items-center gap-2 bg-white/15 hover:bg-white/25 text-white font-semibold px-4 py-2.5 rounded-lg transition-colors text-sm"
       >
-        ✉️ {session ? "Trimite un mesaj" : "Autentifică-te pentru a scrie"}
+        <Mail className="w-4 h-4 flex-shrink-0" aria-hidden />
+        {session ? "Trimite un mesaj" : "Autentifică-te pentru a scrie"}
       </button>
 
       {open && (
@@ -83,18 +85,18 @@ export function ContactSellerButton({
           onClick={(e) => e.target === e.currentTarget && setOpen(false)}
         >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-1">
+            <h2 className="font-serif text-lg font-semibold text-ink mb-1">
               Trimite un mesaj
             </h2>
-            <p className="text-sm text-gray-500 mb-4 line-clamp-1">
+            <p className="text-sm text-muted mb-4 line-clamp-1">
               Re: {listingTitle}
             </p>
 
             {sent ? (
-              <div className="text-center py-6">
-                <p className="text-2xl mb-2">✅</p>
-                <p className="font-semibold text-gray-900">Mesaj trimis!</p>
-                <p className="text-sm text-gray-500 mt-1">Te redirecționăm spre conversație...</p>
+              <div className="flex flex-col items-center text-center py-6">
+                <CheckCircle2 className="w-10 h-10 text-green-600 mb-2" aria-hidden />
+                <p className="font-semibold text-ink">Mesaj trimis!</p>
+                <p className="text-sm text-muted mt-1">Te redirecționăm spre conversație...</p>
               </div>
             ) : (
               <form onSubmit={handleSend} className="space-y-4">
@@ -121,7 +123,7 @@ export function ContactSellerButton({
                     maxLength={2000}
                     rows={5}
                     placeholder="Bună ziua, sunt interesat de anunțul dvs..."
-                    className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:border-[#c84b1e] focus:ring-1 focus:ring-[#c84b1e] resize-y"
+                    className="w-full border border-hairline rounded-lg px-4 py-3 text-base focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent resize-y"
                     style={{ color: "#1a1a1a", backgroundColor: "#ffffff", colorScheme: "light" }}
                   />
                   <p className="text-xs text-gray-400 mt-1 text-right">{body.length}/2000</p>
@@ -137,14 +139,14 @@ export function ContactSellerButton({
                   <button
                     type="button"
                     onClick={() => setOpen(false)}
-                    className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg hover:bg-gray-50 transition-colors"
+                    className="flex-1 border border-hairline text-ink/70 font-medium py-2.5 rounded-lg hover:bg-cream/40 transition-colors"
                   >
                     Anulează
                   </button>
                   <button
                     type="submit"
                     disabled={loading || body.length < 5}
-                    className="flex-1 bg-[#c84b1e] text-white font-semibold py-2.5 rounded-lg hover:bg-[#d9603a] transition-colors disabled:opacity-60"
+                    className="flex-1 bg-accent text-white font-semibold py-2.5 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-60"
                   >
                     {loading ? "Se trimite..." : "Trimite"}
                   </button>

@@ -1,13 +1,9 @@
 import Link from "next/link";
-
-const CATEGORY_COLORS: Record<string, string> = {
-  "Aventură": "bg-orange-100 text-orange-700",
-  "Sport": "bg-blue-100 text-blue-700",
-  "Cultură": "bg-purple-100 text-purple-700",
-  "Gastronomie": "bg-yellow-100 text-yellow-700",
-  "Natură": "bg-green-100 text-green-700",
-  "Altele": "bg-gray-100 text-gray-700",
-};
+import Image from "next/image";
+import { Compass, ArrowRight } from "lucide-react";
+import { isOptimizableImage } from "@/lib/utils";
+import { cardShell, cardImageFrame, cardImageZoom } from "@/lib/ui";
+import Badge from "@/components/ui/Badge";
 
 type Props = {
   experience: {
@@ -22,27 +18,36 @@ type Props = {
 
 export default function ExperienceCard({ experience: exp }: Props) {
   return (
-    <Link
-      href={`/experiente/${exp.slug}`}
-      className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow overflow-hidden group"
-    >
+    <Link href={`/experiente/${exp.slug}`} className={cardShell("flex flex-col")}>
       {exp.imageUrl ? (
-        <img src={exp.imageUrl} alt={exp.title} className="w-full h-44 object-cover group-hover:scale-105 transition-transform duration-300" />
+        <div className={cardImageFrame}>
+          <Image
+            src={exp.imageUrl}
+            alt={exp.title}
+            fill
+            sizes="(max-width: 640px) 100vw, 33vw"
+            className={cardImageZoom}
+            unoptimized={!isOptimizableImage(exp.imageUrl)}
+          />
+        </div>
       ) : (
-        <div className="w-full h-44 bg-gradient-to-br from-[#e8d9c5] to-[#c84b1e]/20 flex items-center justify-center">
-          <span className="text-4xl" aria-hidden>🎯</span>
+        <div className="w-full aspect-[3/2] bg-gradient-to-br from-cream/70 to-accent-soft flex items-center justify-center">
+          <Compass className="w-11 h-11 text-accent/40" aria-hidden />
         </div>
       )}
-      <div className="p-4">
+      <div className="p-5 flex flex-col gap-2 flex-1">
         {exp.category && (
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CATEGORY_COLORS[exp.category] ?? "bg-gray-100 text-gray-700"}`}>
-            {exp.category}
-          </span>
+          <div>
+            <Badge variant="category" category={exp.category}>
+              {exp.category}
+            </Badge>
+          </div>
         )}
-        <h2 className="font-semibold text-gray-900 mt-2 line-clamp-2">{exp.title}</h2>
-        <p className="text-sm text-gray-500 mt-1 line-clamp-2">{exp.description}</p>
-        <span className="inline-block mt-3 text-sm font-semibold text-[#c84b1e]">
-          Descoperă →
+        <h2 className="font-serif font-semibold text-ink line-clamp-2 leading-snug">{exp.title}</h2>
+        <p className="text-sm text-muted line-clamp-2">{exp.description}</p>
+        <span className="group mt-1 inline-flex items-center gap-1 text-sm font-semibold text-accent">
+          Descoperă
+          <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
         </span>
       </div>
     </Link>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { CheckCircle2 } from "lucide-react";
 
 const REASONS = [
   "Anunț fals sau înșelător",
@@ -44,15 +45,15 @@ export function ReportButton({ listingId }: { listingId: string }) {
           onClick={(e) => e.target === e.currentTarget && setOpen(false)}
         >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">Raportează anunț</h2>
+            <h2 className="font-serif text-lg font-semibold text-ink mb-4">Raportează anunț</h2>
 
             {done ? (
-              <div className="text-center py-4">
-                <p className="text-2xl mb-2">✅</p>
-                <p className="font-semibold">Raport trimis. Îți mulțumim!</p>
+              <div className="flex flex-col items-center text-center py-4">
+                <CheckCircle2 className="w-9 h-9 text-green-600 mb-2" aria-hidden />
+                <p className="font-semibold text-ink">Raport trimis. Îți mulțumim!</p>
                 <button
                   onClick={() => setOpen(false)}
-                  className="mt-4 text-sm text-gray-500 hover:underline"
+                  className="mt-4 text-sm text-muted hover:underline"
                 >
                   Închide
                 </button>
@@ -68,9 +69,9 @@ export function ReportButton({ listingId }: { listingId: string }) {
                         value={r}
                         checked={reason === r}
                         onChange={() => setReason(r)}
-                        className="accent-[#c84b1e] w-4 h-4"
+                        className="accent-accent w-4 h-4"
                       />
-                      <span className="text-sm text-gray-700">{r}</span>
+                      <span className="text-sm text-ink/70">{r}</span>
                     </label>
                   ))}
                 </div>
@@ -78,7 +79,7 @@ export function ReportButton({ listingId }: { listingId: string }) {
                   <button
                     type="button"
                     onClick={() => setOpen(false)}
-                    className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+                    className="flex-1 border border-hairline text-ink/70 font-medium py-2.5 rounded-lg hover:bg-cream/40 transition-colors text-sm"
                   >
                     Anulează
                   </button>

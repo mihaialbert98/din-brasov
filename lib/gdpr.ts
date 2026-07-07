@@ -18,10 +18,17 @@
  *    (call log + staff member + script version + timestamp — see assistedListingConsentLog table)
  */
 
-import { eq, and, lt, lte, isNotNull, isNull, inArray } from "drizzle-orm";
+import { eq, and, lt, lte, isNotNull, isNull, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { users, listings, sessions, verificationTokens, newsletterSubscribers } from "@/lib/db/schema";
+import { users, listings, sessions, verificationTokens, newsletterSubscribers, newsItems, events } from "@/lib/db/schema";
 import { UTApi } from "uploadthing/server";
+
+/** Extract an Uploadthing file key from a stored image URL (…/f/<key>). */
+function uploadthingKey(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const key = url.split("/f/")[1];
+  return key || null;
+}
 
 // ─── Retention periods ────────────────────────────────────────────────────────
 
@@ -42,6 +49,15 @@ export const RETENTION = {
   /** Cookie consent records: 13 months (re-consent required after 12 months
    *  per EDPB guidance; 1 month buffer). */
   COOKIE_CONSENT_MONTHS: 13,
+
+  /** Published news: kept for 2 weeks, then hard-deleted (row + image). News is
+   *  time-sensitive; older items are of little value and reduce our scraping /
+   *  copyright footprint (excerpts only, source-attributed). */
+  NEWS_PUBLISHED_DAYS: 14,
+
+  /** Finished events: kept for 2 weeks after their END date, then hard-deleted
+   *  (row + image). Events with no end date are never auto-deleted. */
+  EVENT_POST_END_DAYS: 14,
 } as const;
 
 // ─── User deletion (GDPR Art. 17 — right to erasure) ─────────────────────────
@@ -182,6 +198,76 @@ export async function hardDeleteExpiredListings(): Promise<number> {
   await db
     .delete(listings)
     .where(inArray(listings.id, dead.map((l) => l.id)));
+
+  return dead.length;
+}
+
+// ─── News retention (2-week window) ───────────────────────────────────────────
+
+/**
+ * Hard-delete PUBLISHED news older than RETENTION.NEWS_PUBLISHED_DAYS, by publish
+ * date (falling back to creation date when unpublished-but-published-status). The
+ * item's Uploadthing image (if we host it) is removed first, then the DB row.
+ *
+ * Drafts are handled separately (deleted after 3 days unreviewed by the expiry
+ * cron); this only touches items the public can actually see. Returns the count.
+ */
+export async function hardDeleteOldNews(): Promise<number> {
+  const cutoff = new Date(
+    Date.now() - RETENTION.NEWS_PUBLISHED_DAYS * 24 * 60 * 60 * 1000
+  );
+
+  const dead = await db
+    .select({ id: newsItems.id, imageUrl: newsItems.imageUrl })
+    .from(newsItems)
+    .where(
+      and(
+        eq(newsItems.status, "published"),
+        // Use publishedAt, falling back to createdAt when it's null.
+        lt(sql`COALESCE(${newsItems.publishedAt}, ${newsItems.createdAt})`, cutoff)
+      )
+    );
+
+  if (dead.length === 0) return 0;
+
+  // Only our own Uploadthing-hosted images have a deletable key; scraped source
+  // images (arbitrary hosts) simply have no key and are skipped.
+  const keys = dead.map((n) => uploadthingKey(n.imageUrl)).filter((k): k is string => !!k);
+  if (keys.length) {
+    await new UTApi().deleteFiles(keys).catch(() => {});
+  }
+
+  await db.delete(newsItems).where(inArray(newsItems.id, dead.map((n) => n.id)));
+
+  return dead.length;
+}
+
+// ─── Event retention (2 weeks after end date) ─────────────────────────────────
+
+/**
+ * Hard-delete events whose END date is more than RETENTION.EVENT_POST_END_DAYS
+ * in the past (row + Uploadthing image). Events with NO end date are never
+ * auto-deleted — they may be open-ended/recurring and are removed manually.
+ * Returns the count.
+ */
+export async function hardDeleteEndedEvents(): Promise<number> {
+  const cutoff = new Date(
+    Date.now() - RETENTION.EVENT_POST_END_DAYS * 24 * 60 * 60 * 1000
+  );
+
+  const dead = await db
+    .select({ id: events.id, imageUrl: events.imageUrl })
+    .from(events)
+    .where(and(isNotNull(events.endsAt), lt(events.endsAt, cutoff)));
+
+  if (dead.length === 0) return 0;
+
+  const keys = dead.map((e) => uploadthingKey(e.imageUrl)).filter((k): k is string => !!k);
+  if (keys.length) {
+    await new UTApi().deleteFiles(keys).catch(() => {});
+  }
+
+  await db.delete(events).where(inArray(events.id, dead.map((e) => e.id)));
 
   return dead.length;
 }

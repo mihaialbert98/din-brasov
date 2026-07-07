@@ -1,7 +1,11 @@
 import { notFound } from "next/navigation";
+import Image from "next/image";
+import { ArrowUpRight } from "lucide-react";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { experiences } from "@/lib/db/schema";
+import { isOptimizableImage } from "@/lib/utils";
+import Badge from "@/components/ui/Badge";
 import type { Metadata } from "next";
 
 type Props = { params: Promise<{ slug: string }> };
@@ -27,26 +31,37 @@ export default async function ExperientaPage({ params }: Props) {
   return (
     <article className="max-w-2xl mx-auto px-4 py-10">
       {exp.imageUrl && (
-        <img src={exp.imageUrl} alt={exp.title} className="w-full rounded-xl mb-6 max-h-80 object-cover" />
+        <div className="relative w-full aspect-[16/9] rounded-2xl mb-6 overflow-hidden bg-cream/40">
+          <Image
+            src={exp.imageUrl}
+            alt={exp.title}
+            fill
+            priority
+            sizes="(max-width: 768px) 100vw, 672px"
+            className="object-cover"
+            unoptimized={!isOptimizableImage(exp.imageUrl)}
+          />
+        </div>
       )}
 
       {exp.category && (
-        <span className="text-xs bg-orange-100 text-orange-700 px-3 py-1 rounded-full font-medium">
+        <Badge variant="category" category={exp.category}>
           {exp.category}
-        </span>
+        </Badge>
       )}
 
-      <h1 className="text-3xl font-bold font-serif text-gray-900 mt-3 mb-4">{exp.title}</h1>
+      <h1 className="text-3xl sm:text-4xl font-semibold font-serif text-ink mt-3 mb-4 leading-tight">{exp.title}</h1>
 
-      <p className="text-gray-700 leading-relaxed mb-8 whitespace-pre-wrap">{exp.description}</p>
+      <p className="text-ink/80 leading-relaxed mb-8 whitespace-pre-wrap">{exp.description}</p>
 
       <a
         href={exp.externalUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center gap-2 bg-[#c84b1e] text-white font-semibold px-6 py-3 rounded-xl hover:bg-[#d9603a] transition-colors"
+        className="inline-flex items-center gap-2 bg-accent text-white font-semibold px-6 py-3 rounded-xl hover:bg-accent-hover transition-colors"
       >
-        Încearcă experiența →
+        Încearcă experiența
+        <ArrowUpRight className="w-4 h-4" aria-hidden />
       </a>
     </article>
   );

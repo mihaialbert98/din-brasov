@@ -1,9 +1,11 @@
 import Link from "next/link";
 import Image from "next/image";
+import { MessageSquare } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { conversations, messages } from "@/lib/db/schema";
 import { eq, or, and, ne, isNull } from "drizzle-orm";
+import { CULTURE_HREF } from "@/lib/categories";
 import MobileMenu from "./MobileMenu";
 
 async function getUnreadCount(userId: string): Promise<number> {
@@ -43,13 +45,14 @@ export async function Navbar() {
   const navItems = [
     { href: "/stiri", label: "Știri" },
     { href: "/evenimente", label: "Evenimente" },
+    { href: CULTURE_HREF, label: "Cultură" },
     { href: "/experiente", label: "Experiențe" },
     { href: "/localuri", label: "Localuri" },
     { href: "/anunturi", label: "Anunțuri" },
   ];
 
   return (
-    <header className="bg-[#1a1a1a] text-white sticky top-0 z-50 shadow-md relative">
+    <header className="bg-ink text-white sticky top-0 z-50 shadow-md relative">
       <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
         {/* Logo + wordmark */}
         <Link
@@ -67,8 +70,8 @@ export async function Navbar() {
               className="w-full h-full object-cover scale-105"
             />
           </span>
-          <span className="font-bold text-xl tracking-tight">
-            Din <span className="text-[#c84b1e]">Brașov</span>
+          <span className="font-serif font-semibold text-xl tracking-tight">
+            Din <span className="text-accent">Brașov</span>
           </span>
         </Link>
 
@@ -103,11 +106,9 @@ export async function Navbar() {
                 className="relative text-sm font-medium hover:bg-white/10 p-2 rounded-lg transition-colors"
                 aria-label={`Mesaje${unreadCount > 0 ? ` (${unreadCount} necitite)` : ""}`}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5" aria-hidden="true">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                </svg>
+                <MessageSquare className="w-5 h-5" aria-hidden />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 bg-[#c84b1e] text-white text-xs font-bold w-4 h-4 rounded-full flex items-center justify-center leading-none">
+                  <span className="absolute -top-0.5 -right-0.5 bg-accent text-white text-xs font-bold w-4 h-4 rounded-full flex items-center justify-center leading-none tabular-nums">
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}
@@ -115,7 +116,7 @@ export async function Navbar() {
               {isStaff && (
                 <Link
                   href="/admin"
-                  className="text-sm font-medium bg-[#c84b1e] hover:bg-[#d9603a] px-3 py-2 rounded-lg transition-colors"
+                  className="text-sm font-medium bg-accent hover:bg-accent-hover px-3 py-2 rounded-lg transition-colors"
                   aria-label="Panou de administrare"
                 >
                   {role === "admin" ? "Admin" : role === "moderator" ? "Moderator" : "Asistent"}
@@ -131,7 +132,7 @@ export async function Navbar() {
           ) : (
             <Link
               href="/intra"
-              className="text-sm font-medium border border-[#6bb5d4] text-[#6bb5d4] hover:bg-[#6bb5d4] hover:text-[#1a1a1a] px-4 py-2 rounded-lg transition-colors"
+              className="text-sm font-medium border border-sky text-sky hover:bg-sky hover:text-ink px-4 py-2 rounded-lg transition-colors"
             >
               Intră în cont
             </Link>
