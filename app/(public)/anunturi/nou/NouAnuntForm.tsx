@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { ArrowLeft, Infinity as InfinityIcon, PartyPopper, Lock, CreditCard, AlertTriangle } from "lucide-react";
 import ListingImagesField from "@/components/marketplace/ListingImagesField";
 import ListingRules from "@/components/marketplace/ListingRules";
 
@@ -85,10 +86,11 @@ export function NouAnuntForm({
   return (
     <div className="max-w-2xl mx-auto px-4 py-10">
       <div className="flex items-center gap-3 mb-8">
-        <Link href="/anunturi" className="text-gray-400 hover:text-gray-700 transition-colors">
-          ← Înapoi
+        <Link href="/anunturi" className="inline-flex items-center gap-1 text-faint hover:text-ink transition-colors">
+          <ArrowLeft className="w-4 h-4" aria-hidden />
+          Înapoi
         </Link>
-        <h1 className="text-3xl font-bold font-serif text-[#1a4731]">Adaugă anunț</h1>
+        <h1 className="text-3xl font-bold font-serif text-ink">Adaugă anunț</h1>
       </div>
 
       {/* Free quota banner */}
@@ -99,7 +101,9 @@ export function NouAnuntForm({
           ? "bg-red-50 border border-red-200 text-red-800"
           : "bg-amber-50 border border-amber-200 text-amber-800"
       }`}>
-        <span className="text-lg">{exempt ? "♾️" : isFree ? "🎉" : blocked ? "🔒" : "💳"}</span>
+        <span className="flex-shrink-0" aria-hidden>
+          {exempt ? <InfinityIcon className="w-5 h-5" /> : isFree ? <PartyPopper className="w-5 h-5" /> : blocked ? <Lock className="w-5 h-5" /> : <CreditCard className="w-5 h-5" />}
+        </span>
         <div>
           {exempt ? (
             <span>
@@ -134,8 +138,9 @@ export function NouAnuntForm({
 
       <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm p-6 space-y-5">
         {error && (
-          <div role="alert" className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-            ⚠️ {error}
+          <div role="alert" className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" aria-hidden />
+            {error}
           </div>
         )}
 
@@ -144,7 +149,7 @@ export function NouAnuntForm({
           <input
             id="title" name="title" type="text" required minLength={3} maxLength={200}
             placeholder="ex: Bicicletă mountain bike Trek, stare bună"
-            className="border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-900 bg-white focus:outline-none focus:border-[#c84b1e] focus:ring-1 focus:ring-[#c84b1e]"
+            className="border border-hairline rounded-lg px-4 py-3 text-base text-ink bg-white focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
           />
         </div>
 
@@ -153,7 +158,7 @@ export function NouAnuntForm({
           <textarea
             id="description" name="description" required minLength={10} maxLength={5000} rows={5}
             placeholder="Descrie anunțul cât mai detaliat: stare, caracteristici, motive vânzare..."
-            className="border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-900 bg-white focus:outline-none focus:border-[#c84b1e] focus:ring-1 focus:ring-[#c84b1e] resize-y"
+            className="border border-hairline rounded-lg px-4 py-3 text-base text-ink bg-white focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent resize-y"
           />
         </div>
 
@@ -162,7 +167,7 @@ export function NouAnuntForm({
             <label htmlFor="category" className="font-medium text-gray-700">Categorie *</label>
             <select
               id="category" name="category" required defaultValue=""
-              className="border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-900 bg-white focus:outline-none focus:border-[#c84b1e]"
+              className="border border-hairline rounded-lg px-4 py-3 text-base text-ink bg-white focus:outline-none focus:border-accent"
             >
               <option value="" disabled>Alege categoria</option>
               {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -172,7 +177,7 @@ export function NouAnuntForm({
             <label htmlFor="condition" className="font-medium text-gray-700">Stare</label>
             <select
               id="condition" name="condition" defaultValue="used"
-              className="border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-900 bg-white focus:outline-none focus:border-[#c84b1e]"
+              className="border border-hairline rounded-lg px-4 py-3 text-base text-ink bg-white focus:outline-none focus:border-accent"
             >
               {CONDITIONS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
             </select>
@@ -185,7 +190,7 @@ export function NouAnuntForm({
             <input
               id="price" name="price" type="text" maxLength={20}
               placeholder="ex: 500 sau lasă gol pentru negociabil"
-              className="border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-900 bg-white focus:outline-none focus:border-[#c84b1e]"
+              className="border border-hairline rounded-lg px-4 py-3 text-base text-ink bg-white focus:outline-none focus:border-accent"
             />
           </div>
           <div className="flex flex-col gap-1">
@@ -193,7 +198,7 @@ export function NouAnuntForm({
             <input
               id="location" name="location" type="text" maxLength={200}
               placeholder="ex: Brașov, Schei"
-              className="border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-900 bg-white focus:outline-none focus:border-[#c84b1e]"
+              className="border border-hairline rounded-lg px-4 py-3 text-base text-ink bg-white focus:outline-none focus:border-accent"
             />
           </div>
         </div>
@@ -205,7 +210,7 @@ export function NouAnuntForm({
           <input
             id="contactPhone" name="contactPhone" type="tel" maxLength={20}
             placeholder="ex: 0722 123 456"
-            className="border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-900 bg-white focus:outline-none focus:border-[#c84b1e]"
+            className="border border-hairline rounded-lg px-4 py-3 text-base text-ink bg-white focus:outline-none focus:border-accent"
           />
           <p className="text-xs text-gray-400">Ascuns în pagina anunțului — vizibil doar utilizatorilor autentificați. Cumpărătorii te pot contacta și prin mesaje în aplicație.</p>
         </div>
@@ -217,14 +222,14 @@ export function NouAnuntForm({
         <div className="flex gap-3 pt-1">
           <Link
             href="/anunturi"
-            className="flex-1 text-center border border-gray-300 text-gray-700 font-medium py-3 rounded-lg hover:bg-gray-50 transition-colors"
+            className="flex-1 text-center border border-hairline text-gray-700 font-medium py-3 rounded-lg hover:bg-gray-50 transition-colors"
           >
             Anulează
           </Link>
           <button
             type="submit"
             disabled={loading || blocked}
-            className="flex-1 bg-[#c84b1e] text-white font-semibold py-3 rounded-lg hover:bg-[#d9603a] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            className="flex-1 bg-accent text-white font-semibold py-3 rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {blocked
               ? "Limită atinsă"

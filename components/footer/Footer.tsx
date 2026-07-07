@@ -17,7 +17,7 @@ function InstagramIcon({ className }: { className?: string }) {
 
 export function Footer() {
   return (
-    <footer className="bg-[#1a1a1a] text-gray-300 mt-auto">
+    <footer className="bg-ink text-white/70 mt-auto">
       <div className="max-w-5xl mx-auto px-4 py-10">
         <div className="grid md:grid-cols-3 gap-8 mb-8">
           <div>
@@ -32,24 +32,24 @@ export function Footer() {
                   className="w-full h-full object-cover scale-105"
                 />
               </span>
-              <span className="font-bold text-lg text-white">
-                Din <span className="text-[#c84b1e]">Brașov</span>
+              <span className="font-serif font-semibold text-lg text-white">
+                Din <span className="text-accent">Brașov</span>
               </span>
             </div>
-            <p className="text-sm text-gray-400 mb-4">
+            <p className="text-sm text-white/50 mb-4">
               Platforma comunității brașovene — știri, evenimente, localuri și anunțuri.
             </p>
 
             {/* Social media */}
             <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">
+              <p className="text-xs text-white/40 uppercase tracking-wider mb-2">
                 Urmărește-ne
               </p>
               <a
                 href="https://www.instagram.com/din_brasov/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-sm text-gray-300 hover:text-white transition-colors group"
+                className="inline-flex items-center gap-2 text-sm text-white/70 hover:text-white transition-colors group"
                 aria-label="Urmărește Din Brașov pe Instagram"
               >
                 <span className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#f09433] via-[#e6683c] via-[#dc2743] via-[#cc2366] to-[#bc1888] flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
@@ -80,12 +80,12 @@ export function Footer() {
 
           <div>
             <h4 className="font-semibold text-white mb-3">Anunț Asistat</h4>
-            <p className="text-sm text-gray-400 mb-2">
-              Ai nevoie de ajutor in publicare anuntului? Sună-ne!
+            <p className="text-sm text-white/50 mb-2">
+              Ai nevoie de ajutor la publicarea anunțului? Sună-ne!
             </p>
             <a
               href="tel:+40770936013"
-              className="text-2xl font-bold text-[#c84b1e] hover:text-[#d9603a] transition-colors"
+              className="text-2xl font-bold text-accent hover:text-accent-hover transition-colors tabular-nums"
               aria-label="Telefon pentru anunț asistat"
             >
               0770 936 013
@@ -93,7 +93,7 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="border-t border-white/10 pt-6 flex flex-wrap items-center justify-between gap-4 text-xs text-gray-500">
+        <div className="border-t border-white/10 pt-6 flex flex-wrap items-center justify-between gap-4 text-xs text-white/40">
           <p>© {new Date().getFullYear()} Din Brașov. Toate drepturile rezervate.</p>
           <div className="flex gap-4">
             <Link href="/despre" className="hover:text-white transition-colors">Despre noi</Link>

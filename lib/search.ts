@@ -24,23 +24,28 @@ export async function searchNews(
     );
   }
 
-  return db
-    .select({
-      id: newsItems.id,
-      title: newsItems.title,
-      excerpt: newsItems.excerpt,
-      sourceUrl: newsItems.sourceUrl,
-      sourceName: newsItems.sourceName,
-      publishedAt: newsItems.publishedAt,
-      imageUrl: newsItems.imageUrl,
-      category: newsItems.category,
-      slug: newsItems.slug,
-    })
-    .from(newsItems)
-    .where(and(...conditions))
-    .orderBy(sql`${newsItems.publishedAt} DESC NULLS LAST`)
-    .limit(PAGE_SIZE)
-    .offset((page - 1) * PAGE_SIZE);
+  const [items, [{ total }]] = await Promise.all([
+    db
+      .select({
+        id: newsItems.id,
+        title: newsItems.title,
+        excerpt: newsItems.excerpt,
+        sourceUrl: newsItems.sourceUrl,
+        sourceName: newsItems.sourceName,
+        publishedAt: newsItems.publishedAt,
+        imageUrl: newsItems.imageUrl,
+        category: newsItems.category,
+        slug: newsItems.slug,
+      })
+      .from(newsItems)
+      .where(and(...conditions))
+      .orderBy(sql`${newsItems.publishedAt} DESC NULLS LAST`)
+      .limit(PAGE_SIZE)
+      .offset((page - 1) * PAGE_SIZE),
+    db.select({ total: count() }).from(newsItems).where(and(...conditions)),
+  ]);
+
+  return { items, total, pageSize: PAGE_SIZE };
 }
 
 export async function searchEvents(
@@ -59,26 +64,31 @@ export async function searchEvents(
     conditions.push(sql`COALESCE(${events.endsAt}, ${events.startsAt}) >= NOW()`);
   }
 
-  return db
-    .select({
-      id: events.id,
-      title: events.title,
-      slug: events.slug,
-      startsAt: events.startsAt,
-      endsAt: events.endsAt,
-      locationName: events.locationName,
-      category: events.category,
-      imageUrl: events.imageUrl,
-      isFree: events.isFree,
-      price: events.price,
-      currency: events.currency,
-    })
-    .from(events)
-    .where(and(...conditions))
-    // Soonest upcoming first — the most relevant ordering for a visitor.
-    .orderBy(sql`${events.startsAt} ASC`)
-    .limit(PAGE_SIZE)
-    .offset((page - 1) * PAGE_SIZE);
+  const [items, [{ total }]] = await Promise.all([
+    db
+      .select({
+        id: events.id,
+        title: events.title,
+        slug: events.slug,
+        startsAt: events.startsAt,
+        endsAt: events.endsAt,
+        locationName: events.locationName,
+        category: events.category,
+        imageUrl: events.imageUrl,
+        isFree: events.isFree,
+        price: events.price,
+        currency: events.currency,
+      })
+      .from(events)
+      .where(and(...conditions))
+      // Soonest upcoming first — the most relevant ordering for a visitor.
+      .orderBy(sql`${events.startsAt} ASC`)
+      .limit(PAGE_SIZE)
+      .offset((page - 1) * PAGE_SIZE),
+    db.select({ total: count() }).from(events).where(and(...conditions)),
+  ]);
+
+  return { items, total, pageSize: PAGE_SIZE };
 }
 
 export type ListingSort = "newest" | "oldest" | "price_asc" | "price_desc";
@@ -154,21 +164,26 @@ export async function searchPlaces(
     conditions.push(sql`${places.searchVector} @@ ${searchQuery(query)}`);
   }
 
-  return db
-    .select({
-      id: places.id,
-      name: places.name,
-      slug: places.slug,
-      category: places.category,
-      address: places.address,
-      imagesJson: places.imagesJson,
-      createdAt: places.createdAt,
-    })
-    .from(places)
-    .where(and(...conditions))
-    .orderBy(sql`${places.createdAt} DESC`)
-    .limit(PAGE_SIZE)
-    .offset((page - 1) * PAGE_SIZE);
+  const [items, [{ total }]] = await Promise.all([
+    db
+      .select({
+        id: places.id,
+        name: places.name,
+        slug: places.slug,
+        category: places.category,
+        address: places.address,
+        imagesJson: places.imagesJson,
+        createdAt: places.createdAt,
+      })
+      .from(places)
+      .where(and(...conditions))
+      .orderBy(sql`${places.createdAt} DESC`)
+      .limit(PAGE_SIZE)
+      .offset((page - 1) * PAGE_SIZE),
+    db.select({ total: count() }).from(places).where(and(...conditions)),
+  ]);
+
+  return { items, total, pageSize: PAGE_SIZE };
 }
 
 export async function searchExperiences(
@@ -181,18 +196,23 @@ export async function searchExperiences(
     conditions.push(sql`${experiences.searchVector} @@ ${searchQuery(query)}`);
   }
 
-  return db
-    .select({
-      id: experiences.id,
-      title: experiences.title,
-      slug: experiences.slug,
-      category: experiences.category,
-      imageUrl: experiences.imageUrl,
-      description: experiences.description,
-    })
-    .from(experiences)
-    .where(and(...conditions))
-    .orderBy(sql`${experiences.createdAt} DESC`)
-    .limit(PAGE_SIZE)
-    .offset((page - 1) * PAGE_SIZE);
+  const [items, [{ total }]] = await Promise.all([
+    db
+      .select({
+        id: experiences.id,
+        title: experiences.title,
+        slug: experiences.slug,
+        category: experiences.category,
+        imageUrl: experiences.imageUrl,
+        description: experiences.description,
+      })
+      .from(experiences)
+      .where(and(...conditions))
+      .orderBy(sql`${experiences.createdAt} DESC`)
+      .limit(PAGE_SIZE)
+      .offset((page - 1) * PAGE_SIZE),
+    db.select({ total: count() }).from(experiences).where(and(...conditions)),
+  ]);
+
+  return { items, total, pageSize: PAGE_SIZE };
 }

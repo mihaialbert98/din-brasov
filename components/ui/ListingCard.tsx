@@ -1,5 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
+import { Package, Zap, Phone, MapPin } from "lucide-react";
+import { cardShell, cardImageFrame, cardImageZoom } from "@/lib/ui";
+import Badge from "@/components/ui/Badge";
 
 type Props = {
   listing: {
@@ -21,18 +24,19 @@ export default function ListingCard({ listing, compact = false }: Props) {
 
   if (compact) {
     return (
-      <Link
-        href={`/anunturi/${listing.slug}`}
-        className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-shadow p-4 flex flex-col gap-2 border border-[#e8d9c5]"
-      >
+      <Link href={`/anunturi/${listing.slug}`} className={cardShell("p-4 flex flex-col gap-2")}>
         {listing.isAssisted && (
-          <span className="text-xs bg-[#e8d9c5] text-[#c84b1e] px-2 py-0.5 rounded-full self-start font-medium">
-            📞 Anunț Asistat
-          </span>
+          <div>
+            <Badge variant="neutral" icon={<Phone className="w-3 h-3" aria-hidden />}>
+              Anunț Asistat
+            </Badge>
+          </div>
         )}
-        <h3 className="font-semibold text-gray-900 line-clamp-2">{listing.title}</h3>
+        <h3 className="font-serif font-semibold text-ink line-clamp-2 leading-snug">
+          {listing.title}
+        </h3>
         {listing.price && (
-          <span className="text-xl font-bold text-[#c84b1e]">
+          <span className="text-xl font-bold text-accent tabular-nums">
             {listing.price} {listing.currency}
           </span>
         )}
@@ -41,47 +45,53 @@ export default function ListingCard({ listing, compact = false }: Props) {
   }
 
   return (
-    <Link
-      href={`/anunturi/${listing.slug}`}
-      className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col"
-    >
+    <Link href={`/anunturi/${listing.slug}`} className={cardShell("flex flex-col")}>
       {images[0] ? (
-        <div className="relative w-full h-44">
+        <div className={cardImageFrame}>
           <Image
             src={images[0]}
             alt={listing.title}
             fill
             sizes="(max-width: 640px) 100vw, 33vw"
-            className="object-cover"
+            className={cardImageZoom}
           />
         </div>
       ) : (
-        <div className="w-full h-44 bg-gray-100 flex items-center justify-center text-gray-400 text-4xl">
-          📦
+        <div className="w-full aspect-[3/2] bg-gradient-to-br from-cream/70 to-accent-soft flex items-center justify-center">
+          <Package className="w-11 h-11 text-accent/40" aria-hidden />
         </div>
       )}
       <div className="p-4 flex flex-col gap-2 flex-1">
-        <div className="flex gap-1.5 flex-wrap">
-          {listing.isBoosted && (
-            <span className="text-xs bg-[#c84b1e] text-white px-2 py-0.5 rounded-full font-medium">
-              ⚡ Promovat
-            </span>
-          )}
-          {listing.isAssisted && (
-            <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
-              Anunț Asistat
-            </span>
-          )}
-        </div>
-        <h2 className="font-semibold text-gray-900 line-clamp-2">{listing.title}</h2>
+        {(listing.isBoosted || listing.isAssisted) && (
+          <div className="flex gap-1.5 flex-wrap">
+            {listing.isBoosted && (
+              <Badge variant="accent" icon={<Zap className="w-3 h-3" aria-hidden />}>
+                Promovat
+              </Badge>
+            )}
+            {listing.isAssisted && (
+              <Badge variant="neutral" icon={<Phone className="w-3 h-3" aria-hidden />}>
+                Anunț Asistat
+              </Badge>
+            )}
+          </div>
+        )}
+        <h2 className="font-serif font-semibold text-ink line-clamp-2 leading-snug">
+          {listing.title}
+        </h2>
         {listing.price ? (
-          <p className="text-xl font-bold text-[#1a4731]">
+          <p className="text-xl font-bold text-accent tabular-nums">
             {listing.price} {listing.currency}
           </p>
         ) : (
-          <p className="text-base font-medium text-gray-500">Negociabil</p>
+          <p className="text-base font-medium text-muted">Negociabil</p>
         )}
-        {listing.location && <p className="text-sm text-gray-400">{listing.location}</p>}
+        {listing.location && (
+          <p className="flex items-center gap-1 text-sm text-faint">
+            <MapPin className="w-3.5 h-3.5 flex-shrink-0" aria-hidden />
+            <span className="truncate">{listing.location}</span>
+          </p>
+        )}
       </div>
     </Link>
   );

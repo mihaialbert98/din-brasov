@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { X } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing-client";
 import { compressFiles } from "@/lib/image-compress";
 
@@ -63,7 +64,7 @@ export default function ListingImagesField({ images, onChange }: Props) {
             <div key={src} className="relative aspect-square rounded-lg overflow-hidden border border-gray-200">
               <img src={src} alt={`Fotografie ${i + 1}`} className="w-full h-full object-cover" />
               {i === 0 && (
-                <span className="absolute bottom-1 left-1 bg-[#c84b1e] text-white text-[10px] font-semibold px-1.5 py-0.5 rounded">
+                <span className="absolute bottom-1 left-1 bg-accent text-white text-[10px] font-semibold px-1.5 py-0.5 rounded">
                   Principală
                 </span>
               )}
@@ -71,9 +72,9 @@ export default function ListingImagesField({ images, onChange }: Props) {
                 type="button"
                 onClick={() => removeAt(i)}
                 aria-label={`Elimină fotografia ${i + 1}`}
-                className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-black/60 text-white rounded-full text-sm hover:bg-black/80"
+                className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-black/60 text-white rounded-full hover:bg-black/80"
               >
-                ✕
+                <X className="w-3.5 h-3.5" aria-hidden />
               </button>
             </div>
           ))}
@@ -81,7 +82,7 @@ export default function ListingImagesField({ images, onChange }: Props) {
       )}
 
       {remaining > 0 && (
-        <label className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-[#c84b1e] transition-colors">
+        <label className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-accent transition-colors">
           {isUploading ? (
             <p className="text-gray-500 text-sm">Se încarcă...</p>
           ) : (

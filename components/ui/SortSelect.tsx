@@ -34,7 +34,7 @@ export default function SortSelect({
     <select
       value={value}
       onChange={(e) => router.push(buildHref(e.target.value))}
-      className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:border-[#1a4731] focus:ring-1 focus:ring-[#1a4731] cursor-pointer"
+      className="border border-hairline rounded-lg px-3 py-2 text-sm text-ink bg-surface focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent cursor-pointer"
       aria-label="Sortare anunțuri"
     >
       {options.map((opt) => (

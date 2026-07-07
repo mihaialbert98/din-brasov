@@ -29,8 +29,8 @@ export default function FavouriteButton({ listingId, favouriteCount, isOwner }: 
   // Owner sees their favourite count, not a toggle
   if (isOwner) {
     return (
-      <span className="flex items-center gap-1.5 text-sm text-gray-500">
-        <Heart size={16} className="text-[#c84b1e]" fill="#c84b1e" />
+      <span className="flex items-center gap-1.5 text-sm text-muted">
+        <Heart size={16} className="text-accent" fill="currentColor" />
         {favouriteCount ?? 0} {(favouriteCount ?? 0) === 1 ? "salvare" : "salvări"}
       </span>
     );
@@ -55,12 +55,12 @@ export default function FavouriteButton({ listingId, favouriteCount, isOwner }: 
       onClick={handleToggle}
       disabled={loading}
       aria-label={saved ? "Elimină din favorite" : "Salvează la favorite"}
-      className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-sm font-medium hover:border-[#c84b1e] hover:text-[#c84b1e] transition-colors disabled:opacity-50"
+      className="flex items-center gap-2 px-4 py-2 rounded-xl border border-hairline text-sm font-medium text-ink/70 hover:border-accent hover:text-accent transition-colors disabled:opacity-50"
     >
       <Heart
         size={16}
-        className={saved ? "text-[#c84b1e]" : "text-gray-400"}
-        fill={saved ? "#c84b1e" : "none"}
+        className={saved ? "text-accent" : "text-faint"}
+        fill={saved ? "currentColor" : "none"}
       />
       {saved ? "Salvat" : "Salvează"}
     </button>

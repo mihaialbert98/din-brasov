@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export default function ListingGallery({ images, title }: { images: string[]; title: string }) {
   const [active, setActive] = useState(0);
@@ -15,11 +16,11 @@ export default function ListingGallery({ images, title }: { images: string[]; ti
   return (
     <div className="mb-6">
       {/* Main image */}
-      <div className="relative rounded-xl overflow-hidden bg-gray-100">
+      <div className="relative rounded-2xl overflow-hidden bg-cream/40">
         <img
           src={current}
           alt={`${title} — fotografie ${active + 1}`}
-          className="w-full max-h-[28rem] object-contain bg-gray-50"
+          className="w-full max-h-[28rem] object-contain bg-cream/30"
         />
 
         {images.length > 1 && (
@@ -30,7 +31,7 @@ export default function ListingGallery({ images, title }: { images: string[]; ti
               aria-label="Imaginea anterioară"
               className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-full bg-black/45 text-white hover:bg-black/65 transition-colors"
             >
-              ‹
+              <ChevronLeft className="w-5 h-5" aria-hidden />
             </button>
             <button
               type="button"
@@ -38,7 +39,7 @@ export default function ListingGallery({ images, title }: { images: string[]; ti
               aria-label="Imaginea următoare"
               className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-full bg-black/45 text-white hover:bg-black/65 transition-colors"
             >
-              ›
+              <ChevronRight className="w-5 h-5" aria-hidden />
             </button>
             <span className="absolute bottom-2 right-2 bg-black/55 text-white text-xs px-2 py-0.5 rounded-full">
               {active + 1} / {images.length}
@@ -57,7 +58,7 @@ export default function ListingGallery({ images, title }: { images: string[]; ti
               onClick={() => setActive(i)}
               aria-label={`Vezi fotografia ${i + 1}`}
               className={`flex-shrink-0 rounded-lg overflow-hidden border-2 transition-colors ${
-                i === active ? "border-[#c84b1e]" : "border-transparent hover:border-gray-300"
+                i === active ? "border-accent" : "border-transparent hover:border-hairline"
               }`}
             >
               <img src={src} alt="" className="h-16 w-16 object-cover" />

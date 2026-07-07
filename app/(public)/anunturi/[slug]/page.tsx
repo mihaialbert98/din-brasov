@@ -1,8 +1,10 @@
 import { notFound } from "next/navigation";
 import { eq, and, count } from "drizzle-orm";
+import { Phone, Lock, MapPin, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
 import { db } from "@/lib/db";
 import { listings, listingFavourites } from "@/lib/db/schema";
 import { formatDate } from "@/lib/utils";
+import Badge from "@/components/ui/Badge";
 import { RevealPhoneButton } from "@/components/marketplace/RevealPhoneButton";
 import { ContactSellerButton } from "@/components/marketplace/ContactSellerButton";
 import { ReportButton } from "@/components/marketplace/ReportButton";
@@ -87,64 +89,61 @@ export default async function AnuntPage({ params, searchParams }: Props) {
         />
       )}
       {paymentStatus === "success" && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6 text-green-800 text-sm">
-          ✅ Plată finalizată cu succes! Anunțul tău este acum activ.
+        <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl p-4 mb-6 text-green-800 text-sm">
+          <CheckCircle2 className="w-4 h-4 flex-shrink-0" aria-hidden />
+          Plată finalizată cu succes! Anunțul tău este acum activ.
         </div>
       )}
       {paymentStatus === "pending" && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 text-amber-800 text-sm">
-          ⏳ Plata este în curs de procesare. Anunțul va apărea în câteva momente.
+        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 text-amber-800 text-sm">
+          <Clock className="w-4 h-4 flex-shrink-0" aria-hidden />
+          Plata este în curs de procesare. Anunțul va apărea în câteva momente.
         </div>
       )}
       {isSuspended && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 text-red-700 text-sm">
-          ⚠️ Acest anunț a fost suspendat temporar pentru verificare.
+        <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-4 mb-6 text-red-700 text-sm">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" aria-hidden />
+          Acest anunț a fost suspendat temporar pentru verificare.
         </div>
       )}
 
       {/* Image gallery */}
       <ListingGallery images={images} title={listing.title} />
 
-      <div className="flex items-start gap-3 flex-wrap mb-4">
+      <div className="flex items-start gap-2 flex-wrap mb-4">
         {listing.isAssisted && (
-          <span className="bg-amber-100 text-amber-800 text-sm px-3 py-1 rounded-full font-medium">
-            📞 Anunț Asistat — publicat de echipa Din Brașov
-          </span>
+          <Badge variant="neutral" icon={<Phone className="w-3 h-3" aria-hidden />}>
+            Anunț Asistat — publicat de echipa Din Brașov
+          </Badge>
         )}
         {listing.status === "sold" && (
-          <span className="bg-red-100 text-red-800 text-sm px-3 py-1 rounded-full font-medium">
-            Vândut
-          </span>
+          <Badge className="bg-red-100 text-red-800">Vândut</Badge>
         )}
-        <span className="text-sm text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
-          {listing.category}
-        </span>
+        {listing.category && <Badge variant="category" category={listing.category}>{listing.category}</Badge>}
         {listing.condition && listing.condition !== "not_applicable" && (
-          <span className="text-sm text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
-            {listing.condition === "new" ? "Nou" : "Folosit"}
-          </span>
+          <Badge variant="neutral">{listing.condition === "new" ? "Nou" : "Folosit"}</Badge>
         )}
       </div>
 
-      <h1 className="text-3xl font-bold text-gray-900 mb-3">{listing.title}</h1>
+      <h1 className="text-3xl sm:text-4xl font-semibold font-serif text-ink mb-3 leading-tight">{listing.title}</h1>
 
       {listing.price ? (
-        <p className="text-3xl font-bold text-[#c84b1e] mb-6">
+        <p className="text-3xl font-bold text-accent mb-6 tabular-nums">
           {listing.price} {listing.currency}
         </p>
       ) : (
-        <p className="text-xl font-medium text-gray-500 mb-6">Preț negociabil</p>
+        <p className="text-xl font-medium text-muted mb-6">Preț negociabil</p>
       )}
 
-      <div className="bg-white rounded-xl p-6 mb-6 shadow-sm">
-        <h2 className="font-semibold text-lg mb-3">Descriere</h2>
-        <p className="text-gray-700 whitespace-pre-wrap">{listing.description}</p>
+      <div className="bg-surface rounded-2xl border border-hairline p-6 mb-6">
+        <h2 className="font-serif font-semibold text-lg text-ink mb-3">Descriere</h2>
+        <p className="text-ink/80 whitespace-pre-wrap leading-relaxed">{listing.description}</p>
       </div>
 
       {/* Contact section — phone never in HTML source */}
       {!isSuspended && listing.status === "active" && (
-        <div className="bg-[#1a1a1a] text-white rounded-xl p-6 mb-6">
-          <h2 className="font-semibold text-lg mb-4">Contact vânzător</h2>
+        <div className="bg-ink text-white rounded-2xl p-6 mb-6">
+          <h2 className="font-serif font-semibold text-lg mb-4">Contact vânzător</h2>
           <div className="flex flex-col gap-3">
             {listing.contactPhone && (
               <RevealPhoneButton listingId={listing.id} />
@@ -156,14 +155,20 @@ export default async function AnuntPage({ params, searchParams }: Props) {
               />
             )}
           </div>
-          <p className="text-xs text-gray-400 mt-4">
-            🔒 Numărul de telefon este protejat. Autentifică-te pentru a-l vedea.
+          <p className="flex items-center gap-1.5 text-xs text-white/50 mt-4">
+            <Lock className="w-3.5 h-3.5 flex-shrink-0" aria-hidden />
+            Numărul de telefon este protejat. Autentifică-te pentru a-l vedea.
           </p>
         </div>
       )}
 
-      <div className="text-sm text-gray-400 space-y-1 mb-6">
-        {listing.location && <p>📍 {listing.location}</p>}
+      <div className="text-sm text-faint space-y-1 mb-6">
+        {listing.location && (
+          <p className="flex items-center gap-1.5">
+            <MapPin className="w-3.5 h-3.5 flex-shrink-0" aria-hidden />
+            {listing.location}
+          </p>
+        )}
         <p>Publicat: {formatDate(listing.createdAt)}</p>
         {listing.expiresAt && listing.status === "active" && (
           <p>Expiră: {formatDate(listing.expiresAt)}</p>

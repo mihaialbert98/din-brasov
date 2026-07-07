@@ -51,7 +51,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ro" className={`h-full antialiased ${inter.variable} ${lora.variable}`}>
-      <body className="min-h-full flex flex-col bg-[#f8f5f0] text-gray-900">
+      <body className="min-h-full flex flex-col bg-background text-ink">
         <SessionProvider>{children}</SessionProvider>
         <Analytics />
       </body>

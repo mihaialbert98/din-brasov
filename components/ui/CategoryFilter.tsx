@@ -8,6 +8,10 @@ type Props = {
   basePath: string;
   paramName?: string;
   extraParams?: Record<string, string>;
+  /**
+   * Kept for API compatibility with existing callers. The site now has ONE brand
+   * accent, so the active pill is always terracotta regardless of this value.
+   */
   activeColor?: "green" | "terracotta";
 };
 
@@ -17,7 +21,6 @@ export default function CategoryFilter({
   basePath,
   paramName = "categorie",
   extraParams,
-  activeColor = "green",
 }: Props) {
   const router = useRouter();
 
@@ -28,20 +31,9 @@ export default function CategoryFilter({
     return `${basePath}${qs ? `?${qs}` : ""}`;
   }
 
-  const activeClass =
-    activeColor === "terracotta"
-      ? "bg-[#c84b1e] text-white border-[#c84b1e]"
-      : "bg-[#1a4731] text-white border-[#1a4731]";
-
+  const activeClass = "bg-accent text-white border-accent";
   const inactiveClass =
-    activeColor === "terracotta"
-      ? "border-gray-300 text-gray-600 hover:bg-gray-50"
-      : "border-gray-300 text-gray-700 hover:border-[#1a4731]";
-
-  const focusClass =
-    activeColor === "terracotta"
-      ? "focus:border-[#c84b1e] focus:ring-[#c84b1e]"
-      : "focus:border-[#1a4731] focus:ring-[#1a4731]";
+    "border-hairline text-muted hover:border-accent/40 hover:text-ink bg-surface";
 
   return (
     <>
@@ -50,7 +42,7 @@ export default function CategoryFilter({
         <select
           value={active ?? ""}
           onChange={(e) => router.push(buildHref(e.target.value || undefined))}
-          className={`w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-1 cursor-pointer ${focusClass}`}
+          className="w-full border border-hairline rounded-lg px-3 py-2.5 text-sm text-ink bg-surface focus:outline-none focus:ring-1 focus:border-accent focus:ring-accent cursor-pointer"
           aria-label="Filtrează după categorie"
         >
           <option value="">Toate categoriile</option>

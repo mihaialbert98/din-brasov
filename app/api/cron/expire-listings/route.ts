@@ -8,13 +8,20 @@
  * 2. Hard-delete expired listings past the 30-day renewal grace period (+ Uploadthing images)
  * 3. Hard-delete users past the 30-day deletion grace period (Law 190/2018 + Art. 17)
  * 4. Delete draft news items older than 3 days
+ * 5. Hard-delete published news older than 2 weeks (+ image)
+ * 6. Hard-delete events ended more than 2 weeks ago (+ image)
  */
 
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { listings, newsItems } from "@/lib/db/schema";
 import { lt, eq, and, isNotNull } from "drizzle-orm";
-import { hardDeleteExpiredUsers, hardDeleteExpiredListings } from "@/lib/gdpr";
+import {
+  hardDeleteExpiredUsers,
+  hardDeleteExpiredListings,
+  hardDeleteOldNews,
+  hardDeleteEndedEvents,
+} from "@/lib/gdpr";
 
 function verifyCron(req: Request) {
   const auth = req.headers.get("authorization");
@@ -54,11 +61,19 @@ export async function GET(req: Request) {
     .where(and(eq(newsItems.status, "draft"), lt(newsItems.createdAt, threeDaysAgo)))
     .returning({ id: newsItems.id });
 
+  // 6. Hard-delete published news older than 2 weeks (+ Uploadthing image)
+  const deletedOldNews = await hardDeleteOldNews();
+
+  // 7. Hard-delete events that ended more than 2 weeks ago (+ image)
+  const deletedEndedEvents = await hardDeleteEndedEvents();
+
   return NextResponse.json({
     ok: true,
     expiredListings: expired.length,
     deletedListings,
     deletedUsers,
     deletedDraftNews: deletedDrafts.length,
+    deletedOldNews,
+    deletedEndedEvents,
   });
 }

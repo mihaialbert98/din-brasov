@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useSession } from "next-auth/react";
+import { Flag, CheckCircle2 } from "lucide-react";
 
 type Props = {
   reportedUserId: string;
@@ -60,9 +61,10 @@ export function ReportUserButton({
     <>
       <button
         onClick={() => setOpen(true)}
-        className="text-xs text-gray-400 hover:text-red-500 transition-colors flex items-center gap-1"
+        className="text-xs text-faint hover:text-red-500 transition-colors flex items-center gap-1"
       >
-        ⚑ Raportează utilizatorul
+        <Flag className="w-3.5 h-3.5" aria-hidden />
+        Raportează utilizatorul
       </button>
 
       {open && (
@@ -71,23 +73,23 @@ export function ReportUserButton({
           onClick={(e) => e.target === e.currentTarget && setOpen(false)}
         >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-1">
+            <h2 className="font-serif text-lg font-semibold text-ink mb-1">
               Raportează utilizatorul
             </h2>
             {reportedUserName && (
-              <p className="text-sm text-gray-500 mb-4">{reportedUserName}</p>
+              <p className="text-sm text-muted mb-4">{reportedUserName}</p>
             )}
 
             {done ? (
-              <div className="text-center py-6">
-                <p className="text-3xl mb-2">✅</p>
-                <p className="font-semibold text-gray-900">Raport trimis.</p>
-                <p className="text-sm text-gray-500 mt-1">
+              <div className="flex flex-col items-center text-center py-6">
+                <CheckCircle2 className="w-10 h-10 text-green-600 mb-2" aria-hidden />
+                <p className="font-semibold text-ink">Raport trimis.</p>
+                <p className="text-sm text-muted mt-1">
                   Echipa noastră va analiza sesizarea în cel mai scurt timp.
                 </p>
                 <button
                   onClick={() => { setOpen(false); setDone(false); setReason(""); }}
-                  className="mt-4 text-sm text-[#c84b1e] hover:underline"
+                  className="mt-4 text-sm text-accent hover:underline"
                 >
                   Închide
                 </button>
@@ -107,7 +109,7 @@ export function ReportUserButton({
                     rows={4}
                     placeholder="Descrie pe scurt de ce raportezi acest utilizator (min. 10 caractere)..."
                     style={{ color: "#1a1a1a", backgroundColor: "#ffffff", colorScheme: "light" }}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#c84b1e] focus:ring-1 focus:ring-[#c84b1e] resize-y"
+                    className="w-full border border-hairline rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent resize-y"
                   />
                   <p className="text-xs text-gray-400 mt-1 text-right">{reason.length}/500</p>
                 </div>
@@ -122,7 +124,7 @@ export function ReportUserButton({
                   <button
                     type="button"
                     onClick={() => setOpen(false)}
-                    className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg hover:bg-gray-50 transition-colors"
+                    className="flex-1 border border-hairline text-ink/70 font-medium py-2.5 rounded-lg hover:bg-cream/40 transition-colors"
                   >
                     Anulează
                   </button>

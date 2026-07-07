@@ -63,8 +63,8 @@ export default async function AdminRestaurantePage() {
       {enriched.length === 0 ? (
         <p className="text-gray-500 text-sm">Niciun restaurant încă.</p>
       ) : (
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
             <thead className="bg-gray-50 text-gray-500 text-left">
               <tr>
                 <th className="px-4 py-3 font-medium">Restaurant</th>

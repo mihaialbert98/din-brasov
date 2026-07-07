@@ -3,6 +3,7 @@ import Image from "next/image";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { newsItems } from "@/lib/db/schema";
+import { ExternalLink } from "lucide-react";
 import { formatDate, isOptimizableImage } from "@/lib/utils";
 import type { Metadata } from "next";
 import JsonLd from "@/components/seo/JsonLd";
@@ -60,39 +61,40 @@ export default async function StirePage({ params }: Props) {
         ]}
       />
       <div className="mb-4">
-        <span className="text-sm font-semibold text-[#d4820a] uppercase tracking-wide">
+        <span className="text-sm font-semibold text-accent uppercase tracking-wide">
           {item.sourceName}
         </span>
         {item.category && (
-          <span className="text-sm text-gray-400"> · {item.category}</span>
+          <span className="text-sm text-faint"> · {item.category}</span>
         )}
       </div>
 
-      <h1 className="text-3xl font-bold font-serif text-gray-900 mb-4">{item.title}</h1>
+      <h1 className="text-3xl sm:text-4xl font-semibold font-serif text-ink mb-4 leading-tight">{item.title}</h1>
 
       {item.publishedAt && (
-        <p className="text-sm text-gray-500 mb-6">{formatDate(item.publishedAt)}</p>
+        <p className="text-sm text-muted mb-6">{formatDate(item.publishedAt)}</p>
       )}
 
       {item.imageUrl && (
-        <div className="relative w-full h-80 rounded-xl mb-6 overflow-hidden">
+        <div className="relative w-full aspect-[16/9] rounded-2xl mb-6 overflow-hidden bg-cream/40">
           <Image src={item.imageUrl} alt={item.title} fill priority sizes="(max-width: 768px) 100vw, 672px" className="object-cover" unoptimized={!isOptimizableImage(item.imageUrl)} />
         </div>
       )}
 
-      <p className="text-lg text-gray-700 leading-relaxed mb-8">{item.excerpt}</p>
+      <p className="text-lg text-ink/80 leading-relaxed mb-8">{item.excerpt}</p>
 
-      <div className="border-t pt-6">
-        <p className="text-sm text-gray-500 mb-3">
+      <div className="border-t border-hairline pt-6">
+        <p className="text-sm text-muted mb-3">
           Aceasta este o prezentare succintă a articolului. Citește articolul complet la sursă:
         </p>
         <a
           href={item.sourceUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 bg-[#1a4731] text-white px-5 py-3 rounded-lg hover:bg-[#2d6a4f] transition-colors font-medium"
+          className="inline-flex items-center gap-2 bg-ink text-white px-5 py-3 rounded-lg hover:bg-ink-soft transition-colors font-medium"
         >
-          Citește la {item.sourceName} →
+          Citește la {item.sourceName}
+          <ExternalLink className="w-4 h-4" aria-hidden />
         </a>
       </div>
     </article>

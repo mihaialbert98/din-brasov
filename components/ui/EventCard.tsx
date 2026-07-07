@@ -1,6 +1,9 @@
 import Link from "next/link";
 import Image from "next/image";
+import { MapPin, CalendarDays } from "lucide-react";
 import { isOptimizableImage } from "@/lib/utils";
+import { cardShell, cardImageFrame, cardImageZoom } from "@/lib/ui";
+import Badge from "@/components/ui/Badge";
 
 type Props = {
   event: {
@@ -23,11 +26,13 @@ function DateBadge({ startsAt, size = "md" }: { startsAt: Date | null; size?: "s
   const d = new Date(startsAt);
   const day = new Intl.DateTimeFormat("ro-RO", { day: "numeric" }).format(d);
   const month = new Intl.DateTimeFormat("ro-RO", { month: "short" }).format(d);
-  const dim = size === "sm" ? "w-14 h-14 rounded-xl text-xl" : "w-16 h-16 rounded-lg text-xl";
+  const dim = size === "sm" ? "w-14 h-14 rounded-xl" : "w-16 h-16 rounded-xl";
   return (
-    <div className={`flex-shrink-0 ${dim} bg-[#1a4731] text-white flex flex-col items-center justify-center`}>
-      <span className="font-bold leading-none">{day}</span>
-      <span className="text-xs uppercase leading-none mt-0.5">{month}</span>
+    <div
+      className={`flex-shrink-0 ${dim} bg-ink text-white flex flex-col items-center justify-center leading-none`}
+    >
+      <span className="text-xl font-bold tabular-nums">{day}</span>
+      <span className="text-[11px] uppercase tracking-wide mt-1 text-white/80">{month}</span>
     </div>
   );
 }
@@ -39,15 +44,17 @@ function priceLabel(event: Props["event"]) {
 export default function EventCard({ event, compact = false }: Props) {
   if (compact) {
     return (
-      <Link
-        href={`/evenimente/${event.slug}`}
-        className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-shadow p-4 flex gap-4 border border-[#e8d9c5]"
-      >
+      <Link href={`/evenimente/${event.slug}`} className={cardShell("p-4 flex gap-4 items-center")}>
         <DateBadge startsAt={event.startsAt} size="sm" />
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-gray-900 line-clamp-2">{event.title}</h3>
+          <h3 className="font-serif font-semibold text-ink line-clamp-2 leading-snug">
+            {event.title}
+          </h3>
           {event.locationName && (
-            <p className="text-sm text-gray-500 mt-1">📍 {event.locationName}</p>
+            <p className="mt-1 flex items-center gap-1 text-sm text-muted">
+              <MapPin className="w-3.5 h-3.5 flex-shrink-0 text-faint" aria-hidden />
+              <span className="truncate">{event.locationName}</span>
+            </p>
           )}
         </div>
       </Link>
@@ -55,39 +62,47 @@ export default function EventCard({ event, compact = false }: Props) {
   }
 
   return (
-    <Link
-      href={`/evenimente/${event.slug}`}
-      className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col"
-    >
-      {/* Cover image with the date badge overlaid (top-left). When there's no
-          image, fall back to a brand-coloured banner so cards stay uniform. */}
+    <Link href={`/evenimente/${event.slug}`} className={cardShell("flex flex-col")}>
+      {/* Cover with the date badge overlaid; a calm fallback keeps cards uniform. */}
       <div className="relative">
         {event.imageUrl ? (
-          <div className="relative w-full h-44">
-            <Image src={event.imageUrl} alt={event.title} fill sizes="(max-width: 640px) 100vw, 50vw" className="object-cover" unoptimized={!isOptimizableImage(event.imageUrl)} />
+          <div className={cardImageFrame}>
+            <Image
+              src={event.imageUrl}
+              alt={event.title}
+              fill
+              sizes="(max-width: 640px) 100vw, 50vw"
+              className={cardImageZoom}
+              unoptimized={!isOptimizableImage(event.imageUrl)}
+            />
           </div>
         ) : (
-          <div className="w-full h-44 bg-[#1a4731]/10 flex items-center justify-center">
-            <span className="text-5xl opacity-40" aria-hidden>📅</span>
+          <div className="w-full aspect-[3/2] bg-gradient-to-br from-cream/70 to-accent-soft flex items-center justify-center">
+            <CalendarDays className="w-12 h-12 text-accent/40" aria-hidden />
           </div>
         )}
-        <div className="absolute top-3 left-3 shadow-md rounded-lg overflow-hidden">
+        <div className="absolute top-3 left-3 shadow-md rounded-xl overflow-hidden">
           <DateBadge startsAt={event.startsAt} />
         </div>
         {event.category && (
-          <span className="absolute top-3 right-3 bg-white/90 text-[#1a4731] text-xs font-semibold px-2.5 py-1 rounded-full">
-            {event.category}
-          </span>
+          <div className="absolute top-3 right-3">
+            <Badge variant="onImage">{event.category}</Badge>
+          </div>
         )}
       </div>
 
-      <div className="p-5 flex-1">
-        <h2 className="font-semibold text-gray-900 line-clamp-2">{event.title}</h2>
+      <div className="p-5 flex-1 flex flex-col gap-1.5">
+        <h2 className="font-serif font-semibold text-lg text-ink line-clamp-2 leading-snug">
+          {event.title}
+        </h2>
         {event.locationName && (
-          <p className="text-sm text-gray-500 mt-1">📍 {event.locationName}</p>
+          <p className="flex items-center gap-1 text-sm text-muted">
+            <MapPin className="w-3.5 h-3.5 flex-shrink-0 text-faint" aria-hidden />
+            <span className="truncate">{event.locationName}</span>
+          </p>
         )}
         {priceLabel(event) && (
-          <p className="text-sm text-[#d4820a] mt-1 font-medium">{priceLabel(event)}</p>
+          <p className="mt-1 text-sm font-semibold text-accent tabular-nums">{priceLabel(event)}</p>
         )}
       </div>
     </Link>

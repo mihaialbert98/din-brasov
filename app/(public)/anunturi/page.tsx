@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Plus } from "lucide-react";
 import { searchListings, type ListingSort } from "@/lib/search";
 import { auth } from "@/lib/auth";
 import CategoryFilter from "@/components/ui/CategoryFilter";
 import ListingCard from "@/components/ui/ListingCard";
 import Pagination from "@/components/ui/Pagination";
 import SortSelect from "@/components/ui/SortSelect";
+import PageHeader from "@/components/ui/PageHeader";
+import EmptyState from "@/components/ui/EmptyState";
 import { pageMetadata } from "@/lib/seo";
 
 export const metadata: Metadata = pageMetadata({
@@ -57,25 +60,29 @@ export default async function AnunturiPage({
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-10">
-      <div className="flex items-center justify-between mb-8 gap-3">
-        <h1 className="text-2xl sm:text-3xl font-bold font-serif text-[#1a4731]">Anunțuri</h1>
-        {session ? (
-          <Link
-            href="/anunturi/nou"
-            className="bg-[#d4820a] text-white font-semibold px-4 sm:px-5 py-2.5 sm:py-3 rounded-lg hover:bg-[#e8a020] transition-colors text-sm sm:text-base whitespace-nowrap"
-          >
-            + Adaugă anunț
-          </Link>
-        ) : (
-          <Link
-            href="/intra"
-            className="border border-[#d4820a] text-[#d4820a] font-semibold px-4 sm:px-5 py-2.5 sm:py-3 rounded-lg hover:bg-amber-50 transition-colors text-sm sm:text-base whitespace-nowrap"
-          >
-            <span className="hidden sm:inline">Intră în cont pentru a posta</span>
-            <span className="sm:hidden">Intră în cont</span>
-          </Link>
-        )}
-      </div>
+      <PageHeader
+        title="Anunțuri"
+        subtitle="Cumpără și vinde în Brașov — de la oameni reali, fără spam."
+        action={
+          session ? (
+            <Link
+              href="/anunturi/nou"
+              className="inline-flex items-center gap-1.5 bg-accent text-white font-semibold px-4 sm:px-5 py-2.5 sm:py-3 rounded-lg hover:bg-accent-hover transition-colors text-sm sm:text-base whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4" aria-hidden />
+              Adaugă anunț
+            </Link>
+          ) : (
+            <Link
+              href="/intra"
+              className="inline-flex items-center border border-accent text-accent font-semibold px-4 sm:px-5 py-2.5 sm:py-3 rounded-lg hover:bg-accent-soft transition-colors text-sm sm:text-base whitespace-nowrap"
+            >
+              <span className="hidden sm:inline">Intră în cont pentru a posta</span>
+              <span className="sm:hidden">Intră în cont</span>
+            </Link>
+          )
+        }
+      />
 
       <CategoryFilter
         categories={CATEGORIES}
@@ -86,13 +93,13 @@ export default async function AnunturiPage({
 
       {/* Sort + results count bar */}
       <div className="flex items-center justify-between gap-4 mt-5 mb-4">
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-muted tabular-nums">
           {total > 0 ? (
             <>{total} {total === 1 ? "anunț" : "anunțuri"}</>
           ) : null}
         </p>
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500 hidden sm:inline">Sortare:</span>
+          <span className="text-sm text-muted hidden sm:inline">Sortare:</span>
           <SortSelect
             options={SORT_OPTIONS}
             value={sort}
@@ -106,7 +113,7 @@ export default async function AnunturiPage({
       </div>
 
       {listings.length === 0 ? (
-        <p className="text-gray-500 text-center py-20">Nu am găsit anunțuri.</p>
+        <EmptyState message="Nu am găsit anunțuri." hint="Încearcă altă categorie sau caută altceva." />
       ) : (
         <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-5">
           {listings.map((listing) => (

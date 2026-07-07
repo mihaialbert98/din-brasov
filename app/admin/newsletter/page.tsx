@@ -48,7 +48,7 @@ export default async function AdminNewsletterPage({
         <p className="text-gray-500 py-12 text-center">Niciun abonat activ momentan.</p>
       ) : (
         <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm min-w-[560px]">
             <thead>
               <tr className="border-b border-gray-100 text-left text-gray-500">
                 <th className="px-4 py-3 font-medium">Email</th>

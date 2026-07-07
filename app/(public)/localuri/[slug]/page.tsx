@@ -1,9 +1,11 @@
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import { eq } from "drizzle-orm";
+import { MapPin, Phone, Globe } from "lucide-react";
 import { db } from "@/lib/db";
 import { places } from "@/lib/db/schema";
 import type { Metadata } from "next";
+import Badge from "@/components/ui/Badge";
 import JsonLd from "@/components/seo/JsonLd";
 import { pageMetadata, localBusinessJsonLd, breadcrumbJsonLd } from "@/lib/seo";
 
@@ -60,32 +62,39 @@ export default async function LocalPage({ params }: Props) {
         ]}
       />
       {images[0] && (
-        <div className="relative w-full h-80 rounded-xl mb-6 overflow-hidden">
+        <div className="relative w-full aspect-[16/9] rounded-2xl mb-6 overflow-hidden bg-cream/40">
           <Image src={images[0]} alt={place.name} fill priority sizes="(max-width: 768px) 100vw, 672px" className="object-cover" />
         </div>
       )}
       {place.category && (
-        <span className="text-xs bg-green-100 text-green-800 px-3 py-1 rounded-full font-medium">
+        <Badge variant="category" category={place.category}>
           {place.category}
-        </span>
+        </Badge>
       )}
-      <h1 className="text-3xl font-bold font-serif text-gray-900 mt-3 mb-4">{place.name}</h1>
+      <h1 className="text-3xl sm:text-4xl font-semibold font-serif text-ink mt-3 mb-4 leading-tight">{place.name}</h1>
 
-      <div className="bg-white rounded-xl p-5 mb-6 shadow-sm space-y-2 text-gray-700">
-        {place.address && <p>📍 {place.address}</p>}
+      <div className="bg-surface rounded-2xl border border-hairline p-5 mb-6 space-y-2.5 text-ink/80">
+        {place.address && (
+          <p className="flex items-center gap-2">
+            <MapPin className="w-4 h-4 flex-shrink-0 text-accent" aria-hidden />
+            <span>{place.address}</span>
+          </p>
+        )}
         {place.phone && (
-          <a href={`tel:${place.phone}`} className="flex items-center gap-2 hover:underline">
-            📞 {place.phone}
+          <a href={`tel:${place.phone}`} className="flex items-center gap-2 hover:text-accent transition-colors">
+            <Phone className="w-4 h-4 flex-shrink-0 text-accent" aria-hidden />
+            <span>{place.phone}</span>
           </a>
         )}
         {place.website && (
-          <a href={place.website} target="_blank" rel="noopener noreferrer" className="text-[#d4820a] hover:underline">
-            🌐 {place.website}
+          <a href={place.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-accent hover:text-accent-hover transition-colors">
+            <Globe className="w-4 h-4 flex-shrink-0" aria-hidden />
+            <span className="truncate">{place.website}</span>
           </a>
         )}
       </div>
 
-      <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{place.description}</p>
+      <p className="text-ink/80 leading-relaxed whitespace-pre-wrap">{place.description}</p>
     </article>
   );
 }

@@ -135,8 +135,8 @@ export default async function AdminAnunturiPage({
           </Link>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
             <thead className="bg-gray-50 border-b">
               <tr>
                 <th className="text-left p-3 font-semibold text-gray-600">Titlu</th>
