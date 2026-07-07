@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { MenuDesignId } from "@/lib/menu-themes";
+import MenuAccountCta from "@/components/restaurant/MenuAccountCta";
 
 export type MenuLang = "ro" | "en";
 
@@ -53,6 +54,7 @@ export default function MenuView({
   categories,
   lang,
   onLangChange,
+  showAccountCta = false,
 }: {
   design: MenuDesignId;
   restaurantName: string;
@@ -62,6 +64,7 @@ export default function MenuView({
   categories: MenuViewCategory[];
   lang: MenuLang;
   onLangChange: (l: MenuLang) => void;
+  showAccountCta?: boolean;
 }) {
   const [activeId, setActiveId] = useState(categories[0]?.id ?? "");
   const [sheetItem, setSheetItem] = useState<MenuViewItem | null>(null);
@@ -184,6 +187,8 @@ export default function MenuView({
             {isCompact && <CompactList items={cat.items} lang={lang} onOpen={open} />}
           </section>
         ))}
+
+        {showAccountCta && <MenuAccountCta lang={lang} variant="footer" />}
 
         <footer className="text-center mt-14" style={{ color: "var(--menu-faint)" }}>
           <p className="text-[10px] uppercase tracking-[0.18em] font-medium">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import MenuAccountCta from "@/components/restaurant/MenuAccountCta";
 
 type RequestType = "call_waiter" | "request_check";
 type PaymentMethod = "cash" | "card";
@@ -39,10 +40,12 @@ export default function ServiceButtons({
   token,
   disabled = false,
   lang = "ro",
+  showAccountCta = false,
 }: {
   token: string;
   disabled?: boolean;
   lang?: Lang;
+  showAccountCta?: boolean;
 }) {
   const L = LABELS[lang];
   const [pending, setPending] = useState<RequestType | null>(null);
@@ -151,6 +154,8 @@ export default function ServiceButtons({
             </button>
           </div>
         )}
+        {/* After a request lands, use the idle "it worked" moment for a soft nudge. */}
+        {sent && showAccountCta && <MenuAccountCta lang={lang} variant="inline" />}
       </div>
       {error && (
         <p className="max-w-md mx-auto text-center text-xs mt-2" style={{ color: "#dc2626" }}>

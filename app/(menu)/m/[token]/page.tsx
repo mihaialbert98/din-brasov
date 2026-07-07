@@ -7,6 +7,7 @@ import {
   menuItems,
 } from "@/lib/db/schema";
 import { eq, and, asc } from "drizzle-orm";
+import { auth } from "@/lib/auth";
 import ServiceButtons from "@/components/restaurant/ServiceButtons";
 import MenuShell from "@/components/restaurant/MenuShell";
 import { type MenuViewCategory } from "@/components/restaurant/MenuView";
@@ -45,6 +46,11 @@ export default async function ScannedMenuPage({ params }: Props) {
   const ctx = await getMenuContext(token);
   // Unknown token, or restaurant suspended → not found (no menu shown).
   if (!ctx || ctx.restaurantStatus !== "active") notFound();
+
+  // Invite only diners who aren't already members (page is force-dynamic, so this
+  // session read is cheap and never cached across users).
+  const session = await auth().catch(() => null);
+  const showAccountCta = !session?.user;
 
   const [categories, items] = await Promise.all([
     db
@@ -114,7 +120,7 @@ export default async function ScannedMenuPage({ params }: Props) {
           <p className="text-center text-sm mt-16 px-4" style={{ color: "var(--menu-faint)" }}>
             Meniul nu este disponibil momentan.
           </p>
-          <ServiceButtons token={token} disabled={!ctx.tableActive} />
+          <ServiceButtons token={token} disabled={!ctx.tableActive} showAccountCta={showAccountCta} />
         </>
       ) : (
         <MenuShell
@@ -126,6 +132,7 @@ export default async function ScannedMenuPage({ params }: Props) {
           logoUrl={ctx.logoUrl}
           coverUrl={ctx.coverUrl}
           categories={grouped}
+          showAccountCta={showAccountCta}
         />
       )}
     </div>
