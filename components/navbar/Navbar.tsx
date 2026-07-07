@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { conversations, messages } from "@/lib/db/schema";
@@ -57,12 +58,13 @@ export async function Navbar() {
           aria-label="Din Brașov — pagina principală"
         >
           <span className="block w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
-            <img
+            <Image
               src="/logo.png"
               alt="Din Brașov"
               width={40}
               height={40}
-              className="w-full h-full object-cover"
+              priority
+              className="w-full h-full object-cover scale-105"
             />
           </span>
           <span className="font-bold text-xl tracking-tight">
