@@ -1,12 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState, useEffect } from "react";
+import { signIn } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import FoundingMemberBanner from "@/components/promo/FoundingMemberBanner";
 
-export default function ContNouPage() {
+const googleEnabled = process.env.NEXT_PUBLIC_GOOGLE_AUTH_ENABLED === "true";
+
+function ContNouForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Diners arrive from the menu with ?callbackUrl=/ so they return to the platform
+  // after a one-tap Google signup. Default to home for direct visitors.
+  const callbackUrl = searchParams.get("callbackUrl") || "/";
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [spotsLeft, setSpotsLeft] = useState<number | null>(null);
@@ -67,6 +74,30 @@ export default function ContNouPage() {
 
       {spotsLeft !== null && spotsLeft > 0 && (
         <FoundingMemberBanner spotsLeft={spotsLeft} variant="compact" />
+      )}
+
+      {/* Google-first: one tap, no password, no email confirmation. */}
+      {googleEnabled && (
+        <div className="mb-5">
+          <button
+            type="button"
+            onClick={() => signIn("google", { callbackUrl })}
+            className="w-full flex items-center justify-center gap-3 border border-gray-300 bg-white text-gray-700 font-semibold py-3 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24" aria-hidden>
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84z"/>
+              <path fill="#EA4335" d="M12 4.75c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 1.48 14.97.5 12 .5A11 11 0 0 0 2.18 7.06l3.66 2.84C6.71 6.68 9.14 4.75 12 4.75z"/>
+            </svg>
+            Continuă cu Google
+          </button>
+          <div className="flex items-center gap-3 my-5">
+            <span className="h-px flex-1 bg-gray-200" />
+            <span className="text-xs text-gray-400 uppercase tracking-wide">sau cu email</span>
+            <span className="h-px flex-1 bg-gray-200" />
+          </div>
+        </div>
       )}
 
       <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm p-6 space-y-5">
@@ -150,5 +181,13 @@ export default function ContNouPage() {
         </Link>
       </p>
     </div>
+  );
+}
+
+export default function ContNouPage() {
+  return (
+    <Suspense fallback={null}>
+      <ContNouForm />
+    </Suspense>
   );
 }

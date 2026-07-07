@@ -18,6 +18,7 @@ export default function MenuShell({
   logoUrl,
   coverUrl,
   categories,
+  showAccountCta = false,
 }: {
   token: string;
   tableActive: boolean;
@@ -27,6 +28,7 @@ export default function MenuShell({
   logoUrl: string | null;
   coverUrl?: string | null;
   categories: MenuViewCategory[];
+  showAccountCta?: boolean;
 }) {
   const [lang, setLang] = useState<MenuLang>("ro");
 
@@ -41,8 +43,9 @@ export default function MenuShell({
         categories={categories}
         lang={lang}
         onLangChange={setLang}
+        showAccountCta={showAccountCta}
       />
-      <ServiceButtons token={token} disabled={!tableActive} lang={lang} />
+      <ServiceButtons token={token} disabled={!tableActive} lang={lang} showAccountCta={showAccountCta} />
     </>
   );
 }
