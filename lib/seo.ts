@@ -6,6 +6,7 @@
  * https://dinbrasov.com) → NEXTAUTH_URL (dev/preview) → localhost.
  */
 import type { Metadata } from "next";
+import { INSTAGRAM_URL, FACEBOOK_URL } from "@/lib/contact";
 
 export const SITE_URL = (
   process.env.NEXT_PUBLIC_SITE_URL ??
@@ -90,7 +91,7 @@ export function organizationJsonLd() {
     name: SITE_NAME,
     url: SITE_URL,
     logo: absoluteUrl("/logo.png"),
-    sameAs: ["https://www.instagram.com/din_brasov/"],
+    sameAs: [INSTAGRAM_URL, FACEBOOK_URL],
   };
 }
 
