@@ -19,6 +19,7 @@ import { lt, eq, and, isNotNull } from "drizzle-orm";
 import {
   hardDeleteExpiredUsers,
   hardDeleteExpiredListings,
+  hardDeleteDisabledListings,
   hardDeleteOldNews,
   hardDeleteEndedEvents,
 } from "@/lib/gdpr";
@@ -35,15 +36,20 @@ export async function GET(req: Request) {
 
   const now = new Date();
 
-  // 1. Soft-expire active listings past their expiry date
+  // 1. Auto-disable active listings past their expiry date. Disabled = hidden from
+  //    the public but still visible to owner + admins, and owner-reactivatable.
   const expired = await db
     .update(listings)
-    .set({ status: "expired", updatedAt: now })
+    .set({ status: "disabled", disabledAt: now, updatedAt: now })
     .where(and(eq(listings.status, "active"), lt(listings.expiresAt, now)))
     .returning({ id: listings.id });
 
-  // 2. Hard-delete expired listings past the 30-day grace period (includes Uploadthing image cleanup)
+  // 2a. Hard-delete legacy `expired` listings past the 7-day grace period.
   const deletedListings = await hardDeleteExpiredListings();
+
+  // 2b. Hard-delete listings disabled for more than 30 days (aged-out, owner-off,
+  //     or account-deletion orphans). Includes Uploadthing image cleanup.
+  const deletedDisabled = await hardDeleteDisabledListings();
 
   // 3. Hard-delete users past the 30-day deletion grace period
   const deletedUsers = await hardDeleteExpiredUsers();
@@ -69,8 +75,9 @@ export async function GET(req: Request) {
 
   return NextResponse.json({
     ok: true,
-    expiredListings: expired.length,
+    disabledListings: expired.length,
     deletedListings,
+    deletedDisabled,
     deletedUsers,
     deletedDraftNews: deletedDrafts.length,
     deletedOldNews,

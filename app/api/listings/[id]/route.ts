@@ -142,8 +142,13 @@ export async function DELETE(
     return NextResponse.json({ error: "Neautorizat." }, { status: 403 });
   }
 
-  // Owner can delete their own active or expired listings
-  if (isOwner && !isAdmin && listing.status !== "active" && listing.status !== "expired") {
+  // Owner can delete their own active, expired, or disabled listings
+  if (
+    isOwner && !isAdmin &&
+    listing.status !== "active" &&
+    listing.status !== "expired" &&
+    listing.status !== "disabled"
+  ) {
     return NextResponse.json({ error: "Nu poți șterge acest anunț." }, { status: 400 });
   }
 

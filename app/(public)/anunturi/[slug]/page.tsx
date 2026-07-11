@@ -32,7 +32,7 @@ async function getListing(slug: string) {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const item = await getListing(slug);
-  if (!item || item.status === "removed" || item.status === "suspended") {
+  if (!item || item.status === "removed" || item.status === "suspended" || item.status === "disabled") {
     return { title: "Anunț negăsit" };
   }
   const images: string[] = item.imagesJson ? JSON.parse(item.imagesJson) : [];
@@ -56,6 +56,12 @@ export default async function AnuntPage({ params, searchParams }: Props) {
   const images: string[] = listing.imagesJson ? JSON.parse(listing.imagesJson) : [];
   const isSuspended = listing.status === "suspended";
   const isOwner = !!session?.user?.id && session.user.id === listing.sellerId;
+  const role = (session?.user as { role?: string } | undefined)?.role;
+  const isAdmin = role === "admin" || role === "moderator";
+
+  // Disabled listings are private: visible only to their owner and to admins.
+  // Everyone else gets a 404 (the listing is hidden from the public).
+  if (listing.status === "disabled" && !isOwner && !isAdmin) notFound();
 
   const favouriteCount = isOwner
     ? await db
@@ -144,21 +150,33 @@ export default async function AnuntPage({ params, searchParams }: Props) {
       {!isSuspended && listing.status === "active" && (
         <div className="bg-ink text-white rounded-2xl p-6 mb-6">
           <h2 className="font-serif font-semibold text-lg mb-4">Contact vânzător</h2>
-          <div className="flex flex-col gap-3">
-            {listing.contactPhone && (
-              <RevealPhoneButton listingId={listing.id} />
-            )}
-            {listing.sellerId && (
-              <ContactSellerButton
-                listingId={listing.id}
-                listingTitle={listing.title}
-              />
-            )}
-          </div>
-          <p className="flex items-center gap-1.5 text-xs text-white/50 mt-4">
-            <Lock className="w-3.5 h-3.5 flex-shrink-0" aria-hidden />
-            Numărul de telefon este protejat. Autentifică-te pentru a-l vedea.
-          </p>
+          {listing.contactPhone || listing.sellerId ? (
+            <>
+              <div className="flex flex-col gap-3">
+                {listing.contactPhone && (
+                  <RevealPhoneButton listingId={listing.id} />
+                )}
+                {listing.sellerId && (
+                  <ContactSellerButton
+                    listingId={listing.id}
+                    listingTitle={listing.title}
+                  />
+                )}
+              </div>
+              {/* Only mention the protected number when there actually is one. */}
+              {listing.contactPhone && (
+                <p className="flex items-center gap-1.5 text-xs text-white/50 mt-4">
+                  <Lock className="w-3.5 h-3.5 flex-shrink-0" aria-hidden />
+                  Numărul de telefon este protejat. Autentifică-te pentru a-l vedea.
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="flex items-center gap-1.5 text-sm text-white/70">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" aria-hidden />
+              Acest anunț nu are date de contact disponibile momentan.
+            </p>
+          )}
         </div>
       )}
 

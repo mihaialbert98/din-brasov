@@ -2,6 +2,7 @@ const LISTING_STATUS: Record<string, string> = {
   active: "bg-green-100 text-green-700",
   sold: "bg-blue-100 text-blue-700",
   expired: "bg-gray-100 text-gray-500",
+  disabled: "bg-gray-200 text-gray-700",
   suspended: "bg-red-100 text-red-700",
   removed: "bg-gray-100 text-gray-400",
   draft: "bg-amber-100 text-amber-700",

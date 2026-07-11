@@ -1,15 +1,18 @@
 import { db } from "@/lib/db";
 import { users, userReports, listings } from "@/lib/db/schema";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, count } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { formatDate } from "@/lib/utils";
 import Link from "next/link";
 import { OpenSupportButton } from "@/components/admin/OpenSupportButton";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import Pagination from "@/components/ui/Pagination";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Admin — Utilizatori" };
+
+const PAGE_SIZE = 30;
 
 const ROLE_LABELS: Record<string, string> = {
   user: "Utilizator",
@@ -19,11 +22,17 @@ const ROLE_LABELS: Record<string, string> = {
   restaurant_admin: "Admin restaurant",
 };
 
-export default async function UtilizatoriPage() {
+export default async function UtilizatoriPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ pagina?: string }>;
+}) {
   const session = await auth();
   const role = (session?.user as any)?.role;
   if (role !== "admin" && role !== "moderator") redirect("/admin");
   const isAdmin = role === "admin";
+  const params = await searchParams;
+  const page = Math.max(1, parseInt(params.pagina ?? "1"));
 
   // Pending user reports with context
   const pendingReports = await db
@@ -57,19 +66,26 @@ export default async function UtilizatoriPage() {
     })
   );
 
-  const allUsers = await db
-    .select({
-      id: users.id,
-      name: users.name,
-      email: users.email,
-      role: users.role,
-      createdAt: users.createdAt,
-      deletedAt: users.deletedAt,
-      deletionRequestedAt: users.deletionRequestedAt,
-      bannedUntil: users.bannedUntil,
-    })
-    .from(users)
-    .orderBy(desc(users.createdAt));
+  const [allUsers, [{ total }]] = await Promise.all([
+    db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        role: users.role,
+        createdAt: users.createdAt,
+        deletedAt: users.deletedAt,
+        deletionRequestedAt: users.deletionRequestedAt,
+        bannedUntil: users.bannedUntil,
+      })
+      .from(users)
+      .orderBy(desc(users.createdAt))
+      .limit(PAGE_SIZE)
+      .offset((page - 1) * PAGE_SIZE),
+    db.select({ total: count() }).from(users),
+  ]);
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
     <div className="space-y-8">
@@ -143,7 +159,7 @@ export default async function UtilizatoriPage() {
       <section>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-base font-semibold text-gray-700">Toți utilizatorii</h2>
-          <span className="text-sm text-gray-500">{allUsers.length} total</span>
+          <span className="text-sm text-gray-500">{total} total</span>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
@@ -233,6 +249,12 @@ export default async function UtilizatoriPage() {
             </tbody>
           </table>
         </div>
+
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          buildHref={(p) => `/admin/utilizatori${p > 1 ? `?pagina=${p}` : ""}`}
+        />
       </section>
     </div>
   );

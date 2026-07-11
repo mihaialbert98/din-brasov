@@ -7,12 +7,14 @@ import { users, paidSlots, listings } from "@/lib/db/schema";
 import { count, isNull, eq, and, gt, inArray } from "drizzle-orm";
 
 /**
- * Listing statuses that occupy a slot: `active` and `expired` (still in the
- * renewal grace window). `sold`/`removed`/`suspended` do not — so deleting or
- * fully expiring a listing frees a slot. Single source of truth; reused by the
- * create API, the new-listing form, and the profile.
+ * Listing statuses that occupy a slot: `active` and `disabled`. A disabled
+ * listing is reclaimable by the owner (reactivate → active), so it must keep
+ * holding its slot — otherwise disabling would be a free-quota bypass (turn off
+ * N, post N more). `sold`/`removed`/`suspended`/legacy-`expired` do not occupy a
+ * slot. Single source of truth; reused by the create API, new-listing form,
+ * reactivate route, and the profile.
  */
-export const SLOT_STATUSES = ["active", "expired"] as const;
+export const SLOT_STATUSES = ["active", "disabled"] as const;
 
 /**
  * Whether a role is exempt from listing/boost payments (unlimited free listings,
@@ -105,8 +107,8 @@ export async function findReusablePaidSlot(
 }
 
 /**
- * Count the user's CURRENT free listings (non-paid, active or expired-in-grace) —
- * the basis for the free-quota check. Paid listings sit above the free allowance
+ * Count the user's CURRENT free listings (non-paid, active or disabled) — the
+ * basis for the free-quota check. Paid listings sit above the free allowance
  * (tracked via paid_slots) so they're excluded here.
  */
 export async function countFreeListings(userId: string): Promise<number> {

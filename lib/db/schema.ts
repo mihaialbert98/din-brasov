@@ -205,8 +205,12 @@ export const listings = pgTable(
     sellerId: text("seller_id").references(() => users.id),
     contactPhone: text("contact_phone"),
     contactEmail: text("contact_email"),
-    status: text("status").notNull().default("active"), // active | sold | expired | removed | suspended
+    status: text("status").notNull().default("active"), // active | sold | expired | disabled | removed | suspended
     expiresAt: timestamp("expires_at", { mode: "date" }),
+    // When the listing entered the `disabled` state (aged-out, owner-turned-off, or
+    // orphaned by account deletion). Drives the 30-day auto-delete clock; cleared
+    // (null) when the owner reactivates. Cannot reuse expiresAt for this timing.
+    disabledAt: timestamp("disabled_at", { mode: "date" }),
     isBoosted: boolean("is_boosted").notNull().default(false),
     boostedUntil: timestamp("boosted_until", { mode: "date" }),
     // Paid listing (purchased a slot, above the free allowance). isPaid drives the
@@ -224,6 +228,7 @@ export const listings = pgTable(
     index("listings_search_idx").on(t.searchVector),
     index("listings_status_idx").on(t.status),
     index("listings_expires_at_idx").on(t.expiresAt),
+    index("listings_disabled_at_idx").on(t.disabledAt),
     index("listings_seller_idx").on(t.sellerId),
     index("listings_city_idx").on(t.city),
   ]
