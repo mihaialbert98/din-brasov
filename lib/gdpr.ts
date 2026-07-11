@@ -39,8 +39,14 @@ export const RETENTION = {
 
   /** Expired listings: retained for 7 days post-expiry so the owner can renew.
    *  Contact data is kept in DB during this window but never shown publicly.
-   *  After 7 days with no renewal, listing is hard-deleted including photos. */
+   *  After 7 days with no renewal, listing is hard-deleted including photos.
+   *  Legacy path — new listings age out into `disabled`, not `expired`. */
   LISTING_POST_EXPIRY_DAYS: 7,
+
+  /** Disabled listings (aged-out, owner-turned-off, or orphaned by account
+   *  deletion): kept for 30 days so the owner can reactivate, then hard-deleted
+   *  including photos. Measured from disabledAt. */
+  LISTING_DISABLED_DAYS: 30,
 
   /** Assisted listing consent logs: kept for life of listing + 3 years
    *  (Romanian Civil Code limitation period) to defend against complaints. */
@@ -112,13 +118,20 @@ export async function requestUserDeletion(userId: string): Promise<void> {
  * Based on: GDPR Art. 17, Russmedia joint controller obligations (CJEU C-492/23).
  */
 export async function anonymiseUserListings(userId: string): Promise<void> {
+  const now = new Date();
   await db
     .update(listings)
     .set({
       contactPhone: null,
       contactEmail: null,
       sellerId: null,
-      updatedAt: new Date(),
+      // Take the listing out of circulation: with the seller gone and contact
+      // data stripped, an "active" listing would be uncontactable but still
+      // publicly visible. Disable it (hidden from public); the disabled-30-day
+      // sweep then hard-deletes it. Seller is null, so nobody can reactivate it.
+      status: "disabled",
+      disabledAt: now,
+      updatedAt: now,
     })
     .where(eq(listings.sellerId, userId));
 }
@@ -186,6 +199,48 @@ export async function hardDeleteExpiredListings(): Promise<number> {
       return (JSON.parse(l.imagesJson ?? "[]") as string[])
         .map((u) => u.split("/f/")[1])
         .filter(Boolean);
+    } catch {
+      return [];
+    }
+  });
+
+  if (keys.length) {
+    await new UTApi().deleteFiles(keys);
+  }
+
+  await db
+    .delete(listings)
+    .where(inArray(listings.id, dead.map((l) => l.id)));
+
+  return dead.length;
+}
+
+/**
+ * Hard-delete listings that have been `disabled` for more than
+ * RETENTION.LISTING_DISABLED_DAYS (measured from disabledAt).
+ *
+ * Covers every way a listing enters `disabled`: aged out at expiry, turned off by
+ * the owner, or orphaned by account deletion (seller nulled). Uploadthing images
+ * are removed first, then the DB row (cascade clears favourites, reports, phone
+ * reveals, assisted consent logs). Same pattern as hardDeleteExpiredListings().
+ */
+export async function hardDeleteDisabledListings(): Promise<number> {
+  const cutoff = new Date(
+    Date.now() - RETENTION.LISTING_DISABLED_DAYS * 24 * 60 * 60 * 1000
+  );
+
+  const dead = await db
+    .select({ id: listings.id, imagesJson: listings.imagesJson })
+    .from(listings)
+    .where(and(eq(listings.status, "disabled"), lte(listings.disabledAt, cutoff)));
+
+  if (dead.length === 0) return 0;
+
+  const keys = dead.flatMap((l) => {
+    try {
+      return (JSON.parse(l.imagesJson ?? "[]") as string[])
+        .map((u) => uploadthingKey(u))
+        .filter((k): k is string => Boolean(k));
     } catch {
       return [];
     }

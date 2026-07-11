@@ -5,26 +5,36 @@ import Link from "next/link";
 import { formatDate } from "@/lib/utils";
 import { auth } from "@/lib/auth";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import Pagination from "@/components/ui/Pagination";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Admin — Anunțuri" };
 
 const STATUS_LABELS: Record<string, string> = {
   active: "Activ", suspended: "Suspendat", sold: "Vândut",
-  expired: "Expirat", removed: "Șters",
+  expired: "Expirat", disabled: "Dezactivat", removed: "Șters",
 };
+
+const PAGE_SIZE = 30;
 
 export default async function AdminAnunturiPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; pagina?: string }>;
 }) {
   const session = await auth();
   const role = (session?.user as any)?.role as string;
   const params = await searchParams;
   const statusFilter = params.status ?? "all";
+  const page = Math.max(1, parseInt(params.pagina ?? "1"));
 
-  const [flaggedMessages, allListings, reportCounts] = await Promise.all([
+  // Shared WHERE for the listings table + its count (keep them in sync).
+  const listingsWhere =
+    statusFilter === "all"
+      ? ne(listings.status, "removed")
+      : eq(listings.status, statusFilter);
+
+  const [flaggedMessages, allListings, [{ total }], reportCounts] = await Promise.all([
     // Flagged messages (URL-containing scam attempts)
     db
       .select({ id: messages.id, body: messages.body, createdAt: messages.createdAt })
@@ -33,7 +43,7 @@ export default async function AdminAnunturiPage({
       .orderBy(desc(messages.createdAt))
       .limit(20),
 
-    // Listings with seller name
+    // Listings with seller name (paginated)
     db
       .select({
         id: listings.id,
@@ -49,13 +59,13 @@ export default async function AdminAnunturiPage({
         createdAt: listings.createdAt,
       })
       .from(listings)
-      .where(
-        statusFilter === "all"
-          ? ne(listings.status, "removed")
-          : eq(listings.status, statusFilter)
-      )
+      .where(listingsWhere)
       .orderBy(desc(listings.createdAt))
-      .limit(50),
+      .limit(PAGE_SIZE)
+      .offset((page - 1) * PAGE_SIZE),
+
+    // Total for the current filter (drives pagination)
+    db.select({ total: count() }).from(listings).where(listingsWhere),
 
     // Report counts per listing
     db
@@ -63,6 +73,8 @@ export default async function AdminAnunturiPage({
       .from(listingReports)
       .groupBy(listingReports.listingId),
   ]);
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   const reportMap = Object.fromEntries(reportCounts.map((r) => [r.listingId, r.c]));
 
@@ -80,6 +92,7 @@ export default async function AdminAnunturiPage({
   const tabs = [
     { key: "all", label: "Toate" },
     { key: "active", label: "Active" },
+    { key: "disabled", label: "Dezactivate" },
     { key: "suspended", label: "Suspendate" },
     { key: "expired", label: "Expirate" },
     { key: "sold", label: "Vândute" },
@@ -212,6 +225,17 @@ export default async function AdminAnunturiPage({
             </tbody>
           </table>
         </div>
+
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          buildHref={(p) => {
+            const parts: string[] = [];
+            if (statusFilter !== "all") parts.push(`status=${statusFilter}`);
+            if (p > 1) parts.push(`pagina=${p}`);
+            return `/admin/anunturi${parts.length ? `?${parts.join("&")}` : ""}`;
+          }}
+        />
       </section>
     </div>
   );
