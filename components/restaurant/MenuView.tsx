@@ -252,9 +252,11 @@ function Hero({
                 <span className="h-px w-6 bg-white/45" />
               </div>
             )}
-            <p className={`text-white/85 text-[11px] font-semibold uppercase tracking-[0.2em] ${elegant ? "mt-3" : "mt-2"}`}>
-              {tableLabel}
-            </p>
+            {tableLabel && (
+              <p className={`text-white/85 text-[11px] font-semibold uppercase tracking-[0.2em] ${elegant ? "mt-3" : "mt-2"}`}>
+                {tableLabel}
+              </p>
+            )}
           </div>
         </div>
       </header>
@@ -275,12 +277,14 @@ function Hero({
         {restaurantName}
       </h1>
       {design === "elegant" && <Ornament onBrand />}
-      <p
-        className={`text-[11px] font-semibold uppercase tracking-[0.2em] ${design === "elegant" ? "mt-3" : "mt-2"}`}
-        style={{ color: "color-mix(in srgb, var(--brand-contrast) 88%, transparent)" }}
-      >
-        {tableLabel}
-      </p>
+      {tableLabel && (
+        <p
+          className={`text-[11px] font-semibold uppercase tracking-[0.2em] ${design === "elegant" ? "mt-3" : "mt-2"}`}
+          style={{ color: "color-mix(in srgb, var(--brand-contrast) 88%, transparent)" }}
+        >
+          {tableLabel}
+        </p>
+      )}
     </header>
   );
 }

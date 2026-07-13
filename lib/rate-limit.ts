@@ -1,6 +1,6 @@
 import { createHash } from "crypto";
 import { db } from "@/lib/db";
-import { phoneReveals, messages, newsletterSubscribers, serviceRequests } from "@/lib/db/schema";
+import { phoneReveals, messages, newsletterSubscribers, serviceRequests, reservations } from "@/lib/db/schema";
 import { eq, and, gt, count } from "drizzle-orm";
 
 export function hashIp(ip: string): string {
@@ -84,6 +84,19 @@ export async function checkServiceRequestLimit(tableId: string): Promise<boolean
     .from(serviceRequests)
     .where(and(eq(serviceRequests.tableId, tableId), gt(serviceRequests.createdAt, since)));
   return (row?.c ?? 0) < 6;
+}
+
+/**
+ * Anti-spam for the anonymous public reservation form: cap bookings per phone
+ * number to 5 per hour. Stops a bot/prankster flooding a restaurant's board.
+ */
+export async function checkReservationLimit(guestPhone: string): Promise<boolean> {
+  const since = new Date(Date.now() - 60 * 60 * 1000);
+  const [row] = await db
+    .select({ c: count() })
+    .from(reservations)
+    .where(and(eq(reservations.guestPhone, guestPhone), gt(reservations.createdAt, since)));
+  return (row?.c ?? 0) < 5;
 }
 
 /** URL detection — scam messages almost always contain links */

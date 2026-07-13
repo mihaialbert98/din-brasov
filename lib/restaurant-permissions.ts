@@ -128,6 +128,24 @@ export async function authorizeMenuEdit(
   return { userId };
 }
 
+/**
+ * Gate for RESERVATION-SETTINGS mutations (enable, mode, hours, capacity). Owner
+ * or platform admin — NO 2FA unlock (unlike the menu editor). Reservation settings
+ * are configured by the owner on their own device, not the shared service screen.
+ */
+export async function authorizeReservationSettings(
+  session: { user?: { id?: string } } | null,
+  platformRole: string | null | undefined,
+  restaurantId: string
+): Promise<{ userId: string } | { error: string; status: 401 | 403 }> {
+  const userId = session?.user?.id;
+  if (!userId) return { error: "Neautorizat", status: 401 };
+  if (!(await canManageRestaurant(userId, restaurantId, platformRole))) {
+    return { error: "Neautorizat", status: 403 };
+  }
+  return { userId };
+}
+
 /** Resolve a restaurant by slug (used by the owner/waiter area pages). */
 export async function getRestaurantBySlug(slug: string) {
   const [row] = await db

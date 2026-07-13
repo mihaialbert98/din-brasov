@@ -11,6 +11,8 @@ import {
   isPlatformStaff,
 } from "@/lib/restaurant-permissions";
 import AppearanceSettings from "@/components/restaurant/AppearanceSettings";
+import LocaluriToggle from "@/components/restaurant/LocaluriToggle";
+import { places } from "@/lib/db/schema";
 
 export default async function AspectPage({
   params,
@@ -32,10 +34,21 @@ export default async function AspectPage({
   const initiallyUnlocked = isAdmin || (await canEditMenuNow(session.user.id, restaurant.id, role));
 
   const [current] = await db
-    .select({ menuDesign: restaurants.menuDesign, menuTheme: restaurants.menuTheme })
+    .select({
+      menuDesign: restaurants.menuDesign,
+      menuTheme: restaurants.menuTheme,
+      showInLocaluri: restaurants.showInLocaluri,
+      placeId: restaurants.placeId,
+    })
     .from(restaurants)
     .where(eq(restaurants.id, restaurant.id))
     .limit(1);
+
+  // Localuri publication state: is the linked place already live for the public?
+  const [linkedPlace] = current?.placeId
+    ? await db.select({ status: places.status }).from(places).where(eq(places.id, current.placeId)).limit(1)
+    : [undefined];
+  const placePublished = linkedPlace?.status === "published";
 
   // Photo coverage — used to warn before switching to a photos-required design.
   const [{ total }] = await db.select({ total: count() }).from(menuItems).where(eq(menuItems.restaurantId, restaurant.id));
@@ -61,6 +74,12 @@ export default async function AspectPage({
         initialCoverUrl={restaurant.coverUrl}
         requiresUnlock={!isAdmin}
         initiallyUnlocked={initiallyUnlocked}
+      />
+
+      <LocaluriToggle
+        restaurantId={restaurant.id}
+        initialEnabled={current?.showInLocaluri ?? false}
+        placePublished={placePublished}
       />
     </div>
   );

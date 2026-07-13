@@ -1,6 +1,9 @@
 import { notFound } from "next/navigation";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { restaurants } from "@/lib/db/schema";
 import { getRestaurantByStaffToken } from "@/lib/restaurant-permissions";
-import ServiceBoard from "@/components/restaurant/ServiceBoard";
+import StaffBoardTabs from "@/components/restaurant/StaffBoardTabs";
 
 // Live board — always fresh.
 export const dynamic = "force-dynamic";
@@ -17,6 +20,14 @@ export default async function StaffBoardPage({ params }: Props) {
   const restaurant = await getRestaurantByStaffToken(token);
   if (!restaurant) notFound();
 
+  // Show the Rezervări tab only when the restaurant takes reservations.
+  const [flags] = await db
+    .select({ admin: restaurants.reservationsEnabledByAdmin, owner: restaurants.reservationsEnabledByOwner })
+    .from(restaurants)
+    .where(eq(restaurants.id, restaurant.id))
+    .limit(1);
+  const showReservations = !!flags?.admin && !!flags?.owner;
+
   return (
     <div className="min-h-screen bg-gray-100">
       <header className="bg-[#1a1a1a] text-white px-5 py-4">
@@ -29,10 +40,7 @@ export default async function StaffBoardPage({ params }: Props) {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-6">
-        <p className="text-sm text-gray-500 mb-5">
-          Cererile clienților apar aici în câteva secunde. Apasă „Am preluat" după ce te ocupi de masă.
-        </p>
-        <ServiceBoard basePath={`/api/s/${token}`} />
+        <StaffBoardTabs basePath={`/api/s/${token}`} showReservations={showReservations} />
       </main>
     </div>
   );
