@@ -1,19 +1,49 @@
 import { notFound } from "next/navigation";
 import Image from "next/image";
-import { eq } from "drizzle-orm";
-import { MapPin, Phone, Globe } from "lucide-react";
+import Link from "next/link";
+import { eq, and } from "drizzle-orm";
+import { MapPin, Phone, Globe, UtensilsCrossed, CalendarClock } from "lucide-react";
 import { db } from "@/lib/db";
-import { places } from "@/lib/db/schema";
+import { places, restaurants, menuItems } from "@/lib/db/schema";
 import type { Metadata } from "next";
 import Badge from "@/components/ui/Badge";
 import JsonLd from "@/components/seo/JsonLd";
 import { pageMetadata, localBusinessJsonLd, breadcrumbJsonLd } from "@/lib/seo";
+import { canReserve } from "@/lib/reservations";
 
 type Props = { params: Promise<{ slug: string }> };
 
 async function getPlace(slug: string) {
   const [item] = await db.select().from(places).where(eq(places.slug, slug)).limit(1);
   return item;
+}
+
+/**
+ * If this place is a restaurant that opted into Localuri, report which public
+ * actions to offer: "Vezi meniul" (has ≥1 available item) and "Rezervă o masă"
+ * (reservations enabled + hours). Both live at the place's own URL.
+ */
+async function restaurantActions(placeId: string): Promise<{ menu: boolean; reserve: boolean }> {
+  const [r] = await db
+    .select({ id: restaurants.id })
+    .from(restaurants)
+    .where(
+      and(
+        eq(restaurants.placeId, placeId),
+        eq(restaurants.status, "active"),
+        eq(restaurants.showInLocaluri, true),
+      )
+    )
+    .limit(1);
+  if (!r) return { menu: false, reserve: false };
+
+  const [item] = await db
+    .select({ id: menuItems.id })
+    .from(menuItems)
+    .where(and(eq(menuItems.restaurantId, r.id), eq(menuItems.isAvailable, true)))
+    .limit(1);
+
+  return { menu: !!item, reserve: await canReserve(r.id) };
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -37,6 +67,7 @@ export default async function LocalPage({ params }: Props) {
   if (!place || place.status !== "published") notFound();
 
   const images: string[] = place.imagesJson ? JSON.parse(place.imagesJson) : [];
+  const actions = await restaurantActions(place.id);
 
   return (
     <article className="max-w-2xl mx-auto px-4 py-10">
@@ -72,6 +103,29 @@ export default async function LocalPage({ params }: Props) {
         </Badge>
       )}
       <h1 className="text-3xl sm:text-4xl font-semibold font-serif text-ink mt-3 mb-4 leading-tight">{place.name}</h1>
+
+      {(actions.menu || actions.reserve) && (
+        <div className="flex flex-wrap gap-3 mb-6">
+          {actions.menu && (
+            <Link
+              href={`/localuri/${place.slug}/meniu`}
+              className="inline-flex items-center gap-2 bg-accent text-white font-semibold px-5 py-3 rounded-xl hover:bg-accent-hover transition-colors"
+            >
+              <UtensilsCrossed className="w-5 h-5" aria-hidden />
+              Vezi meniul
+            </Link>
+          )}
+          {actions.reserve && (
+            <Link
+              href={`/localuri/${place.slug}/rezervare`}
+              className="inline-flex items-center gap-2 border border-accent text-accent font-semibold px-5 py-3 rounded-xl hover:bg-accent/5 transition-colors"
+            >
+              <CalendarClock className="w-5 h-5" aria-hidden />
+              Rezervă o masă
+            </Link>
+          )}
+        </div>
+      )}
 
       <div className="bg-surface rounded-2xl border border-hairline p-5 mb-6 space-y-2.5 text-ink/80">
         {place.address && (

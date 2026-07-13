@@ -1,18 +1,12 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import {
-  restaurantTables,
-  restaurants,
-  menuCategories,
-  menuItems,
-} from "@/lib/db/schema";
-import { eq, and, asc } from "drizzle-orm";
+import { restaurantTables, restaurants } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import ServiceButtons from "@/components/restaurant/ServiceButtons";
 import MenuShell from "@/components/restaurant/MenuShell";
-import { type MenuViewCategory } from "@/components/restaurant/MenuView";
+import { getRestaurantMenu } from "@/lib/menu";
 import { resolveTheme, themeStyle } from "@/lib/menu-themes";
-import { allergensToText } from "@/lib/text";
 
 // Always render fresh so menu edits appear on the next scan of the same QR.
 export const dynamic = "force-dynamic";
@@ -52,46 +46,7 @@ export default async function ScannedMenuPage({ params }: Props) {
   const session = await auth().catch(() => null);
   const showAccountCta = !session?.user;
 
-  const [categories, items] = await Promise.all([
-    db
-      .select()
-      .from(menuCategories)
-      .where(eq(menuCategories.restaurantId, ctx.restaurantId))
-      .orderBy(asc(menuCategories.position)),
-    db
-      .select()
-      .from(menuItems)
-      .where(
-        and(
-          eq(menuItems.restaurantId, ctx.restaurantId),
-          eq(menuItems.isAvailable, true)
-        )
-      )
-      .orderBy(asc(menuItems.position)),
-  ]);
-
-  const grouped: MenuViewCategory[] = categories
-    .map((c) => ({
-      id: c.id,
-      name: c.name,
-      nameEn: c.nameEn,
-      items: items
-        .filter((it) => it.categoryId === c.id)
-        .map((it) => ({
-          id: it.id,
-          name: it.name,
-          nameEn: it.nameEn,
-          description: it.description,
-          descriptionEn: it.descriptionEn,
-          price: it.price,
-          imageUrl: it.imageUrl,
-          allergens: allergensToText(it.allergens),
-          allergensEn: it.allergensEn ?? "",
-          calories: it.calories,
-          isVegan: it.isVegan,
-        })),
-    }))
-    .filter((c) => c.items.length > 0); // hide empty categories from diners
+  const grouped = await getRestaurantMenu(ctx.restaurantId);
 
   // Resolve the restaurant's chosen design + theme; theme tokens are applied as
   // CSS custom properties on the .menu-theme root, so every component follows.

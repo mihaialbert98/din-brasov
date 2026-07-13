@@ -40,6 +40,8 @@ export default async function RestaurantLayout({
     { href: `/restaurant/${slug}/aspect`, label: "Aspect meniu" },
     { href: `/restaurant/${slug}/mese`, label: "Mese & QR" },
     { href: `/restaurant/${slug}/serviciu`, label: "Serviciu" },
+    { href: `/restaurant/${slug}/rezervari`, label: "Rezervări" },
+    { href: `/restaurant/${slug}/rezervari-setari`, label: "Setări rezervări" },
   ];
 
   return (

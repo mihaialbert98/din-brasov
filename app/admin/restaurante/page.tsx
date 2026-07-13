@@ -9,6 +9,7 @@ import { eq, and, desc, count } from "drizzle-orm";
 import Link from "next/link";
 import type { Metadata } from "next";
 import RestaurantStatusButton from "@/components/admin/RestaurantStatusButton";
+import ReservationsGrantButton from "@/components/admin/ReservationsGrantButton";
 
 export const metadata: Metadata = { title: "Admin — Restaurante" };
 
@@ -19,6 +20,7 @@ export default async function AdminRestaurantePage() {
       name: restaurants.name,
       slug: restaurants.slug,
       status: restaurants.status,
+      reservationsGranted: restaurants.reservationsEnabledByAdmin,
       createdAt: restaurants.createdAt,
     })
     .from(restaurants)
@@ -100,7 +102,10 @@ export default async function AdminRestaurantePage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <RestaurantStatusButton id={r.id} status={r.status} />
+                    <div className="flex items-center justify-end gap-2">
+                      <ReservationsGrantButton id={r.id} granted={r.reservationsGranted} />
+                      <RestaurantStatusButton id={r.id} status={r.status} />
+                    </div>
                   </td>
                 </tr>
               ))}

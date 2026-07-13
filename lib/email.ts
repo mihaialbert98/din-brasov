@@ -328,6 +328,99 @@ export async function sendNewsletterWelcomeEmail(to: string, token: string) {
   });
 }
 
+export interface ReservationEmailData {
+  restaurantName: string;
+  date: string; // "YYYY-MM-DD"
+  time: string; // "HH:MM"
+  partySize: number;
+  guestName: string;
+}
+
+/** Confirmation that a table reservation was accepted. */
+export async function sendReservationConfirmedEmail(to: string, r: ReservationEmailData) {
+  const when = `${r.date} · ora ${r.time}`;
+  const html = emailLayout({
+    heading: `Rezervarea ta la ${esc(r.restaurantName)} este confirmată`,
+    body: `
+      <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#374151;">
+        Salut${r.guestName ? `, ${esc(r.guestName)}` : ""}! Rezervarea ta a fost confirmată.
+      </p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+        <tr><td style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px 18px;">
+          <p style="margin:0;font-size:14px;line-height:1.8;color:#166534;">
+            <strong>${esc(r.restaurantName)}</strong><br>
+            📅 ${esc(when)}<br>
+            👥 ${r.partySize} ${r.partySize === 1 ? "persoană" : "persoane"}
+          </p>
+        </td></tr>
+      </table>
+      <p style="margin:0;font-size:13px;line-height:1.6;color:#9ca3af;">
+        Dacă nu mai poți ajunge, te rugăm să anunți restaurantul.
+      </p>`,
+  });
+  return getResend()?.emails.send({
+    from: FROM,
+    to,
+    subject: `Rezervare confirmată — ${r.restaurantName}`,
+    html,
+  });
+}
+
+/** Notice that a reservation request could not be accepted. */
+export async function sendReservationDeclinedEmail(to: string, r: ReservationEmailData) {
+  const when = `${r.date} · ora ${r.time}`;
+  const html = emailLayout({
+    heading: `Rezervarea ta la ${esc(r.restaurantName)}`,
+    body: `
+      <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#374151;">
+        Salut${r.guestName ? `, ${esc(r.guestName)}` : ""}! Din păcate, rezervarea ta pentru
+        <strong>${esc(when)}</strong> (${r.partySize} ${r.partySize === 1 ? "persoană" : "persoane"})
+        nu a putut fi confirmată.
+      </p>
+      <p style="margin:0;font-size:13px;line-height:1.6;color:#6b7280;">
+        Te rugăm să încerci o altă dată sau oră, ori să contactezi direct restaurantul.
+      </p>`,
+  });
+  return getResend()?.emails.send({
+    from: FROM,
+    to,
+    subject: `Rezervare — ${r.restaurantName}`,
+    html,
+  });
+}
+
+/**
+ * Audit notice to a platform admin who changed a restaurant's reservation settings.
+ */
+export async function sendAdminReservationSettingsChangedEmail(
+  to: string,
+  opts: { adminName: string; restaurantName: string; change: string }
+) {
+  const html = emailLayout({
+    heading: "Modificare setări rezervări",
+    body: `
+      <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#374151;">
+        ${esc(opts.adminName)}, ai modificat setările de rezervări pentru
+        <strong>${esc(opts.restaurantName)}</strong>.
+      </p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;">
+        <tr><td style="background:#f9fafb;border:1px solid #eee;border-radius:12px;padding:14px 16px;">
+          <p style="margin:0;font-size:14px;color:#374151;">${esc(opts.change)}</p>
+        </td></tr>
+      </table>
+      <p style="margin:0;font-size:12px;line-height:1.6;color:#9ca3af;">
+        Acest email confirmă o acțiune administrativă. Dacă nu ai făcut tu această modificare,
+        verifică jurnalul de audit.
+      </p>`,
+  });
+  return getResend()?.emails.send({
+    from: FROM,
+    to,
+    subject: `Setări rezervări modificate — ${opts.restaurantName}`,
+    html,
+  });
+}
+
 export async function sendAccountDeletionConfirmationEmail(to: string) {
   return getResend()?.emails.send({
     from: FROM,

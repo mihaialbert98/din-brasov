@@ -595,6 +595,17 @@ export const restaurants = pgTable(
       .$defaultFn(() => crypto.randomUUID())
       .default(sql`gen_random_uuid()`),
     placeId: text("place_id").references(() => places.id), // optional link to a Localuri place
+    // Owner opt-in: surface this restaurant publicly in the Localuri directory (via
+    // the linked place) and expose a public read-only menu. Off by default.
+    showInLocaluri: boolean("show_in_localuri").notNull().default(false),
+    // Table reservations — doubly gated: platform admin GRANTS the capability, then
+    // the owner ENABLES it. Public booking requires both. Confirm mode decides
+    // whether a new booking is auto-confirmed or arrives pending for a callback.
+    reservationsEnabledByAdmin: boolean("reservations_enabled_by_admin").notNull().default(false),
+    reservationsEnabledByOwner: boolean("reservations_enabled_by_owner").notNull().default(false),
+    reservationConfirmMode: text("reservation_confirm_mode").notNull().default("manual"), // auto | manual
+    // A single party may not exceed this size (independent of per-slot seat capacity).
+    reservationMaxPartySize: integer("reservation_max_party_size").notNull().default(12),
     status: text("status").notNull().default("active"), // active | suspended
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
@@ -709,6 +720,55 @@ export const serviceRequests = pgTable(
   (t) => [
     index("service_requests_restaurant_idx").on(t.restaurantId),
     index("service_requests_table_idx").on(t.tableId),
+  ]
+);
+
+// Bookable reservation windows. One or more rows per weekday the restaurant accepts
+// bookings; the public form derives selectable time slots from these.
+export const reservationHours = pgTable(
+  "reservation_hours",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    dayOfWeek: integer("day_of_week").notNull(), // 0 = Sunday … 6 = Saturday
+    startTime: text("start_time").notNull(), // "HH:MM"
+    endTime: text("end_time").notNull(), // "HH:MM"
+    slotMinutes: integer("slot_minutes").notNull().default(30),
+    // Total covers (seats) available in each time slot. Each booking subtracts its
+    // party size; a slot that fills disappears from the guest's choices.
+    seatsPerSlot: integer("seats_per_slot").notNull().default(20),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("reservation_hours_restaurant_idx").on(t.restaurantId)]
+);
+
+// A table reservation. Persistent (unlike the transient service queue) with a
+// status lifecycle. Guest is anonymous (name + phone mandatory, email optional);
+// userId is set only when a logged-in Din Brașov member booked.
+export const reservations = pgTable(
+  "reservations",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    date: text("date").notNull(), // "YYYY-MM-DD"
+    time: text("time").notNull(), // "HH:MM"
+    partySize: integer("party_size").notNull(),
+    guestName: text("guest_name").notNull(),
+    guestPhone: text("guest_phone").notNull(),
+    guestEmail: text("guest_email"),
+    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+    status: text("status").notNull().default("pending"), // pending | confirmed | declined | cancelled
+    note: text("note"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("reservations_restaurant_date_idx").on(t.restaurantId, t.date),
+    index("reservations_status_idx").on(t.status),
   ]
 );
 
