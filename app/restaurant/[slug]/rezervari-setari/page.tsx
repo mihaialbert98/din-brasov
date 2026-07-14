@@ -35,6 +35,7 @@ export default async function RezervariSetariPage({
       ownerEnabled: restaurants.reservationsEnabledByOwner,
       confirmMode: restaurants.reservationConfirmMode,
       maxParty: restaurants.reservationMaxPartySize,
+      areasEnabled: restaurants.reservationAreasEnabled,
     })
     .from(restaurants)
     .where(eq(restaurants.id, restaurant.id))
@@ -66,6 +67,7 @@ export default async function RezervariSetariPage({
           initialEnabled={row.ownerEnabled}
           initialMode={row.confirmMode === "auto" ? "auto" : "manual"}
           initialMaxParty={row.maxParty ?? 12}
+          initialAreasEnabled={row.areasEnabled ?? false}
           initialHours={hours}
         />
       )}

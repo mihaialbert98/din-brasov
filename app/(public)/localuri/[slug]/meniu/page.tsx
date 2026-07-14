@@ -36,6 +36,7 @@ async function getPlaceMenu(slug: string) {
       coverUrl: restaurants.coverUrl,
       menuDesign: restaurants.menuDesign,
       menuTheme: restaurants.menuTheme,
+      menuPublic: restaurants.menuPublic,
     })
     .from(restaurants)
     .where(
@@ -46,7 +47,7 @@ async function getPlaceMenu(slug: string) {
       )
     )
     .limit(1);
-  if (!restaurant) return null;
+  if (!restaurant || !restaurant.menuPublic) return null;
 
   return { place, restaurant };
 }

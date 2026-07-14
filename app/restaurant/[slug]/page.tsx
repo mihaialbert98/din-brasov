@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { restaurantTables, menuItems, restaurantMembers } from "@/lib/db/schema";
 import { eq, count } from "drizzle-orm";
 import { getRestaurantBySlug } from "@/lib/restaurant-permissions";
+import CuisineTypeInput from "@/components/restaurant/CuisineTypeInput";
 
 export default async function RestaurantOverviewPage({
   params,
@@ -50,6 +51,8 @@ export default async function RestaurantOverviewPage({
           </Link>
         ))}
       </div>
+
+      <CuisineTypeInput restaurantId={restaurant.id} initialValue={restaurant.cuisineType} />
     </div>
   );
 }

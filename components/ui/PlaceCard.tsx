@@ -11,6 +11,7 @@ type Props = {
     name: string;
     address: string | null;
     category: string | null;
+    cuisineType?: string | null;
     imagesJson?: string | null;
   };
   compact?: boolean;
@@ -53,10 +54,15 @@ export default function PlaceCard({ place, compact = false }: Props) {
         <ImageFallback />
       )}
       <div className={`flex flex-col gap-2 flex-1 ${compact ? "p-4" : "p-5"}`}>
-        <div>
+        <div className="flex flex-wrap items-center gap-1.5">
           <Badge variant="category" category={place.category}>
             {place.category ?? "Local"}
           </Badge>
+          {place.cuisineType && (
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-cream/60 text-ink/70 border border-hairline">
+              {place.cuisineType}
+            </span>
+          )}
         </div>
         <h2 className="font-serif font-semibold text-ink line-clamp-2 leading-snug">{place.name}</h2>
         {place.address && (

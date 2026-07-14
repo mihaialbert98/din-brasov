@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Check, Users, CalendarDays, Clock, Sparkles, X } from "lucide-react";
+import { Check, Users, CalendarDays, Clock, Sparkles, X, Home, Trees } from "lucide-react";
 import type { ReservationHour } from "@/lib/reservations";
 
 type Prefill = { name?: string | null; phone?: string | null; email?: string | null };
@@ -14,12 +14,15 @@ const WEEKDAYS = ["Dum", "Lun", "Mar", "Mie", "Joi", "Vin", "Sâm"];
  * the next ~14 open days; time slots are fetched live per (day, party) so full
  * slots never appear. Name + phone required, email optional.
  */
+type Area = "inside" | "outside";
+
 export default function ReservationForm({
   restaurantId,
   restaurantName,
   hours,
   confirmMode,
   maxParty,
+  areasEnabled = false,
   prefill,
   isMember = false,
 }: {
@@ -28,14 +31,17 @@ export default function ReservationForm({
   hours: ReservationHour[];
   confirmMode: "auto" | "manual";
   maxParty: number;
+  areasEnabled?: boolean;
   prefill?: Prefill;
   isMember?: boolean;
 }) {
   const mountedAt = useRef(Date.now());
   const [partySize, setPartySize] = useState(2);
+  const [area, setArea] = useState<Area | null>(areasEnabled ? null : "inside");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [slots, setSlots] = useState<string[]>([]);
+  const [otherAreaSlots, setOtherAreaSlots] = useState<string[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [done, setDone] = useState<null | "confirmed" | "pending">(null);
   const [showSignup, setShowSignup] = useState(false);
@@ -61,19 +67,20 @@ export default function ReservationForm({
     return out;
   }, [bookableDays]);
 
-  // Fetch live availability whenever party size or date changes.
+  // Fetch live availability whenever party size, date, or area changes.
   useEffect(() => {
-    if (!date) { setSlots([]); return; }
+    if (!date || (areasEnabled && !area)) { setSlots([]); setOtherAreaSlots([]); return; }
     let cancelled = false;
     setSlotsLoading(true);
     setTime("");
-    fetch(`/api/reservations/availability?restaurantId=${restaurantId}&date=${date}&partySize=${partySize}`)
+    const areaParam = areasEnabled && area ? `&area=${area}` : "";
+    fetch(`/api/reservations/availability?restaurantId=${restaurantId}&date=${date}&partySize=${partySize}${areaParam}`)
       .then((r) => r.json())
-      .then((d) => { if (!cancelled) setSlots(d.slots ?? []); })
-      .catch(() => { if (!cancelled) setSlots([]); })
+      .then((d) => { if (!cancelled) { setSlots(d.slots ?? []); setOtherAreaSlots(d.otherAreaSlots ?? []); } })
+      .catch(() => { if (!cancelled) { setSlots([]); setOtherAreaSlots([]); } })
       .finally(() => { if (!cancelled) setSlotsLoading(false); });
     return () => { cancelled = true; };
-  }, [restaurantId, date, partySize]);
+  }, [restaurantId, date, partySize, area, areasEnabled]);
 
   // When the booking succeeds, the success screen replaces the (scrolled-down)
   // form — bring the user back to the top so they see the confirmation.
@@ -91,6 +98,7 @@ export default function ReservationForm({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         restaurantId, date, time, partySize,
+        area: areasEnabled && area ? area : undefined,
         guestName: (form.get("guestName") as string)?.trim(),
         guestPhone: (form.get("guestPhone") as string)?.trim(),
         guestEmail: (form.get("guestEmail") as string)?.trim() || undefined,
@@ -190,7 +198,33 @@ export default function ReservationForm({
         </div>
       </div>
 
-      {/* 2 — Day */}
+      {/* 1b — Area (only when the restaurant splits interior/terasă) */}
+      {areasEnabled && (
+        <div>
+          <p className={stepLabel}><Trees className="w-4 h-4 text-accent" aria-hidden /> Unde vrei să stai?</p>
+          <div className="flex gap-2">
+            {([
+              { v: "inside" as const, icon: Home, label: "Interior" },
+              { v: "outside" as const, icon: Trees, label: "Terasă" },
+            ]).map((o) => {
+              const Icon = o.icon;
+              return (
+                <button
+                  key={o.v} type="button" onClick={() => setArea(o.v)}
+                  className={`flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-xl border text-sm font-medium transition-colors ${
+                    area === o.v ? "bg-accent text-white border-accent" : "border-hairline text-ink hover:border-accent/50"
+                  }`}
+                >
+                  <Icon className="w-4 h-4" aria-hidden /> {o.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 2 — Day (after area is chosen when areas are on) */}
+      {(!areasEnabled || area) && (
       <div>
         <p className={stepLabel}><CalendarDays className="w-4 h-4 text-accent" aria-hidden /> În ce zi?</p>
         {dayChips.length === 0 ? (
@@ -212,15 +246,26 @@ export default function ReservationForm({
           </div>
         )}
       </div>
+      )}
 
       {/* 3 — Time */}
-      {date && (
+      {date && (!areasEnabled || area) && (
         <div>
           <p className={stepLabel}><Clock className="w-4 h-4 text-accent" aria-hidden /> La ce oră?</p>
           {slotsLoading ? (
             <p className="text-sm text-faint">Se caută orele disponibile…</p>
           ) : slots.length === 0 ? (
-            <p className="text-sm text-muted">Nicio oră disponibilă pentru {partySize} pers. în această zi. Încearcă altă zi sau un grup mai mic.</p>
+            <p className="text-sm text-muted">
+              Nicio oră disponibilă pentru {partySize} pers.
+              {areasEnabled && area ? ` la ${area === "inside" ? "interior" : "terasă"}` : ""} în această zi.
+              {areasEnabled && area && otherAreaSlots.length > 0 ? (
+                <> Dar ai locuri {area === "inside" ? "pe terasă" : "la interior"} —{" "}
+                  <button type="button" onClick={() => setArea(area === "inside" ? "outside" : "inside")} className="text-accent font-medium underline hover:no-underline">
+                    schimbă zona
+                  </button>.
+                </>
+              ) : " Încearcă altă zi sau un grup mai mic."}
+            </p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {slots.map((s) => (

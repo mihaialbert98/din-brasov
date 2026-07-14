@@ -12,6 +12,7 @@ interface Reservation {
   guestPhone: string;
   guestEmail: string | null;
   status: "pending" | "confirmed" | "declined" | "cancelled";
+  area: "inside" | "outside" | null;
   note: string | null;
 }
 
@@ -168,6 +169,11 @@ export default function ReservationsBoard({ basePath }: { basePath: string }) {
                         <span className="inline-flex items-center gap-1 text-sm bg-gray-100 text-gray-700 rounded-full px-2 py-0.5">
                           <Users className="w-3.5 h-3.5" aria-hidden /> {r.partySize}
                         </span>
+                        {r.area && (
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-blue-50 text-blue-700">
+                            {r.area === "inside" ? "Interior" : "Terasă"}
+                          </span>
+                        )}
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ml-auto ${STATUS_CLASS[r.status]}`}>
                           {STATUS_LABEL[r.status]}
                         </span>

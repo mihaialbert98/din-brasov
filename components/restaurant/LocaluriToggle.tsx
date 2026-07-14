@@ -13,13 +13,16 @@ export default function LocaluriToggle({
   restaurantId,
   initialEnabled,
   placePublished,
+  initialMenuPublic,
 }: {
   restaurantId: string;
   initialEnabled: boolean;
   placePublished: boolean;
+  initialMenuPublic: boolean;
 }) {
   const router = useRouter();
   const [enabled, setEnabled] = useState(initialEnabled);
+  const [menuPublic, setMenuPublic] = useState(initialMenuPublic);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,6 +38,25 @@ export default function LocaluriToggle({
     setLoading(false);
     if (res.ok) {
       setEnabled(next);
+      router.refresh();
+    } else {
+      const d = await res.json().catch(() => ({}));
+      setError(d.error ?? "Eroare. Încearcă din nou.");
+    }
+  }
+
+  async function toggleMenu() {
+    const next = !menuPublic;
+    setLoading(true);
+    setError(null);
+    const res = await fetch(`/api/restaurants/${restaurantId}/menu-visibility`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ menuPublic: next }),
+    });
+    setLoading(false);
+    if (res.ok) {
+      setMenuPublic(next);
       router.refresh();
     } else {
       const d = await res.json().catch(() => ({}));
@@ -82,6 +104,37 @@ export default function LocaluriToggle({
           >
             {loading ? "Se salvează..." : enabled ? "Retrage din Localuri" : "Afișează în Localuri"}
           </button>
+
+          {/* Sub-option: show/hide the public menu without deleting items. Only
+              relevant while the restaurant is listed in Localuri. */}
+          {enabled && (
+            <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-gray-900">Afișează meniul public</p>
+                <p className="text-xs text-gray-500">
+                  {menuPublic
+                    ? "Clienții pot vedea meniul pe pagina din Localuri."
+                    : "Meniul public este ascuns. Produsele rămân salvate; meniul cu QR de la masă nu e afectat."}
+                </p>
+              </div>
+              <button
+                onClick={toggleMenu}
+                disabled={loading}
+                role="switch"
+                aria-checked={menuPublic}
+                aria-label="Afișează meniul public"
+                style={{ width: 44, height: 24, minWidth: 44, minHeight: 24 }}
+                className={`relative inline-flex items-center rounded-full transition-colors flex-shrink-0 disabled:opacity-60 border ${
+                  menuPublic ? "bg-green-600 border-green-600" : "bg-gray-200 border-gray-300"
+                }`}
+              >
+                <span
+                  style={{ width: 18, height: 18, transform: menuPublic ? "translateX(22px)" : "translateX(3px)" }}
+                  className="inline-block rounded-full bg-white shadow-sm transition-transform"
+                />
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </section>

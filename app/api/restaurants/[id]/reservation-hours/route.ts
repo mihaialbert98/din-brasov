@@ -16,6 +16,9 @@ const addSchema = z.object({
   endTime: z.string().regex(HHMM),
   slotMinutes: z.number().int().min(10).max(240).default(30),
   seatsPerSlot: z.number().int().min(1).max(200).default(20),
+  // Per-area capacities — sent when the restaurant splits interior/terasă.
+  seatsInside: z.number().int().min(0).max(200).optional(),
+  seatsOutside: z.number().int().min(0).max(200).optional(),
 });
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {

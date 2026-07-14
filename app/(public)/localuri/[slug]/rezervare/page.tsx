@@ -26,6 +26,7 @@ async function getReservableRestaurant(slug: string) {
       id: restaurants.id,
       name: restaurants.name,
       confirmMode: restaurants.reservationConfirmMode,
+      areasEnabled: restaurants.reservationAreasEnabled,
     })
     .from(restaurants)
     .where(and(eq(restaurants.placeId, place.id), eq(restaurants.status, "active")))
@@ -88,6 +89,7 @@ export default async function ReservationPage({ params }: Props) {
         hours={hours}
         confirmMode={restaurant.confirmMode === "auto" ? "auto" : "manual"}
         maxParty={maxParty}
+        areasEnabled={restaurant.areasEnabled}
         prefill={prefill}
         isMember={!!session?.user?.id}
       />
