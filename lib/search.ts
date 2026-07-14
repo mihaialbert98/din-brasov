@@ -171,6 +171,7 @@ export async function searchPlaces(
         name: places.name,
         slug: places.slug,
         category: places.category,
+        cuisineType: places.cuisineType,
         address: places.address,
         imagesJson: places.imagesJson,
         createdAt: places.createdAt,

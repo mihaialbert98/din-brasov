@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2, Plus, Power, CheckCircle2, Clock, Users } from "lucide-react";
+import { Trash2, Plus, Power, CheckCircle2, Clock, Users, Home, Trees } from "lucide-react";
 import type { ReservationHour } from "@/lib/reservations";
 
 const DAYS = ["Duminică", "Luni", "Marți", "Miercuri", "Joi", "Vineri", "Sâmbătă"];
@@ -14,18 +14,21 @@ export default function ReservationSettings({
   initialEnabled,
   initialMode,
   initialMaxParty,
+  initialAreasEnabled,
   initialHours,
 }: {
   restaurantId: string;
   initialEnabled: boolean;
   initialMode: "auto" | "manual";
   initialMaxParty: number;
+  initialAreasEnabled: boolean;
   initialHours: ReservationHour[];
 }) {
   const router = useRouter();
   const [enabled, setEnabled] = useState(initialEnabled);
   const [mode, setMode] = useState<"auto" | "manual">(initialMode);
   const [maxParty, setMaxParty] = useState(initialMaxParty);
+  const [areas, setAreas] = useState(initialAreasEnabled);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -35,8 +38,13 @@ export default function ReservationSettings({
   const [end, setEnd] = useState("22:00");
   const [slot, setSlot] = useState(30);
   const [seats, setSeats] = useState(20);
+  const [seatsIn, setSeatsIn] = useState(20);
+  const [seatsOut, setSeatsOut] = useState(12);
 
-  async function patchSettings(next: { enabled?: boolean; confirmMode?: "auto" | "manual"; maxPartySize?: number }) {
+  // Windows missing per-area seats (nudge after enabling areas).
+  const windowsMissingAreas = initialHours.filter((h) => h.seatsInside == null && h.seatsOutside == null);
+
+  async function patchSettings(next: { enabled?: boolean; confirmMode?: "auto" | "manual"; maxPartySize?: number; areasEnabled?: boolean }) {
     setBusy(true);
     setError(null);
     const res = await fetch(`/api/restaurants/${restaurantId}/reservations-settings`, {
@@ -55,14 +63,22 @@ export default function ReservationSettings({
     if (start >= end) { setError("Ora de început trebuie să fie înainte de cea de sfârșit."); return; }
     setBusy(true);
     setError(null);
+    const body: Record<string, unknown> = { dayOfWeek: day, startTime: start, endTime: end, slotMinutes: slot };
+    if (areas) { body.seatsInside = seatsIn; body.seatsOutside = seatsOut; body.seatsPerSlot = seatsIn + seatsOut; }
+    else { body.seatsPerSlot = seats; }
     const res = await fetch(`/api/restaurants/${restaurantId}/reservation-hours`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dayOfWeek: day, startTime: start, endTime: end, slotMinutes: slot, seatsPerSlot: seats }),
+      body: JSON.stringify(body),
     });
     setBusy(false);
     if (res.ok) router.refresh();
     else { const d = await res.json().catch(() => ({})); setError(d.error ?? "Eroare."); }
+  }
+
+  async function toggleAreas() {
+    const next = !areas;
+    if (await patchSettings({ areasEnabled: next })) setAreas(next);
   }
 
   async function removeHours(hourId: string) {
@@ -174,12 +190,50 @@ export default function ReservationSettings({
             </div>
           </div>
 
+          {/* Card 3b — Areas (interior / terrace) */}
+          <div className={cardClass}>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <span className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                  <Trees className="w-5 h-5 text-gray-500" aria-hidden />
+                </span>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Interior și terasă</h3>
+                  <p className="text-sm text-gray-500">
+                    Separă locurile pe zone. Clientul alege interior sau terasă, iar fiecare zonă are
+                    propriile locuri per interval.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={toggleAreas}
+                disabled={busy}
+                role="switch"
+                aria-checked={areas}
+                aria-label="Interior și terasă"
+                style={{ width: 44, height: 24, minWidth: 44, minHeight: 24 }}
+                className={`relative inline-flex items-center rounded-full transition-colors flex-shrink-0 disabled:opacity-60 border ${areas ? "bg-green-600 border-green-600" : "bg-gray-200 border-gray-300"}`}
+              >
+                <span style={{ width: 18, height: 18, transform: areas ? "translateX(22px)" : "translateX(3px)" }} className="inline-block rounded-full bg-white shadow-sm transition-transform" />
+              </button>
+            </div>
+            {areas && windowsMissingAreas.length > 0 && (
+              <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mt-3">
+                {windowsMissingAreas.length} interval(e) au fost împărțite automat între interior și
+                terasă. Verifică numărul de locuri mai jos și ajustează-l dacă e nevoie.
+              </p>
+            )}
+          </div>
+
           {/* Card 4 — Program & seats */}
           <div className={cardClass}>
             <h3 className="font-semibold text-gray-900 mb-1">Program & locuri</h3>
             <p className="text-sm text-gray-500 mb-4">
-              Adaugă intervalele în care primești rezervări. <strong>Locuri/slot</strong> = câte
-              persoane încap în total la fiecare oră. Când un interval se umple, dispare din opțiunile clientului.
+              Adaugă intervalele în care primești rezervări.{" "}
+              {areas
+                ? "Setează câte locuri sunt disponibile la interior și pe terasă în fiecare interval."
+                : "Locuri/slot = câte persoane încap în total la fiecare oră."}{" "}
+              Când un interval se umple, dispare din opțiunile clientului.
             </p>
 
             {initialHours.length === 0 ? (
@@ -196,7 +250,14 @@ export default function ReservationSettings({
                         <span key={h.id} className="inline-flex items-center gap-2.5 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
                           <span className="text-gray-800 font-medium tabular-nums">{h.startTime}–{h.endTime}</span>
                           <span className="text-gray-400">{h.slotMinutes}min</span>
-                          <span className="inline-flex items-center gap-1 text-gray-500"><Users className="w-3.5 h-3.5" aria-hidden />{h.seatsPerSlot}</span>
+                          {areas && (h.seatsInside != null || h.seatsOutside != null) ? (
+                            <>
+                              <span className="inline-flex items-center gap-1 text-gray-500" title="Interior"><Home className="w-3.5 h-3.5" aria-hidden />{h.seatsInside ?? 0}</span>
+                              <span className="inline-flex items-center gap-1 text-gray-500" title="Terasă"><Trees className="w-3.5 h-3.5" aria-hidden />{h.seatsOutside ?? 0}</span>
+                            </>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-gray-500"><Users className="w-3.5 h-3.5" aria-hidden />{h.seatsPerSlot}</span>
+                          )}
                           <button onClick={() => removeHours(h.id)} disabled={busy} className="text-gray-300 hover:text-red-600 transition-colors disabled:opacity-50" aria-label="Șterge intervalul">
                             <Trash2 className="w-4 h-4" aria-hidden />
                           </button>
@@ -228,9 +289,20 @@ export default function ReservationSettings({
                     {[15, 30, 60, 90, 120].map((m) => <option key={m} value={m}>{m} min</option>)}
                   </select>
                 </label>
-                <label className={labelClass} title="Câte persoane încap în total la fiecare interval">Locuri/slot
-                  <input type="number" min={1} max={200} value={seats} onChange={(e) => setSeats(Number(e.target.value))} className={fieldClass} />
-                </label>
+                {areas ? (
+                  <>
+                    <label className={labelClass} title="Locuri interior">Interior
+                      <input type="number" min={0} max={200} value={seatsIn} onChange={(e) => setSeatsIn(Number(e.target.value))} className={fieldClass} />
+                    </label>
+                    <label className={labelClass} title="Locuri terasă">Terasă
+                      <input type="number" min={0} max={200} value={seatsOut} onChange={(e) => setSeatsOut(Number(e.target.value))} className={fieldClass} />
+                    </label>
+                  </>
+                ) : (
+                  <label className={labelClass} title="Câte persoane încap în total la fiecare interval">Locuri/slot
+                    <input type="number" min={1} max={200} value={seats} onChange={(e) => setSeats(Number(e.target.value))} className={fieldClass} />
+                  </label>
+                )}
                 <button onClick={addHours} disabled={busy} className="inline-flex items-center justify-center gap-1 bg-[#1a1a1a] text-white text-sm h-[38px] px-3 rounded-lg hover:bg-gray-700 disabled:opacity-50 col-span-2 sm:col-span-1 self-end">
                   <Plus className="w-4 h-4" aria-hidden /> Adaugă
                 </button>

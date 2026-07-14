@@ -5,10 +5,11 @@
  */
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { restaurants } from "@/lib/db/schema";
+import { restaurants, reservationHours } from "@/lib/db/schema";
 import { authorizeReservationSettings } from "@/lib/restaurant-permissions";
 import { auditAdminReservationChange } from "@/lib/reservations";
 
@@ -16,6 +17,7 @@ const schema = z.object({
   enabled: z.boolean().optional(),
   confirmMode: z.enum(["auto", "manual"]).optional(),
   maxPartySize: z.number().int().min(1).max(50).optional(),
+  areasEnabled: z.boolean().optional(),
 });
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -48,8 +50,22 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (parsed.data.enabled !== undefined) patch.reservationsEnabledByOwner = parsed.data.enabled;
   if (parsed.data.confirmMode !== undefined) patch.reservationConfirmMode = parsed.data.confirmMode;
   if (parsed.data.maxPartySize !== undefined) patch.reservationMaxPartySize = parsed.data.maxPartySize;
+  if (parsed.data.areasEnabled !== undefined) patch.reservationAreasEnabled = parsed.data.areasEnabled;
 
   await db.update(restaurants).set(patch).where(eq(restaurants.id, id));
+
+  // When areas are turned ON, backfill any existing window that has no per-area
+  // seats yet by splitting its single capacity ~60% interior / 40% terrace — so
+  // booking works immediately (the owner can fine-tune afterwards).
+  if (parsed.data.areasEnabled === true) {
+    await db
+      .update(reservationHours)
+      .set({
+        seatsInside: sql`CEIL(${reservationHours.seatsPerSlot} * 0.6)`,
+        seatsOutside: sql`${reservationHours.seatsPerSlot} - CEIL(${reservationHours.seatsPerSlot} * 0.6)`,
+      })
+      .where(and(eq(reservationHours.restaurantId, id), isNull(reservationHours.seatsInside), isNull(reservationHours.seatsOutside)));
+  }
 
   // Audit: when a platform admin changes settings, email the acting admin.
   await auditAdminReservationChange(session, role, id, "setări (activare / mod / grup maxim)");

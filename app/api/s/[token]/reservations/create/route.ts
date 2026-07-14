@@ -10,6 +10,7 @@ const schema = z.object({
   partySize: z.number().int().min(1).max(50),
   guestName: z.string().min(2).max(100),
   guestPhone: z.string().min(6).max(20),
+  area: z.enum(["inside", "outside"]).optional(),
   note: z.string().max(500).optional(),
   force: z.boolean().optional(),
 });

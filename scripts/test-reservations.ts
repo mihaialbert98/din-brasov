@@ -149,6 +149,22 @@ async function main() {
     rows.forEach((x) => createdIds.push(x.id));
   }
 
+  console.log("\n=== 8. Interior/terasă areas — independent per-area capacity ===");
+  // Reconfigure LAST (this wipes hours + enables areas): Tuesday interior=4, terasă=6.
+  await db.delete(reservations).where(eq(reservations.restaurantId, r.id));
+  await db.delete(reservationHours).where(eq(reservationHours.restaurantId, r.id));
+  await db.insert(reservationHours).values({ restaurantId: r.id, dayOfWeek: 2, startTime: "18:00", endTime: "22:00", slotMinutes: 30, seatsPerSlot: 10, seatsInside: 4, seatsOutside: 6 });
+  await db.update(restaurants).set({ reservationAreasEnabled: true }).where(eq(restaurants.id, r.id));
+  const tue = nextDateForDay(2);
+  const [ai] = await db.insert(reservations).values({ restaurantId: r.id, date: tue, time: "19:00", partySize: 4, guestName: "Int A", guestPhone: "0740000030", area: "inside", status: "confirmed" }).returning({ id: reservations.id });
+  createdIds.push(ai.id);
+  assert("interior 19:00 full (party 1 can't fit inside)", !(await availableSlotsForDay(r.id, tue, 1, "inside")).includes("19:00"));
+  assert("terasă 19:00 still open (independent capacity)", (await availableSlotsForDay(r.id, tue, 4, "outside")).includes("19:00"));
+  assert("validateBooking rejects a full interior slot", !(await validateBooking(r.id, tue, "19:00", 1, "inside")).ok);
+  assert("validateBooking accepts the open terasă slot", (await validateBooking(r.id, tue, "19:00", 4, "outside")).ok);
+  assert("areas on → booking without an area is rejected", !(await validateBooking(r.id, tue, "19:00", 2)).ok);
+  await db.update(restaurants).set({ reservationAreasEnabled: false }).where(eq(restaurants.id, r.id));
+
   await cleanup();
   console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
   process.exit(fail === 0 ? 0 : 1);

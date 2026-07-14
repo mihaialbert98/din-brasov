@@ -38,6 +38,7 @@ export default async function AspectPage({
       menuDesign: restaurants.menuDesign,
       menuTheme: restaurants.menuTheme,
       showInLocaluri: restaurants.showInLocaluri,
+      menuPublic: restaurants.menuPublic,
       placeId: restaurants.placeId,
     })
     .from(restaurants)
@@ -80,6 +81,7 @@ export default async function AspectPage({
         restaurantId={restaurant.id}
         initialEnabled={current?.showInLocaluri ?? false}
         placePublished={placePublished}
+        initialMenuPublic={current?.menuPublic ?? true}
       />
     </div>
   );

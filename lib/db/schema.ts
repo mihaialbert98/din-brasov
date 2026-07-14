@@ -167,6 +167,9 @@ export const places = pgTable(
     description: text("description").notNull(),
     slug: text("slug").notNull().unique(),
     category: text("category"), // Restaurant | Cafenea | Magazin | Servicii | Sanatate | Altele
+    // Optional cuisine/type for restaurants (mirrored from restaurants.cuisineType),
+    // shown as a badge on the Localuri card without a join.
+    cuisineType: text("cuisine_type"),
     address: text("address"),
     phone: text("phone"),
     website: text("website"),
@@ -598,6 +601,10 @@ export const restaurants = pgTable(
     // Owner opt-in: surface this restaurant publicly in the Localuri directory (via
     // the linked place) and expose a public read-only menu. Off by default.
     showInLocaluri: boolean("show_in_localuri").notNull().default(false),
+    // Whether to show the public read-only menu on the Localuri page. Lets an owner
+    // temporarily hide the menu without deleting items. On by default (only the
+    // public web menu; the QR table menu is unaffected).
+    menuPublic: boolean("menu_public").notNull().default(true),
     // Table reservations — doubly gated: platform admin GRANTS the capability, then
     // the owner ENABLES it. Public booking requires both. Confirm mode decides
     // whether a new booking is auto-confirmed or arrives pending for a callback.
@@ -606,6 +613,12 @@ export const restaurants = pgTable(
     reservationConfirmMode: text("reservation_confirm_mode").notNull().default("manual"), // auto | manual
     // A single party may not exceed this size (independent of per-slot seat capacity).
     reservationMaxPartySize: integer("reservation_max_party_size").notNull().default(12),
+    // Optional cuisine/type (Italian, Fast-food, Pizzerie…). Free text; suggestions
+    // offered in the UI. Shown as a badge on the Localuri card + detail page.
+    cuisineType: text("cuisine_type"),
+    // When on, reservations split into Interior / Terasă areas, each with its own
+    // per-slot seat capacity. Off = single capacity (default behavior).
+    reservationAreasEnabled: boolean("reservation_areas_enabled").notNull().default(false),
     status: text("status").notNull().default("active"), // active | suspended
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
@@ -737,8 +750,12 @@ export const reservationHours = pgTable(
     endTime: text("end_time").notNull(), // "HH:MM"
     slotMinutes: integer("slot_minutes").notNull().default(30),
     // Total covers (seats) available in each time slot. Each booking subtracts its
-    // party size; a slot that fills disappears from the guest's choices.
+    // party size; a slot that fills disappears from the guest's choices. Used when
+    // areas are OFF (single capacity).
     seatsPerSlot: integer("seats_per_slot").notNull().default(20),
+    // Per-area seat capacities, used only when the restaurant enabled areas.
+    seatsInside: integer("seats_inside"),
+    seatsOutside: integer("seats_outside"),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => [index("reservation_hours_restaurant_idx").on(t.restaurantId)]
@@ -762,6 +779,8 @@ export const reservations = pgTable(
     guestEmail: text("guest_email"),
     userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
     status: text("status").notNull().default("pending"), // pending | confirmed | declined | cancelled
+    // Chosen seating area when the restaurant splits reservations. Null when areas off.
+    area: text("area"), // inside | outside
     note: text("note"),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),

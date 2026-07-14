@@ -5,6 +5,8 @@ import { sendAdminReservationSettingsChangedEmail } from "@/lib/email";
 import { isPlatformStaff } from "@/lib/restaurant-permissions";
 import type { Session } from "next-auth";
 
+export type Area = "inside" | "outside";
+
 export type ReservationHour = {
   id: string;
   dayOfWeek: number;
@@ -12,7 +14,19 @@ export type ReservationHour = {
   endTime: string;
   slotMinutes: number;
   seatsPerSlot: number;
+  seatsInside: number | null;
+  seatsOutside: number | null;
 };
+
+/** Whether a restaurant splits reservations into interior/terasă areas. */
+export async function areasEnabled(restaurantId: string): Promise<boolean> {
+  const [r] = await db
+    .select({ on: restaurants.reservationAreasEnabled })
+    .from(restaurants)
+    .where(eq(restaurants.id, restaurantId))
+    .limit(1);
+  return !!r?.on;
+}
 
 /**
  * Whether a restaurant can currently take public reservations: doubly gated
@@ -48,6 +62,8 @@ export async function getReservationHours(restaurantId: string): Promise<Reserva
       endTime: reservationHours.endTime,
       slotMinutes: reservationHours.slotMinutes,
       seatsPerSlot: reservationHours.seatsPerSlot,
+      seatsInside: reservationHours.seatsInside,
+      seatsOutside: reservationHours.seatsOutside,
     })
     .from(reservationHours)
     .where(eq(reservationHours.restaurantId, restaurantId));
@@ -107,19 +123,28 @@ function toHHMM(mins: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
+/** The seat capacity of a window for the given area (or single capacity when null). */
+function windowCapacity(h: ReservationHour, area?: Area): number {
+  if (area === "inside") return h.seatsInside ?? 0;
+  if (area === "outside") return h.seatsOutside ?? 0;
+  return h.seatsPerSlot;
+}
+
 /**
  * Every selectable "HH:MM" slot on one day, each with the seat capacity of the
- * window it belongs to. If windows overlap, the larger capacity wins for that slot.
+ * window it belongs to (for the given area, or single capacity). Overlapping
+ * windows: the larger capacity wins.
  */
-export function slotsWithCapacity(hours: ReservationHour[]): Map<string, number> {
+export function slotsWithCapacity(hours: ReservationHour[], area?: Area): Map<string, number> {
   const caps = new Map<string, number>();
   for (const h of hours) {
     const start = toMinutes(h.startTime);
     const end = toMinutes(h.endTime);
     const step = h.slotMinutes > 0 ? h.slotMinutes : 30;
+    const cap = windowCapacity(h, area);
     for (let t = start; t <= end - step; t += step) {
       const key = toHHMM(t);
-      caps.set(key, Math.max(caps.get(key) ?? 0, h.seatsPerSlot));
+      caps.set(key, Math.max(caps.get(key) ?? 0, cap));
     }
   }
   return caps;
@@ -131,28 +156,24 @@ export function slotsForDay(hours: ReservationHour[]): string[] {
 }
 
 /**
- * Live availability for a date + party size: for each of the day's slots, subtract
- * the seats already taken (pending + confirmed) and return only slots that still
- * have room for this party. Full/insufficient slots are omitted — they "disappear".
+ * Live availability for a date + party size (+ optional area): for each of the
+ * day's slots, subtract the seats already taken (pending + confirmed, IN THAT AREA
+ * when given) and return only slots with room for this party.
  */
 export async function availableSlotsForDay(
   restaurantId: string,
   dateStr: string,
-  partySize: number
+  partySize: number,
+  area?: Area,
 ): Promise<string[]> {
   const day = new Date(`${dateStr}T00:00:00`).getDay();
   const hours = (await getReservationHours(restaurantId)).filter((h) => h.dayOfWeek === day);
   if (hours.length === 0) return [];
 
-  const caps = slotsWithCapacity(hours);
+  const caps = slotsWithCapacity(hours, area);
 
-  // Seats already booked per slot on that date (pending + confirmed hold seats).
   const booked = await db
-    .select({
-      time: reservations.time,
-      partySize: reservations.partySize,
-      status: reservations.status,
-    })
+    .select({ time: reservations.time, partySize: reservations.partySize, area: reservations.area })
     .from(reservations)
     .where(
       and(
@@ -163,7 +184,11 @@ export async function availableSlotsForDay(
     );
 
   const taken = new Map<string, number>();
-  for (const b of booked) taken.set(b.time, (taken.get(b.time) ?? 0) + b.partySize);
+  for (const b of booked) {
+    // When an area is requested, only bookings in the same area consume its seats.
+    if (area && b.area !== area) continue;
+    taken.set(b.time, (taken.get(b.time) ?? 0) + b.partySize);
+  }
 
   return [...caps.entries()]
     .filter(([time, cap]) => cap - (taken.get(time) ?? 0) >= partySize)
@@ -172,21 +197,45 @@ export async function availableSlotsForDay(
 }
 
 /**
+ * For one time, which areas still have room for the party — powers the
+ * "the other area is free at this hour" hint. Only meaningful when areas are on.
+ */
+export async function slotAreaAvailability(
+  restaurantId: string,
+  dateStr: string,
+  time: string,
+  partySize: number,
+): Promise<{ inside: boolean; outside: boolean }> {
+  const [inside, outside] = await Promise.all([
+    availableSlotsForDay(restaurantId, dateStr, partySize, "inside"),
+    availableSlotsForDay(restaurantId, dateStr, partySize, "outside"),
+  ]);
+  return { inside: inside.includes(time), outside: outside.includes(time) };
+}
+
+/**
  * Server-side validity check at booking time (re-checked to prevent oversell):
- * the slot must be within the day's hours, the party within the restaurant cap,
- * and the slot must still have enough seats for this party.
+ * party within the restaurant cap, and the slot has enough seats for this party in
+ * the chosen area (or single capacity when areas are off).
  */
 export async function validateBooking(
   restaurantId: string,
   dateStr: string,
   time: string,
-  partySize: number
+  partySize: number,
+  area?: Area,
 ): Promise<{ ok: boolean; reason?: string }> {
   const cap = await getMaxPartySize(restaurantId);
   if (partySize < 1 || partySize > cap) {
     return { ok: false, reason: `Numărul de persoane trebuie să fie între 1 și ${cap}.` };
   }
-  const available = await availableSlotsForDay(restaurantId, dateStr, partySize);
+  // When areas are on, an area is required.
+  if (await areasEnabled(restaurantId)) {
+    if (area !== "inside" && area !== "outside") {
+      return { ok: false, reason: "Alege zona (interior sau terasă)." };
+    }
+  }
+  const available = await availableSlotsForDay(restaurantId, dateStr, partySize, area);
   if (!available.includes(time)) {
     return { ok: false, reason: "Ora selectată nu mai este disponibilă. Alege altă oră." };
   }
@@ -200,22 +249,28 @@ export async function validateBooking(
  */
 export async function createManualReservation(
   restaurantId: string,
-  input: { date: string; time: string; partySize: number; guestName: string; guestPhone: string; note?: string },
+  input: { date: string; time: string; partySize: number; guestName: string; guestPhone: string; note?: string; area?: Area },
   force: boolean,
 ): Promise<{ ok: true } | { ok: false; reason: string; overridable?: boolean }> {
   if (input.partySize < 1) return { ok: false, reason: "Număr de persoane invalid." };
 
+  const withAreas = await areasEnabled(restaurantId);
+  const area = withAreas ? input.area : undefined;
+  if (withAreas && area !== "inside" && area !== "outside") {
+    return { ok: false, reason: "Alege zona (interior sau terasă)." };
+  }
+
   // Slot must exist in the day's hours (even a forced booking needs a real time).
   const day = new Date(`${input.date}T00:00:00`).getDay();
   const hours = (await getReservationHours(restaurantId)).filter((h) => h.dayOfWeek === day);
-  const caps = slotsWithCapacity(hours);
+  const caps = slotsWithCapacity(hours, area);
   if (!caps.has(input.time)) {
     return { ok: false, reason: "Ora nu este într-un interval de program." };
   }
 
   // Seats check — unless forced.
   if (!force) {
-    const available = await availableSlotsForDay(restaurantId, input.date, input.partySize);
+    const available = await availableSlotsForDay(restaurantId, input.date, input.partySize, area);
     if (!available.includes(input.time)) {
       return { ok: false, reason: "Slotul este plin pentru acest număr de persoane.", overridable: true };
     }
@@ -229,6 +284,7 @@ export async function createManualReservation(
     guestName: input.guestName,
     guestPhone: input.guestPhone,
     guestEmail: null,
+    area: area ?? null,
     status: "confirmed", // staff take it live → already confirmed
     note: input.note || null,
   });
@@ -248,6 +304,7 @@ export async function listUpcomingReservations(restaurantId: string) {
       guestPhone: reservations.guestPhone,
       guestEmail: reservations.guestEmail,
       status: reservations.status,
+      area: reservations.area,
       note: reservations.note,
       createdAt: reservations.createdAt,
     })

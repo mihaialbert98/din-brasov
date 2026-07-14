@@ -20,6 +20,7 @@ const schema = z.object({
   guestName: z.string().min(2).max(100),
   guestPhone: z.string().min(6).max(20),
   guestEmail: z.string().email().max(200).optional().or(z.literal("")),
+  area: z.enum(["inside", "outside"]).optional(),
   note: z.string().max(500).optional(),
   // Anti-bot: honeypot must stay empty; elapsed must be ≥ 2s.
   website: z.string().optional(),
@@ -46,8 +47,8 @@ export async function POST(req: Request) {
   }
 
   // Slot must fall within an enabled window, party within the cap, and the slot
-  // must still have enough free seats (re-checked here to prevent oversell).
-  const slot = await validateBooking(d.restaurantId, d.date, d.time, d.partySize);
+  // must still have enough free seats in the chosen area (re-checked to prevent oversell).
+  const slot = await validateBooking(d.restaurantId, d.date, d.time, d.partySize, d.area);
   if (!slot.ok) return NextResponse.json({ error: slot.reason }, { status: 400 });
 
   // Rate limit by phone (anti-spam).
@@ -73,6 +74,7 @@ export async function POST(req: Request) {
     guestName: d.guestName,
     guestPhone: d.guestPhone,
     guestEmail: d.guestEmail || null,
+    area: d.area ?? null,
     userId: session?.user?.id ?? null,
     status,
     note: d.note || null,

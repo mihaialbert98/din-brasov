@@ -25,7 +25,7 @@ async function getPlace(slug: string) {
  */
 async function restaurantActions(placeId: string): Promise<{ menu: boolean; reserve: boolean }> {
   const [r] = await db
-    .select({ id: restaurants.id })
+    .select({ id: restaurants.id, menuPublic: restaurants.menuPublic })
     .from(restaurants)
     .where(
       and(
@@ -37,13 +37,18 @@ async function restaurantActions(placeId: string): Promise<{ menu: boolean; rese
     .limit(1);
   if (!r) return { menu: false, reserve: false };
 
-  const [item] = await db
-    .select({ id: menuItems.id })
-    .from(menuItems)
-    .where(and(eq(menuItems.restaurantId, r.id), eq(menuItems.isAvailable, true)))
-    .limit(1);
+  // Menu button shows only if the owner has the public menu ON and there's ≥1 item.
+  let menu = false;
+  if (r.menuPublic) {
+    const [item] = await db
+      .select({ id: menuItems.id })
+      .from(menuItems)
+      .where(and(eq(menuItems.restaurantId, r.id), eq(menuItems.isAvailable, true)))
+      .limit(1);
+    menu = !!item;
+  }
 
-  return { menu: !!item, reserve: await canReserve(r.id) };
+  return { menu, reserve: await canReserve(r.id) };
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -97,11 +102,18 @@ export default async function LocalPage({ params }: Props) {
           <Image src={images[0]} alt={place.name} fill priority sizes="(max-width: 768px) 100vw, 672px" className="object-cover" />
         </div>
       )}
-      {place.category && (
-        <Badge variant="category" category={place.category}>
-          {place.category}
-        </Badge>
-      )}
+      <div className="flex flex-wrap items-center gap-2">
+        {place.category && (
+          <Badge variant="category" category={place.category}>
+            {place.category}
+          </Badge>
+        )}
+        {place.cuisineType && (
+          <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-cream/60 text-ink/70 border border-hairline">
+            {place.cuisineType}
+          </span>
+        )}
+      </div>
       <h1 className="text-3xl sm:text-4xl font-semibold font-serif text-ink mt-3 mb-4 leading-tight">{place.name}</h1>
 
       {(actions.menu || actions.reserve) && (
