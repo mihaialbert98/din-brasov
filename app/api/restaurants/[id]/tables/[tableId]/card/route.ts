@@ -1,14 +1,15 @@
 /**
- * Renders a table's business card as a PNG (QR + optional name composited onto the
- * Din Brașov template). Manager-only. Used by the Mese & QR preview + print/download.
+ * Renders a table's plain QR code as a PNG (black-on-white, no template/text).
+ * PLATFORM STAFF ONLY (admin/moderator) — the QR is printed by the Din Brașov team.
+ * A plain QR needs no image compositing or fonts, so it works reliably on serverless.
  */
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
+import QRCode from "qrcode";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { restaurants, restaurantTables } from "@/lib/db/schema";
-import { canManageRestaurant } from "@/lib/restaurant-permissions";
-import { renderCard } from "@/lib/restaurant-card";
+import { restaurantTables } from "@/lib/db/schema";
+import { isPlatformStaff } from "@/lib/restaurant-permissions";
 import { absoluteUrl } from "@/lib/seo";
 
 export async function GET(
@@ -19,40 +20,25 @@ export async function GET(
   const session = await auth();
   const role = (session?.user as any)?.role as string | undefined;
   if (!session?.user?.id) return NextResponse.json({ error: "Neautorizat" }, { status: 401 });
-  if (!(await canManageRestaurant(session.user.id, id, role))) {
+  // Only Din Brașov admins/moderators may access + download the QR codes.
+  if (!isPlatformStaff(role)) {
     return NextResponse.json({ error: "Neautorizat" }, { status: 403 });
   }
 
-  const [rest] = await db
-    .select({ name: restaurants.name, cardTemplateUrl: restaurants.cardTemplateUrl, cardOverlayName: restaurants.cardOverlayName })
-    .from(restaurants)
-    .where(eq(restaurants.id, id))
-    .limit(1);
   const [table] = await db
-    .select({ qrToken: restaurantTables.qrToken, label: restaurantTables.label })
+    .select({ qrToken: restaurantTables.qrToken })
     .from(restaurantTables)
     .where(and(eq(restaurantTables.id, tableId), eq(restaurantTables.restaurantId, id)))
     .limit(1);
+  if (!table) return NextResponse.json({ error: "Negăsit." }, { status: 404 });
 
-  if (!rest || !table) return NextResponse.json({ error: "Negăsit." }, { status: 404 });
-
-  // Custom template (if set) is fetched; otherwise the default brand card is used.
-  let template: Buffer | undefined;
-  if (rest.cardTemplateUrl) {
-    try {
-      const res = await fetch(rest.cardTemplateUrl);
-      if (res.ok) template = Buffer.from(await res.arrayBuffer());
-    } catch {
-      /* fall back to default template */
-    }
-  }
-
-  const png = await renderCard({
-    restaurantName: rest.name,
-    menuUrl: absoluteUrl(`/m/${table.qrToken}`),
-    tableLabel: table.label,
-    template,
-    overlayName: rest.cardOverlayName,
+  // High-res, printable, generous quiet zone.
+  const png = await QRCode.toBuffer(absoluteUrl(`/m/${table.qrToken}`), {
+    type: "png",
+    width: 1000,
+    margin: 4,
+    errorCorrectionLevel: "M",
+    color: { dark: "#000000", light: "#ffffff" },
   });
 
   return new NextResponse(new Uint8Array(png), {
