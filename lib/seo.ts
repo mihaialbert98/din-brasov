@@ -2,14 +2,20 @@
  * Central SEO configuration + helpers — single source of truth for the site's
  * absolute URL, default metadata, OpenGraph image URLs, and JSON-LD builders.
  *
- * Base URL precedence: NEXT_PUBLIC_SITE_URL (set on Vercel Production to
- * https://dinbrasov.com) → NEXTAUTH_URL (dev/preview) → localhost.
+ * Base URL precedence:
+ *  1. NEXT_PUBLIC_SITE_URL — set on Vercel Production to https://dinbrasov.com.
+ *  2. VERCEL_URL — the deployment's own domain (auto-set on every Vercel build,
+ *     incl. previews); needs an https:// prefix. Ensures preview QR codes / links
+ *     point at the preview, not localhost.
+ *  3. NEXTAUTH_URL — dev/other.
+ *  4. localhost — local dev fallback.
  */
 import type { Metadata } from "next";
 import { INSTAGRAM_URL, FACEBOOK_URL } from "@/lib/contact";
 
 export const SITE_URL = (
   process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined) ??
   process.env.NEXTAUTH_URL ??
   "http://localhost:3000"
 ).replace(/\/$/, "");
