@@ -27,19 +27,23 @@ export default function ReservationSettings({
   const router = useRouter();
   const [enabled, setEnabled] = useState(initialEnabled);
   const [mode, setMode] = useState<"auto" | "manual">(initialMode);
-  const [maxParty, setMaxParty] = useState(initialMaxParty);
+  const [maxParty, setMaxParty] = useState<number | "">(initialMaxParty);
   const [areas, setAreas] = useState(initialAreasEnabled);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // New-window draft.
+  // New-window draft. Seat counts are `number | ""` so the field can be cleared
+  // while typing (an empty string) instead of snapping to 0; coerced on save.
   const [day, setDay] = useState(1);
   const [start, setStart] = useState("18:00");
   const [end, setEnd] = useState("22:00");
   const [slot, setSlot] = useState(30);
-  const [seats, setSeats] = useState(20);
-  const [seatsIn, setSeatsIn] = useState(20);
-  const [seatsOut, setSeatsOut] = useState(12);
+  const [seats, setSeats] = useState<number | "">(20);
+  const [seatsIn, setSeatsIn] = useState<number | "">(20);
+  const [seatsOut, setSeatsOut] = useState<number | "">(12);
+
+  // Parse a number-input value, keeping "" for an empty field.
+  const numOrEmpty = (v: string): number | "" => (v === "" ? "" : Number(v));
 
   // Windows missing per-area seats (nudge after enabling areas).
   const windowsMissingAreas = initialHours.filter((h) => h.seatsInside == null && h.seatsOutside == null);
@@ -61,11 +65,16 @@ export default function ReservationSettings({
 
   async function addHours() {
     if (start >= end) { setError("Ora de început trebuie să fie înainte de cea de sfârșit."); return; }
+    // Coerce empty inputs to sensible minimums at save time.
+    const nSeats = seats === "" ? 1 : seats;
+    const nIn = seatsIn === "" ? 0 : seatsIn;
+    const nOut = seatsOut === "" ? 0 : seatsOut;
+    if (areas && nIn + nOut < 1) { setError("Adaugă cel puțin un loc la interior sau terasă."); return; }
     setBusy(true);
     setError(null);
     const body: Record<string, unknown> = { dayOfWeek: day, startTime: start, endTime: end, slotMinutes: slot };
-    if (areas) { body.seatsInside = seatsIn; body.seatsOutside = seatsOut; body.seatsPerSlot = seatsIn + seatsOut; }
-    else { body.seatsPerSlot = seats; }
+    if (areas) { body.seatsInside = nIn; body.seatsOutside = nOut; body.seatsPerSlot = Math.max(1, nIn + nOut); }
+    else { body.seatsPerSlot = nSeats; }
     const res = await fetch(`/api/restaurants/${restaurantId}/reservation-hours`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -181,8 +190,8 @@ export default function ReservationSettings({
               <div className="flex items-center gap-2">
                 <input
                   type="number" min={1} max={50} value={maxParty}
-                  onChange={(e) => setMaxParty(Number(e.target.value))}
-                  onBlur={() => patchSettings({ maxPartySize: maxParty })}
+                  onChange={(e) => setMaxParty(numOrEmpty(e.target.value))}
+                  onBlur={() => { const v = maxParty === "" ? 1 : maxParty; setMaxParty(v); patchSettings({ maxPartySize: v }); }}
                   className="w-20 border border-gray-300 rounded-lg px-2 py-2 text-sm text-center"
                 />
                 <span className="text-sm text-gray-500">pers.</span>
@@ -292,15 +301,15 @@ export default function ReservationSettings({
                 {areas ? (
                   <>
                     <label className={labelClass} title="Locuri interior">Interior
-                      <input type="number" min={0} max={200} value={seatsIn} onChange={(e) => setSeatsIn(Number(e.target.value))} className={fieldClass} />
+                      <input type="number" min={0} max={200} value={seatsIn} onChange={(e) => setSeatsIn(numOrEmpty(e.target.value))} className={fieldClass} />
                     </label>
                     <label className={labelClass} title="Locuri terasă">Terasă
-                      <input type="number" min={0} max={200} value={seatsOut} onChange={(e) => setSeatsOut(Number(e.target.value))} className={fieldClass} />
+                      <input type="number" min={0} max={200} value={seatsOut} onChange={(e) => setSeatsOut(numOrEmpty(e.target.value))} className={fieldClass} />
                     </label>
                   </>
                 ) : (
                   <label className={labelClass} title="Câte persoane încap în total la fiecare interval">Locuri/slot
-                    <input type="number" min={1} max={200} value={seats} onChange={(e) => setSeats(Number(e.target.value))} className={fieldClass} />
+                    <input type="number" min={1} max={200} value={seats} onChange={(e) => setSeats(numOrEmpty(e.target.value))} className={fieldClass} />
                   </label>
                 )}
                 <button onClick={addHours} disabled={busy} className="inline-flex items-center justify-center gap-1 bg-[#1a1a1a] text-white text-sm h-[38px] px-3 rounded-lg hover:bg-gray-700 disabled:opacity-50 col-span-2 sm:col-span-1 self-end">

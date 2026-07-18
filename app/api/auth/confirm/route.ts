@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
+import { linkAnonReservations } from "@/lib/reservations";
 
 const APP_URL = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
 
@@ -18,7 +19,7 @@ export async function GET(req: Request) {
   }
 
   const [user] = await db
-    .select({ id: users.id, emailVerified: users.emailVerified })
+    .select({ id: users.id, email: users.email, emailVerified: users.emailVerified })
     .from(users)
     .where(eq(users.emailConfirmationToken, token))
     .limit(1);
@@ -33,6 +34,9 @@ export async function GET(req: Request) {
     .update(users)
     .set({ emailVerified: user.emailVerified ?? new Date(), emailConfirmationToken: null, updatedAt: new Date() })
     .where(eq(users.id, user.id));
+
+  // Link any reservations they made anonymously with this (now-verified) email.
+  await linkAnonReservations(user.id, user.email).catch(() => {});
 
   return NextResponse.redirect(`${APP_URL}/intra?confirmat=1`);
 }

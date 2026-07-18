@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { listings, listingFavourites, users, paidSlots, newsletterSubscribers } from "@/lib/db/schema";
+import { listings, listingFavourites, users, paidSlots, newsletterSubscribers, reservations, restaurants, places } from "@/lib/db/schema";
 import { eq, and, or, desc, count, inArray } from "drizzle-orm";
 import Link from "next/link";
 import { signOut } from "@/lib/auth";
@@ -15,6 +15,7 @@ import ListingRules from "@/components/marketplace/ListingRules";
 import DeleteOwnListingButton from "@/components/profil/DeleteOwnListingButton";
 import UnfavouriteButton from "@/components/profil/UnfavouriteButton";
 import NewsletterPreferences from "@/components/profil/NewsletterPreferences";
+import CancelReservationButton from "@/components/profil/CancelReservationButton";
 import { getUserRestaurants } from "@/lib/restaurant-permissions";
 import type { Metadata } from "next";
 
@@ -97,6 +98,33 @@ export default async function ProfilPage() {
     .leftJoin(paidSlots, eq(listings.paidSlotId, paidSlots.id))
     .where(eq(listings.sellerId, userId))
     .orderBy(desc(listings.createdAt));
+
+  // The user's own reservations (join restaurant name + linked place slug for the
+  // "rebook" link). Newest first; split upcoming vs past in the view.
+  const myReservations = await db
+    .select({
+      id: reservations.id,
+      date: reservations.date,
+      time: reservations.time,
+      partySize: reservations.partySize,
+      status: reservations.status,
+      area: reservations.area,
+      restaurantName: restaurants.name,
+      placeSlug: places.slug,
+    })
+    .from(reservations)
+    .innerJoin(restaurants, eq(reservations.restaurantId, restaurants.id))
+    .leftJoin(places, eq(restaurants.placeId, places.id))
+    .where(eq(reservations.userId, userId))
+    .orderBy(desc(reservations.date), desc(reservations.time));
+
+  const today = new Date().toISOString().slice(0, 10);
+  const upcomingReservations = myReservations.filter(
+    (r) => r.date >= today && (r.status === "pending" || r.status === "confirmed")
+  );
+  const pastReservations = myReservations.filter(
+    (r) => !(r.date >= today && (r.status === "pending" || r.status === "confirmed"))
+  );
 
   // Slot usage — free (non-paid) active + expired-in-grace listings occupy a free
   // slot (matches the create API). Paid listings don't count against the free quota.
@@ -216,7 +244,7 @@ export default async function ProfilPage() {
           <p className="text-gray-500 text-sm">Nu ai niciun anunț activ.</p>
         ) : (
           <ul className="divide-y">
-            {otherListings.map((l) => {
+            {otherListings.slice(0, 3).map((l) => {
               const favCount = favCountMap[l.id] ?? 0;
               const canRenew = l.status === "expired" && isWithinGracePeriod(l.expiresAt);
               const canEdit = l.status === "active";
@@ -292,7 +320,47 @@ export default async function ProfilPage() {
             })}
           </ul>
         )}
+        {otherListings.length > 3 && (
+          <Link href="/profil/anunturi" className="inline-block mt-4 text-sm font-medium text-[#c84b1e] hover:underline">
+            Vezi toate anunțurile ({otherListings.length}) →
+          </Link>
+        )}
       </div>
+
+      {/* My reservations */}
+      {myReservations.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+          <h2 className="font-semibold text-lg mb-4">Rezervările mele</h2>
+
+          {upcomingReservations.length > 0 ? (
+            <ul className="divide-y">
+              {upcomingReservations.slice(0, 3).map((r) => (
+                <li key={r.id} className="py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div>
+                    <p className="font-medium text-gray-900">{r.restaurantName}</p>
+                    <p className="text-sm text-gray-500">
+                      {formatDate(new Date(`${r.date}T00:00:00`), { weekday: "short", day: "numeric", month: "long" })} · ora {r.time} · {r.partySize} {r.partySize === 1 ? "persoană" : "persoane"}
+                      {r.area ? ` · ${r.area === "inside" ? "interior" : "terasă"}` : ""}
+                    </p>
+                    <span className={`inline-block mt-1 text-xs px-2 py-0.5 rounded-full font-medium ${r.status === "confirmed" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>
+                      {r.status === "confirmed" ? "Confirmată" : "În așteptare"}
+                    </span>
+                  </div>
+                  <CancelReservationButton reservationId={r.id} placeSlug={r.placeSlug} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-gray-500">Nicio rezervare viitoare.</p>
+          )}
+
+          {(upcomingReservations.length > 3 || pastReservations.length > 0) && (
+            <Link href="/profil/rezervari" className="inline-block mt-4 text-sm font-medium text-[#c84b1e] hover:underline">
+              Vezi toate rezervările ({myReservations.length}) →
+            </Link>
+          )}
+        </div>
+      )}
 
       {/* Disabled listings — hidden from the public, reactivatable by the owner */}
       {disabledListings.length > 0 && (

@@ -42,6 +42,7 @@ export default async function RestaurantLayout({
     { href: `/restaurant/${slug}/serviciu`, label: "Serviciu" },
     { href: `/restaurant/${slug}/rezervari`, label: "Rezervări" },
     { href: `/restaurant/${slug}/rezervari-setari`, label: "Setări rezervări" },
+    { href: `/restaurant/${slug}/clienti`, label: "Clienți" },
     { href: `/restaurant/${slug}/personal`, label: "Membri echipă" },
   ];
 

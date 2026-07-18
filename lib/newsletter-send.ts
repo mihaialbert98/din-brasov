@@ -189,3 +189,44 @@ export async function sendCampaign({
 
   return result;
 }
+
+/**
+ * Send a custom campaign to an EXPLICIT recipient list (each with their own
+ * unsubscribe token). Same batching/cap/pacing as sendCampaign — used to email a
+ * specific segment (e.g. a restaurant's subscribed clients). Callers must supply
+ * only recipients who consented (active newsletter subscribers).
+ */
+export async function sendToRecipients(
+  recipients: { email: string; token: string }[],
+  content: CampaignContent,
+  dryRun = false,
+): Promise<SendResult> {
+  const result: SendResult = { sent: 0, skipped: 0, failed: 0, recipients: [] };
+
+  if (dryRun) {
+    result.recipients = recipients.map((r) => r.email);
+    return result;
+  }
+
+  for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
+    if (result.sent >= DAILY_CAP) {
+      result.skipped += recipients.length - i;
+      break;
+    }
+    const batch = recipients.slice(i, i + BATCH_SIZE);
+    await Promise.all(
+      batch.map(async (r) => {
+        try {
+          await sendCustomCampaign(r.email, r.token, content);
+          result.sent++;
+          result.recipients.push(r.email);
+        } catch {
+          result.failed++;
+        }
+      })
+    );
+    if (i + BATCH_SIZE < recipients.length) await sleep(BATCH_DELAY_MS);
+  }
+
+  return result;
+}

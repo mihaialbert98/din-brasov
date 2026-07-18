@@ -10,6 +10,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import RestaurantStatusButton from "@/components/admin/RestaurantStatusButton";
 import ReservationsGrantButton from "@/components/admin/ReservationsGrantButton";
+import EmailClientsButton from "@/components/admin/EmailClientsButton";
 
 export const metadata: Metadata = { title: "Admin — Restaurante" };
 
@@ -102,7 +103,8 @@ export default async function AdminRestaurantePage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex items-center justify-end gap-2 flex-wrap">
+                      <EmailClientsButton restaurantId={r.id} restaurantName={r.name} />
                       <ReservationsGrantButton id={r.id} granted={r.reservationsGranted} />
                       <RestaurantStatusButton id={r.id} status={r.status} />
                     </div>

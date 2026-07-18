@@ -788,6 +788,29 @@ export const reservations = pgTable(
   (t) => [
     index("reservations_restaurant_date_idx").on(t.restaurantId, t.date),
     index("reservations_status_idx").on(t.status),
+    index("reservations_user_idx").on(t.userId),
+  ]
+);
+
+// Owner-private notes about an account-holding client (their preferences etc.).
+// One row per (restaurant, user); shown in the restaurant's Clienți list.
+export const restaurantClientNotes = pgTable(
+  "restaurant_client_notes",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    note: text("note").notNull().default(""),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    // One note row per (restaurant, client).
+    index("restaurant_client_notes_unique_idx").on(t.restaurantId, t.userId),
   ]
 );
 

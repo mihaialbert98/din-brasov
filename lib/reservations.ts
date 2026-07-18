@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
-import { restaurants, reservationHours, reservations, adminAuditLog } from "@/lib/db/schema";
-import { eq, and, gte, ne, asc, inArray } from "drizzle-orm";
+import { restaurants, reservationHours, reservations, adminAuditLog, places } from "@/lib/db/schema";
+import { eq, and, gte, ne, asc, inArray, isNull, sql } from "drizzle-orm";
 import { sendAdminReservationSettingsChangedEmail } from "@/lib/email";
 import { isPlatformStaff } from "@/lib/restaurant-permissions";
 import type { Session } from "next-auth";
@@ -335,4 +335,61 @@ export async function setReservationStatus(
     .set({ status, updatedAt: new Date() })
     .where(eq(reservations.id, reservationId));
   return true;
+}
+
+/**
+ * Link anonymous reservations to a newly-created/confirmed account by matching the
+ * booking's guest email to the account's (verified) email. Called on signup/confirm
+ * so a table booked while logged out shows up in the user's account. Case-insensitive;
+ * only touches rows with no userId yet. Best-effort.
+ */
+export async function linkAnonReservations(userId: string, email: string): Promise<void> {
+  await db
+    .update(reservations)
+    .set({ userId, updatedAt: new Date() })
+    .where(
+      and(
+        sql`lower(${reservations.guestEmail}) = ${email.toLowerCase()}`,
+        isNull(reservations.userId),
+      )
+    );
+}
+
+/**
+ * A user cancels their OWN reservation. Verifies the reservation belongs to the
+ * user and is still cancellable (pending/confirmed). Cancelling frees the seats
+ * (availability counts only pending+confirmed). Returns the place slug so the UI
+ * can offer "cancel & rebook".
+ */
+export async function cancelOwnReservation(
+  userId: string,
+  reservationId: string,
+): Promise<{ ok: true; placeSlug: string | null } | { ok: false; reason: string }> {
+  const [res] = await db
+    .select({ id: reservations.id, status: reservations.status, restaurantId: reservations.restaurantId })
+    .from(reservations)
+    .where(and(eq(reservations.id, reservationId), eq(reservations.userId, userId)))
+    .limit(1);
+  if (!res) return { ok: false, reason: "Rezervare negăsită." };
+  if (res.status !== "pending" && res.status !== "confirmed") {
+    return { ok: false, reason: "Rezervarea nu mai poate fi anulată." };
+  }
+
+  await db
+    .update(reservations)
+    .set({ status: "cancelled", updatedAt: new Date() })
+    .where(eq(reservations.id, reservationId));
+
+  // The linked place slug (for the rebook link).
+  const [r] = await db
+    .select({ placeId: restaurants.placeId })
+    .from(restaurants)
+    .where(eq(restaurants.id, res.restaurantId))
+    .limit(1);
+  let placeSlug: string | null = null;
+  if (r?.placeId) {
+    const [p] = await db.select({ slug: places.slug }).from(places).where(eq(places.id, r.placeId)).limit(1);
+    placeSlug = p?.slug ?? null;
+  }
+  return { ok: true, placeSlug };
 }
