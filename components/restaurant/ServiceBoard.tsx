@@ -41,7 +41,7 @@ function timeAgo(iso: string): string {
  * `/requests/{id}/ack` (POST). The logged-in owner board passes
  * `/api/restaurants/{id}`; the public staff-link board passes `/api/s/{token}`.
  */
-export default function ServiceBoard({ basePath }: { basePath: string }) {
+export default function ServiceBoard({ basePath, onCount }: { basePath: string; onCount?: (n: number) => void }) {
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [acking, setAcking] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -60,6 +60,7 @@ export default function ServiceBoard({ basePath }: { basePath: string }) {
       // Tab title badge + chime/notification when a NEW request arrives.
       const list: ServiceRequest[] = data ?? [];
       const count = list.length;
+      onCount?.(count);
       if (count > prevCount.current) {
         document.title = `(${count}) Serviciu — Din Brașov`;
         // Describe the newest request (last by createdAt) for the OS notification.
@@ -89,8 +90,12 @@ export default function ServiceBoard({ basePath }: { basePath: string }) {
         method: "POST",
       });
       if (res.ok) {
-        setRequests((rs) => rs.filter((r) => r.id !== id));
-        prevCount.current = Math.max(0, prevCount.current - 1);
+        setRequests((rs) => {
+          const next = rs.filter((r) => r.id !== id);
+          prevCount.current = next.length;
+          onCount?.(next.length); // update the tab badge immediately
+          return next;
+        });
       }
     } finally {
       setAcking(null);

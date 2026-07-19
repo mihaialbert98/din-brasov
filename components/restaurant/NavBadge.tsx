@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useVisiblePoll } from "@/lib/useVisiblePoll";
+import { notify } from "@/lib/chime";
 
 /**
  * Small live count badge for a nav item / tab. Polls a board endpoint and shows
@@ -11,8 +12,10 @@ import { useVisiblePoll } from "@/lib/useVisiblePoll";
  * staff-link tabs. Reuses the existing authed GET endpoints — no new API.
  *
  * When the badge's own nav item is the current page (`boardPath`), the matching
- * board on that page already polls the same endpoint, so the badge suppresses its
- * own poll to avoid a duplicate request.
+ * board on that page already polls the same endpoint (and chimes), so the badge
+ * suppresses its own poll to avoid a duplicate request / double chime. Otherwise
+ * the badge itself chimes + OS-notifies on a new item, so an owner working on any
+ * dashboard page still gets alerted about a new request/reservation.
  *
  * kind:
  *  - "service"     → GET {basePath}/requests?status=pending → count of rows
@@ -36,21 +39,33 @@ export default function NavBadge({
   // On the board's own page, the board component polls this endpoint → skip here.
   const skip = skipProp || (!!boardPath && pathname === boardPath);
   const [count, setCount] = useState(0);
+  // Chime only on a genuine increase, and never on the first poll of a page.
+  const prev = useRef<number | null>(null);
 
   async function poll() {
-    if (skip) return;
+    if (skip) { prev.current = null; return; }
     try {
+      let next = 0;
       if (kind === "service") {
         const res = await fetch(`${basePath}/requests?status=pending`, { cache: "no-store" });
         if (!res.ok) return;
         const { data } = await res.json();
-        setCount(Array.isArray(data) ? data.length : 0);
+        next = Array.isArray(data) ? data.length : 0;
       } else {
         const res = await fetch(`${basePath}/reservations`, { cache: "no-store" });
         if (!res.ok) return;
         const { data } = await res.json();
-        setCount(Array.isArray(data) ? data.filter((r: { status: string }) => r.status === "pending").length : 0);
+        next = Array.isArray(data) ? data.filter((r: { status: string }) => r.status === "pending").length : 0;
       }
+      setCount(next);
+      if (prev.current !== null && next > prev.current) {
+        notify(
+          kind === "service"
+            ? { title: "Cerere nouă la masă", body: "Ai o cerere de serviciu nouă." }
+            : { title: "Rezervare nouă", body: "Ai o cerere de rezervare nouă." }
+        );
+      }
+      prev.current = next;
     } catch {
       /* keep last value; retry next tick */
     }

@@ -43,7 +43,7 @@ function formatDay(date: string): string {
  * `/reservations/{id}/status` (POST). Owner passes `/api/restaurants/{id}`; the
  * staff-link board passes `/api/s/{token}`.
  */
-export default function ReservationsBoard({ basePath }: { basePath: string }) {
+export default function ReservationsBoard({ basePath, onCount }: { basePath: string; onCount?: (n: number) => void }) {
   const [rows, setRows] = useState<Reservation[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -63,6 +63,7 @@ export default function ReservationsBoard({ basePath }: { basePath: string }) {
 
       const pendingRows = list.filter((r) => r.status === "pending");
       const pending = pendingRows.length;
+      onCount?.(pending);
       if (prevPending.current !== null && pending > prevPending.current) {
         document.title = `(${pending}) Rezervări — Din Brașov`;
         // Describe the most recent pending reservation for the OS notification.
