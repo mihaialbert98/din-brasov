@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { restaurants, reservationHours, reservations, adminAuditLog, places, users } from "@/lib/db/schema";
 import { eq, and, gte, ne, asc, inArray, isNull, sql } from "drizzle-orm";
-import { sendAdminReservationSettingsChangedEmail, sendReservationConfirmedEmail, sendReservationDeclinedEmail } from "@/lib/email";
+import { sendReservationConfirmedEmail, sendReservationDeclinedEmail } from "@/lib/email";
 import { isPlatformStaff } from "@/lib/restaurant-permissions";
 import type { Session } from "next-auth";
 
@@ -71,7 +71,9 @@ export async function getReservationHours(restaurantId: string): Promise<Reserva
 
 /**
  * When a PLATFORM ADMIN (not the owner) changes a restaurant's reservation config,
- * write an audit-log row and email the acting admin a confirmation. No-op for owners.
+ * write an audit-log row. No email is sent — changes are frequent and per-change
+ * emails were noise; the append-only audit log is the record of accountability.
+ * No-op for owners.
  */
 export async function auditAdminReservationChange(
   session: Session | null,
@@ -81,9 +83,6 @@ export async function auditAdminReservationChange(
 ): Promise<void> {
   if (!isPlatformStaff(role) || !session?.user?.id) return;
 
-  const [r] = await db.select({ name: restaurants.name }).from(restaurants).where(eq(restaurants.id, restaurantId)).limit(1);
-  const restaurantName = r?.name ?? "Restaurant";
-
   await db.insert(adminAuditLog).values({
     adminId: session.user.id,
     action: "edit_reservation_settings",
@@ -91,15 +90,6 @@ export async function auditAdminReservationChange(
     entityId: restaurantId,
     metadataJson: JSON.stringify({ change }),
   });
-
-  const email = session.user.email;
-  if (email) {
-    await sendAdminReservationSettingsChangedEmail(email, {
-      adminName: session.user.name ?? "Administrator",
-      restaurantName,
-      change,
-    }).catch(() => {});
-  }
 }
 
 /** The single-party cap for a restaurant (independent of per-slot seat capacity). */

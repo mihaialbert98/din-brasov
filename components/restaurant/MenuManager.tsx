@@ -154,7 +154,7 @@ export default function MenuManager({
   }
 
   async function saveItem(form: ItemFormValues) {
-    const { categoryId, item } = itemForm!;
+    const { item } = itemForm!;
     const body = {
       name: form.name,
       nameEn: form.nameEn,
@@ -167,10 +167,12 @@ export default function MenuManager({
       calories: form.calories,
       isVegan: form.isVegan,
       isAvailable: form.isAvailable,
+      // categoryId on PATCH moves the item to another section; on POST it's the target.
+      categoryId: form.categoryId,
     };
     const r = item
       ? await call(`${base}/items/${item.id}`, "PATCH", body)
-      : await call(`${base}/items`, "POST", { ...body, categoryId });
+      : await call(`${base}/items`, "POST", body);
     if (r) { setItemForm(null); router.refresh(); }
   }
 
@@ -336,6 +338,8 @@ export default function MenuManager({
         <ItemFormModal
           initial={itemForm.item}
           busy={busy}
+          categories={initialCategories.map((c) => ({ id: c.id, name: c.name }))}
+          currentCategoryId={itemForm.categoryId}
           onCancel={() => setItemForm(null)}
           onSave={saveItem}
         />
@@ -356,19 +360,25 @@ interface ItemFormValues {
   calories: number | null;
   isVegan: boolean;
   isAvailable: boolean;
+  categoryId: string; // chosen section — lets an existing item be MOVED here
 }
 
 function ItemFormModal({
   initial,
   busy,
+  categories,
+  currentCategoryId,
   onCancel,
   onSave,
 }: {
   initial: MenuItemData | null;
   busy: boolean;
+  categories: { id: string; name: string }[];
+  currentCategoryId: string;
   onCancel: () => void;
   onSave: (v: ItemFormValues) => void;
 }) {
+  const [categoryId, setCategoryId] = useState(currentCategoryId);
   const [name, setName] = useState(initial?.name ?? "");
   const [nameEn, setNameEn] = useState(initial?.nameEn ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
@@ -400,6 +410,7 @@ function ItemFormModal({
       calories: kcal,
       isVegan,
       isAvailable,
+      categoryId,
     });
   }
 
@@ -412,6 +423,25 @@ function ItemFormModal({
         <h3 className="font-semibold text-lg">{initial ? "Editează produs" : "Produs nou"}</h3>
 
         {formError && <p className="text-sm text-red-600">{formError}</p>}
+
+        {/* Section — lets an existing item be moved to another category. */}
+        {categories.length > 1 && (
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700">Secțiune</label>
+            <select
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+              className={field}
+            >
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            {initial && categoryId !== currentCategoryId && (
+              <span className="text-xs text-[#c84b1e]">Produsul va fi mutat în această secțiune.</span>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="flex flex-col gap-1">
