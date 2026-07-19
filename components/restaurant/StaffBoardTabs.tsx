@@ -19,9 +19,11 @@ import { notify } from "@/lib/chime";
 export default function StaffBoardTabs({
   basePath,
   showReservations,
+  manualConfirm = false,
 }: {
   basePath: string;
   showReservations: boolean;
+  manualConfirm?: boolean;
 }) {
   const [tab, setTab] = useState<"serviciu" | "rezervari">("serviciu");
   const [serviceCount, setServiceCount] = useState(0);
@@ -104,7 +106,7 @@ export default function StaffBoardTabs({
       {tab === "serviciu" ? (
         <ServiceBoard basePath={basePath} onCount={setServiceCount} />
       ) : (
-        <ReservationsBoard basePath={basePath} onCount={setReservationCount} />
+        <ReservationsBoard basePath={basePath} onCount={setReservationCount} manualConfirm={manualConfirm} />
       )}
     </div>
   );

@@ -36,6 +36,7 @@ export default async function RezervariPage({
     .select({
       adminGrant: restaurants.reservationsEnabledByAdmin,
       ownerEnabled: restaurants.reservationsEnabledByOwner,
+      confirmMode: restaurants.reservationConfirmMode,
     })
     .from(restaurants)
     .where(eq(restaurants.id, restaurant.id))
@@ -68,7 +69,7 @@ export default async function RezervariPage({
             : "Funcția de rezervări nu este activată pentru acest restaurant. Cere activarea de la echipa Din Brașov."}
         </div>
       ) : (
-        <ReservationsBoard basePath={`/api/restaurants/${restaurant.id}`} />
+        <ReservationsBoard basePath={`/api/restaurants/${restaurant.id}`} manualConfirm={row?.confirmMode !== "auto"} />
       )}
     </div>
   );

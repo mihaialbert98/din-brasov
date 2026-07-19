@@ -22,11 +22,16 @@ export default async function StaffBoardPage({ params }: Props) {
 
   // Show the Rezervări tab only when the restaurant takes reservations.
   const [flags] = await db
-    .select({ admin: restaurants.reservationsEnabledByAdmin, owner: restaurants.reservationsEnabledByOwner })
+    .select({
+      admin: restaurants.reservationsEnabledByAdmin,
+      owner: restaurants.reservationsEnabledByOwner,
+      confirmMode: restaurants.reservationConfirmMode,
+    })
     .from(restaurants)
     .where(eq(restaurants.id, restaurant.id))
     .limit(1);
   const showReservations = !!flags?.admin && !!flags?.owner;
+  const manualConfirm = flags?.confirmMode !== "auto";
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -40,7 +45,7 @@ export default async function StaffBoardPage({ params }: Props) {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-6">
-        <StaffBoardTabs basePath={`/api/s/${token}`} showReservations={showReservations} />
+        <StaffBoardTabs basePath={`/api/s/${token}`} showReservations={showReservations} manualConfirm={manualConfirm} />
       </main>
     </div>
   );
