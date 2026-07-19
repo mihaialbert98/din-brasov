@@ -49,6 +49,10 @@ export default function ReservationForm({
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [done, setDone] = useState<null | "confirmed" | "pending">(null);
   const [showSignup, setShowSignup] = useState(false);
+  const [email, setEmail] = useState(prefill?.email ?? "");
+  // Whether this booking will get an email update: a logged-in member (account
+  // email) or a guest who typed an email. Drives the field hint + success message.
+  const willEmail = isMember || email.trim().length > 0;
   // Logged-in extras.
   const [updatePhone, setUpdatePhone] = useState(false);
   const [subscribePromo, setSubscribePromo] = useState(false);
@@ -136,9 +140,35 @@ export default function ReservationForm({
           <p className="text-sm text-muted">
             {done === "confirmed"
               ? `Te așteptăm la ${restaurantName}.`
+              : willEmail
+              ? `${restaurantName} îți va confirma rezervarea în curând. Vei primi un email cu confirmarea.`
               : `${restaurantName} îți va confirma rezervarea în curând, telefonic.`}
           </p>
         </div>
+
+        {/* Logged-in members: point them to their account to view/manage this booking. */}
+        {isMember && (
+          <div className="bg-surface border border-hairline rounded-2xl p-5">
+            <div className="flex items-start gap-3">
+              <span className="w-9 h-9 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
+                <CalendarDays className="w-5 h-5 text-accent" aria-hidden />
+              </span>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-serif text-lg font-semibold text-ink leading-snug">Rezervarea e în contul tău</h3>
+                <p className="text-sm text-muted mt-0.5 mb-3">
+                  O găsești oricând apăsând pe numele tău din colțul de sus → Rezervări, de unde o poți
+                  vedea sau anula.
+                </p>
+                <Link
+                  href="/profil/rezervari"
+                  className="inline-flex items-center justify-center bg-accent text-white font-semibold text-sm px-4 py-2.5 rounded-xl hover:bg-accent-hover transition-colors"
+                >
+                  Vezi rezervările mele
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Gentle inline account invite under the confirmation — dismissible, not a modal. */}
         {showSignup && (
@@ -325,9 +355,27 @@ export default function ReservationForm({
             </div>
           </div>
           <div className="flex flex-col gap-1">
-            <label htmlFor="guestEmail" className="font-medium text-ink text-sm">Email (opțional)</label>
-            <input id="guestEmail" name="guestEmail" type="email" defaultValue={prefill?.email ?? ""} autoComplete="email" className={inputClass} />
-            <span className="text-xs text-faint">Îți trimitem confirmarea pe email dacă îl completezi.</span>
+            <label htmlFor="guestEmail" className="font-medium text-ink text-sm">
+              Email {isMember ? "" : "(opțional)"}
+            </label>
+            <input
+              id="guestEmail" name="guestEmail" type="email"
+              value={email} onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email" className={inputClass}
+            />
+            {/* Manual mode + no way to email → warn they'll only learn by phone. */}
+            {confirmMode === "manual" && !willEmail ? (
+              <span className="text-xs text-amber-700">
+                Fără email, nu vei ști imediat dacă restaurantul acceptă rezervarea — vei fi contactat
+                telefonic de un membru al echipei. Completează emailul ca să primești confirmarea automat.
+              </span>
+            ) : (
+              <span className="text-xs text-faint">
+                {confirmMode === "manual"
+                  ? "Îți trimitem pe email confirmarea sau refuzul rezervării."
+                  : "Îți trimitem confirmarea pe email dacă îl completezi."}
+              </span>
+            )}
           </div>
           <div className="flex flex-col gap-1">
             <label htmlFor="note" className="font-medium text-ink text-sm">Mențiuni (opțional)</label>
@@ -352,7 +400,11 @@ export default function ReservationForm({
             {loading ? "Se trimite…" : confirmMode === "auto" ? "Rezervă masa" : "Trimite cererea de rezervare"}
           </button>
           {confirmMode === "manual" && (
-            <p className="text-xs text-faint text-center">Rezervarea va fi confirmată de restaurant telefonic sau pe email.</p>
+            <p className="text-xs text-faint text-center">
+              {willEmail
+                ? "Rezervarea va fi confirmată de restaurant — primești un email cu răspunsul."
+                : "Rezervarea va fi confirmată de restaurant telefonic."}
+            </p>
           )}
         </div>
       )}

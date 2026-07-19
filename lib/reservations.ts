@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
-import { restaurants, reservationHours, reservations, adminAuditLog, places } from "@/lib/db/schema";
+import { restaurants, reservationHours, reservations, adminAuditLog, places, users } from "@/lib/db/schema";
 import { eq, and, gte, ne, asc, inArray, isNull, sql } from "drizzle-orm";
-import { sendAdminReservationSettingsChangedEmail } from "@/lib/email";
+import { sendAdminReservationSettingsChangedEmail, sendReservationConfirmedEmail, sendReservationDeclinedEmail } from "@/lib/email";
 import { isPlatformStaff } from "@/lib/restaurant-permissions";
 import type { Session } from "next-auth";
 
@@ -361,8 +361,10 @@ export async function listUpcomingReservations(restaurantId: string) {
 
 /**
  * Set a reservation's status (confirmed | declined | cancelled) after verifying it
- * belongs to the given restaurant. No guest email is sent — the restaurant contacts
- * the guest by phone. Returns false if the reservation isn't found.
+ * belongs to the given restaurant. When the guest gave an email (or is linked to an
+ * account), a confirmed/declined email is sent — best-effort, never blocks the
+ * status change. Guests without an email are contacted by phone. Returns false if
+ * the reservation isn't found.
  */
 export async function setReservationStatus(
   restaurantId: string,
@@ -370,8 +372,18 @@ export async function setReservationStatus(
   status: "confirmed" | "declined" | "cancelled",
 ): Promise<boolean> {
   const [res] = await db
-    .select({ id: reservations.id })
+    .select({
+      id: reservations.id,
+      guestName: reservations.guestName,
+      guestEmail: reservations.guestEmail,
+      userId: reservations.userId,
+      date: reservations.date,
+      time: reservations.time,
+      partySize: reservations.partySize,
+      restaurantName: restaurants.name,
+    })
     .from(reservations)
+    .innerJoin(restaurants, eq(reservations.restaurantId, restaurants.id))
     .where(and(eq(reservations.id, reservationId), eq(reservations.restaurantId, restaurantId)))
     .limit(1);
   if (!res) return false;
@@ -380,7 +392,40 @@ export async function setReservationStatus(
     .update(reservations)
     .set({ status, updatedAt: new Date() })
     .where(eq(reservations.id, reservationId));
+
+  // Notify the guest by email on confirm/decline — if we have one (booking email,
+  // else the linked account's email). Fire-and-forget; email failure never blocks.
+  if (status === "confirmed" || status === "declined") {
+    void notifyReservationStatus(res, status);
+  }
   return true;
+}
+
+/** Resolve the guest's email (booking email or linked account) and send the email. */
+async function notifyReservationStatus(
+  res: { guestName: string; guestEmail: string | null; userId: string | null; date: string; time: string; partySize: number; restaurantName: string },
+  status: "confirmed" | "declined",
+): Promise<void> {
+  try {
+    let email = res.guestEmail;
+    if (!email && res.userId) {
+      const [u] = await db.select({ email: users.email }).from(users).where(eq(users.id, res.userId)).limit(1);
+      email = u?.email ?? null;
+    }
+    if (!email) return;
+
+    const data = {
+      restaurantName: res.restaurantName,
+      date: res.date,
+      time: res.time,
+      partySize: res.partySize,
+      guestName: res.guestName,
+    };
+    if (status === "confirmed") await sendReservationConfirmedEmail(email, data);
+    else await sendReservationDeclinedEmail(email, data);
+  } catch {
+    /* email is best-effort — never block the status change */
+  }
 }
 
 /**

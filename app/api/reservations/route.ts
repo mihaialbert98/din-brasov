@@ -10,6 +10,7 @@ import { db } from "@/lib/db";
 import { restaurants, reservations, users, newsletterSubscribers } from "@/lib/db/schema";
 import { auth } from "@/lib/auth";
 import { canReserve, validateBooking } from "@/lib/reservations";
+import { sendReservationConfirmedEmail } from "@/lib/email";
 import { checkReservationLimit, hashIp, getIp } from "@/lib/rate-limit";
 
 const schema = z.object({
@@ -85,11 +86,15 @@ export async function POST(req: Request) {
     note: d.note || null,
   });
 
+  // Guest email for a confirmation mail: the booking email, else the account email.
+  let notifyEmail = d.guestEmail || null;
+
   // Logged-in extras.
   if (userId) {
     // Persist the phone to the account: on first booking (no phone yet), or when
     // the user explicitly asked to update it for future reservations.
     const [u] = await db.select({ phone: users.phone, email: users.email, name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
+    if (u && !notifyEmail) notifyEmail = u.email;
     if (u && (!u.phone || d.updatePhone)) {
       await db.update(users).set({ phone: d.guestPhone, updatedAt: new Date() }).where(eq(users.id, userId));
     }
@@ -114,7 +119,18 @@ export async function POST(req: Request) {
     }
   }
 
-  // No guest email is sent — the restaurant handles confirmation by phone. The
-  // client sees an on-screen result + a gentle signup invite instead.
+  // Auto-confirm mode → email the guest their confirmation immediately (if we have
+  // an email). In manual mode nothing is sent here — the email goes out when a staff
+  // member confirms/declines the pending request. Best-effort; never blocks the booking.
+  if (status === "confirmed" && notifyEmail) {
+    void sendReservationConfirmedEmail(notifyEmail, {
+      restaurantName: r.name,
+      date: d.date,
+      time: d.time,
+      partySize: d.partySize,
+      guestName: d.guestName,
+    }).catch(() => {});
+  }
+
   return NextResponse.json({ ok: true, status });
 }
