@@ -275,9 +275,10 @@ export default function ReservationSettings({
             <p className="text-sm text-gray-500 mb-4">
               Adaugă intervalele în care primești rezervări.{" "}
               {areas
-                ? "Setează câte locuri sunt disponibile la interior și pe terasă în fiecare interval."
-                : "Locuri/slot = câte persoane încap în total la fiecare oră."}{" "}
-              Când un interval se umple, dispare din opțiunile clientului.
+                ? "Setează câte locuri sunt disponibile la interior și pe terasă."
+                : "Locuri = câte persoane încap în total."}{" "}
+              „Start la fiecare” = cât de des poate începe o rezervare (ex: la 15 min), diferit de
+              „Durata unei mese” de mai sus (cât timp stă o rezervare la masă).
             </p>
 
             {initialHours.length === 0 ? (
@@ -328,9 +329,9 @@ export default function ReservationSettings({
                 <label className={labelClass}>Până la
                   <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className={fieldClass} />
                 </label>
-                <label className={labelClass}>La fiecare
+                <label className={labelClass} title="Cât de des poate începe o rezervare (nu durata mesei)">Start la fiecare
                   <select value={slot} onChange={(e) => setSlot(Number(e.target.value))} className={fieldClass}>
-                    {[15, 30, 60, 90, 120].map((m) => <option key={m} value={m}>{m} min</option>)}
+                    {[15, 30].map((m) => <option key={m} value={m}>{m} min</option>)}
                   </select>
                 </label>
                 {areas ? (
