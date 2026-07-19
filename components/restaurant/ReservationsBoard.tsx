@@ -1,7 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Phone, Mail, Users, Clock, Check, X, CalendarClock, Plus } from "lucide-react";
+import { notify } from "@/lib/chime";
+import { useVisiblePoll } from "@/lib/useVisiblePoll";
+import NotifyPermission from "@/components/restaurant/NotifyPermission";
 
 interface Reservation {
   id: string;
@@ -40,28 +43,56 @@ function formatDay(date: string): string {
  * `/reservations/{id}/status` (POST). Owner passes `/api/restaurants/{id}`; the
  * staff-link board passes `/api/s/{token}`.
  */
-export default function ReservationsBoard({ basePath }: { basePath: string }) {
+type Filter = "azi" | "maine" | "toate" | "asteptare";
+
+export default function ReservationsBoard({
+  basePath,
+  onCount,
+  manualConfirm = false,
+}: {
+  basePath: string;
+  onCount?: (n: number) => void;
+  /** Restaurant requires manual confirmation → show the "În așteptare" filter. */
+  manualConfirm?: boolean;
+}) {
   const [rows, setRows] = useState<Reservation[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"azi" | "maine" | "toate">("azi");
+  const [filter, setFilter] = useState<Filter>("azi");
   const [adding, setAdding] = useState(false);
+  // Chime + tab badge when a NEW pending reservation arrives (board must be open).
+  const prevPending = useRef<number | null>(null);
 
   const fetchRows = useCallback(async () => {
     try {
       const res = await fetch(`${basePath}/reservations`, { cache: "no-store" });
       if (!res.ok) return;
       const { data } = await res.json();
-      setRows(data ?? []);
+      const list: Reservation[] = data ?? [];
+      setRows(list);
       setLoaded(true);
+
+      const pendingRows = list.filter((r) => r.status === "pending");
+      const pending = pendingRows.length;
+      onCount?.(pending);
+      if (prevPending.current !== null && pending > prevPending.current) {
+        document.title = `(${pending}) Rezervări — Din Brașov`;
+        // Describe the most recent pending reservation for the OS notification.
+        const newest = [...pendingRows].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)).at(-1);
+        notify({
+          title: "Rezervare nouă",
+          body: newest ? `${newest.guestName} — ${newest.partySize} pers. la ${newest.time}` : undefined,
+        });
+      } else if (pending === 0) {
+        document.title = "Rezervări — Din Brașov";
+      }
+      prevPending.current = pending;
     } catch { /* retry */ }
   }, [basePath]);
 
-  useEffect(() => {
-    fetchRows();
-    const interval = setInterval(fetchRows, 15000);
-    return () => clearInterval(interval);
-  }, [fetchRows]);
+  // Poll every 20s while visible, 30s when hidden.
+  useVisiblePoll(fetchRows, 20000, 30000);
+  useEffect(() => () => { document.title = "Din Brașov"; }, []);
 
   async function setStatus(id: string, status: "confirmed" | "declined" | "cancelled") {
     // Confirm destructive actions — a decline/cancel can't be undone.
@@ -87,6 +118,7 @@ export default function ReservationsBoard({ basePath }: { basePath: string }) {
   const filtered = useMemo(() => {
     if (filter === "azi") return rows.filter((r) => r.date === todayStr());
     if (filter === "maine") return rows.filter((r) => r.date === tomorrowStr());
+    if (filter === "asteptare") return rows.filter((r) => r.status === "pending");
     return rows;
   }, [rows, filter]);
 
@@ -105,6 +137,7 @@ export default function ReservationsBoard({ basePath }: { basePath: string }) {
 
   return (
     <div>
+      <NotifyPermission />
       {/* Summary strip */}
       <div className="grid grid-cols-3 gap-3 mb-5">
         {[
@@ -120,15 +153,28 @@ export default function ReservationsBoard({ basePath }: { basePath: string }) {
       </div>
 
       {/* Filter + manual add */}
-      <div className="flex items-center gap-1 mb-4">
-        {([["azi", "Azi"], ["maine", "Mâine"], ["toate", "Toate"]] as const).map(([k, label]) => (
+      <div className="flex items-center gap-1 mb-4 flex-wrap">
+        {([
+          ["azi", "Azi"],
+          ["maine", "Mâine"],
+          ["toate", "Toate"],
+          // Only useful when the restaurant confirms manually (auto mode has no pending).
+          ...(manualConfirm ? [["asteptare", "În așteptare"] as const] : []),
+        ] as const).map(([k, label]) => (
           <button
             key={k} onClick={() => setFilter(k)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               filter === k ? "bg-[#1a1a1a] text-white" : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
             }`}
           >
             {label}
+            {k === "asteptare" && counts.pending > 0 && (
+              <span className={`inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full text-[10px] font-bold tabular-nums ${
+                filter === k ? "bg-white text-[#1a1a1a]" : "bg-amber-100 text-amber-700"
+              }`}>
+                {counts.pending}
+              </span>
+            )}
           </button>
         ))}
         <button
@@ -150,7 +196,12 @@ export default function ReservationsBoard({ basePath }: { basePath: string }) {
       {sorted.length === 0 ? (
         <div className="text-center py-12 text-gray-400">
           <CalendarClock className="w-8 h-8 mx-auto mb-2 opacity-50" aria-hidden />
-          <p className="text-sm">Nicio rezervare {filter === "azi" ? "azi" : filter === "maine" ? "mâine" : "viitoare"}.</p>
+          <p className="text-sm">
+            {filter === "azi" ? "Nicio rezervare azi."
+              : filter === "maine" ? "Nicio rezervare mâine."
+              : filter === "asteptare" ? "Nicio rezervare în așteptare."
+              : "Nicio rezervare viitoare."}
+          </p>
         </div>
       ) : (
         <div className="space-y-6">

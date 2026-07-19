@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { eq, and } from "drizzle-orm";
 import type { Metadata } from "next";
 import { db } from "@/lib/db";
-import { restaurants, places, users } from "@/lib/db/schema";
+import { restaurants, places, users, newsletterSubscribers } from "@/lib/db/schema";
 import { auth } from "@/lib/auth";
 import { canReserve, getReservationHours, getMaxPartySize } from "@/lib/reservations";
 import ReservationForm from "@/components/restaurant/ReservationForm";
@@ -58,16 +58,29 @@ export default async function ReservationPage({ params }: Props) {
   const hours = await getReservationHours(restaurant.id);
   const maxParty = await getMaxPartySize(restaurant.id);
 
-  // Pre-fill for logged-in members (convenience — never required).
+  // Pre-fill for logged-in members (convenience — never required). Also load
+  // whether the account already saved a phone and whether they're a newsletter
+  // subscriber (drives the "update phone" + "promo opt-in" controls).
   const session = await auth().catch(() => null);
   let prefill: { name?: string | null; phone?: string | null; email?: string | null } | undefined;
+  let hasSavedPhone = false;
+  let isSubscriber = false;
   if (session?.user?.id) {
     const [u] = await db
       .select({ name: users.name, phone: users.phone, email: users.email })
       .from(users)
       .where(eq(users.id, session.user.id))
       .limit(1);
-    if (u) prefill = { name: u.name, phone: u.phone, email: u.email };
+    if (u) {
+      prefill = { name: u.name, phone: u.phone, email: u.email };
+      hasSavedPhone = !!u.phone;
+      const [sub] = await db
+        .select({ id: newsletterSubscribers.id })
+        .from(newsletterSubscribers)
+        .where(and(eq(newsletterSubscribers.email, u.email), eq(newsletterSubscribers.status, "active")))
+        .limit(1);
+      isSubscriber = !!sub;
+    }
   }
 
   return (
@@ -92,6 +105,8 @@ export default async function ReservationPage({ params }: Props) {
         areasEnabled={restaurant.areasEnabled}
         prefill={prefill}
         isMember={!!session?.user?.id}
+        hasSavedPhone={hasSavedPhone}
+        isSubscriber={isSubscriber}
       />
     </div>
   );

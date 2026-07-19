@@ -5,16 +5,17 @@
  */
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
   users,
   restaurants,
   restaurantMembers,
+  places,
   adminAuditLog,
 } from "@/lib/db/schema";
-import { slugify } from "@/lib/slugify";
+import { uniqueRestaurantSlug } from "@/lib/restaurant-permissions";
 import { addNumberedTables } from "@/lib/restaurant-tables";
 
 const schema = z.object({
@@ -24,23 +25,10 @@ const schema = z.object({
   address: z.string().max(300).optional(),
   phone: z.string().max(50).optional(),
   tableCount: z.number().int().min(1).max(100).optional(), // auto-labeled Masa 1…N
+  // When present, link the restaurant to an existing Localuri place instead of
+  // creating a standalone one (used by the merged admin "Asociază proprietar").
+  placeId: z.string().optional(),
 });
-
-/** Build a unique slug from the name (no date suffix — it's a brand URL). */
-async function uniqueSlug(name: string): Promise<string> {
-  const base = slugify(name) || "restaurant";
-  let slug = base;
-  for (let i = 2; i < 100; i++) {
-    const [existing] = await db
-      .select({ id: restaurants.id })
-      .from(restaurants)
-      .where(eq(restaurants.slug, slug))
-      .limit(1);
-    if (!existing) return slug;
-    slug = `${base}-${i}`;
-  }
-  return `${base}-${crypto.randomUUID().slice(0, 6)}`;
-}
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -56,7 +44,7 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-  const { name, ownerEmail, description, address, phone, tableCount } = parsed.data;
+  const { name, ownerEmail, description, address, phone, tableCount, placeId } = parsed.data;
 
   // Owner must already have an account (v1 — no invite flow).
   const [owner] = await db
@@ -71,37 +59,77 @@ export async function POST(req: Request) {
     );
   }
 
-  const slug = await uniqueSlug(name);
+  let restaurantId: string;
+  let slug: string;
+  let createdRestaurant = false;
 
-  const [created] = await db
-    .insert(restaurants)
-    .values({
-      name,
-      slug,
-      description: description ?? null,
-      address: address ?? null,
-      phone: phone ?? null,
-      status: "active",
-    })
-    .returning({ id: restaurants.id });
+  // Linking to an existing Localuri place: reuse its restaurant if one already
+  // exists (just (re)assign the owner), otherwise create it under that place.
+  const [existingForPlace] = placeId
+    ? await db
+        .select({ id: restaurants.id, slug: restaurants.slug })
+        .from(restaurants)
+        .where(eq(restaurants.placeId, placeId))
+        .limit(1)
+    : [];
 
-  const restaurantId = created!.id;
+  if (existingForPlace) {
+    restaurantId = existingForPlace.id;
+    slug = existingForPlace.slug;
+  } else {
+    // When linking to a place, seed missing fields from the place row.
+    const [place] = placeId
+      ? await db
+          .select({ name: places.name, description: places.description, address: places.address, phone: places.phone })
+          .from(places)
+          .where(eq(places.id, placeId))
+          .limit(1)
+      : [];
+    if (placeId && !place) {
+      return NextResponse.json({ error: "Localul nu a fost găsit." }, { status: 404 });
+    }
 
-  await db.insert(restaurantMembers).values({
-    restaurantId,
-    userId: owner.id,
-    memberRole: "owner",
-  });
+    slug = await uniqueRestaurantSlug(name || place?.name || "restaurant");
+    const [created] = await db
+      .insert(restaurants)
+      .values({
+        name: name || place?.name || "Restaurant",
+        slug,
+        description: description ?? place?.description ?? null,
+        address: address ?? place?.address ?? null,
+        phone: phone ?? place?.phone ?? null,
+        placeId: placeId ?? null,
+        showInLocaluri: placeId ? true : false,
+        status: "active",
+      })
+      .returning({ id: restaurants.id });
+    restaurantId = created!.id;
+    createdRestaurant = true;
+  }
+
+  // Assign / ensure the owner membership (idempotent for an already-linked owner).
+  const [existingMember] = await db
+    .select({ id: restaurantMembers.id })
+    .from(restaurantMembers)
+    .where(and(eq(restaurantMembers.restaurantId, restaurantId), eq(restaurantMembers.userId, owner.id)))
+    .limit(1);
+  if (!existingMember) {
+    await db.insert(restaurantMembers).values({
+      restaurantId,
+      userId: owner.id,
+      memberRole: "owner",
+    });
+  }
 
   // Optional initial tables — auto-labeled Masa 1…N, each with its own QR token.
   const tablesCreated = tableCount ? await addNumberedTables(restaurantId, tableCount) : 0;
 
   await db.insert(adminAuditLog).values({
     adminId: session.user.id,
-    action: "create_restaurant",
+    action: createdRestaurant ? "create_restaurant" : "assign_restaurant_owner",
     entityType: "restaurant",
     entityId: restaurantId,
-    metadataJson: JSON.stringify({ name, slug, ownerEmail, tables: tablesCreated }),
+    metadataJson: JSON.stringify({ name, slug, ownerEmail, tables: tablesCreated, placeId: placeId ?? null }),
   });
 
   return NextResponse.json({ ok: true, id: restaurantId, slug }, { status: 201 });

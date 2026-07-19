@@ -18,6 +18,8 @@ const schema = z.object({
   confirmMode: z.enum(["auto", "manual"]).optional(),
   maxPartySize: z.number().int().min(1).max(50).optional(),
   areasEnabled: z.boolean().optional(),
+  // Turn time — how long a booking occupies its seats (minutes). 30 min – 6 h.
+  turnMinutes: z.number().int().min(30).max(360).optional(),
 });
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -51,6 +53,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (parsed.data.confirmMode !== undefined) patch.reservationConfirmMode = parsed.data.confirmMode;
   if (parsed.data.maxPartySize !== undefined) patch.reservationMaxPartySize = parsed.data.maxPartySize;
   if (parsed.data.areasEnabled !== undefined) patch.reservationAreasEnabled = parsed.data.areasEnabled;
+  if (parsed.data.turnMinutes !== undefined) patch.reservationTurnMinutes = parsed.data.turnMinutes;
 
   await db.update(restaurants).set(patch).where(eq(restaurants.id, id));
 

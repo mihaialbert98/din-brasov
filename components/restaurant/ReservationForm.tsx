@@ -25,6 +25,8 @@ export default function ReservationForm({
   areasEnabled = false,
   prefill,
   isMember = false,
+  hasSavedPhone = false,
+  isSubscriber = false,
 }: {
   restaurantId: string;
   restaurantName: string;
@@ -34,6 +36,8 @@ export default function ReservationForm({
   areasEnabled?: boolean;
   prefill?: Prefill;
   isMember?: boolean;
+  hasSavedPhone?: boolean;
+  isSubscriber?: boolean;
 }) {
   const mountedAt = useRef(Date.now());
   const [partySize, setPartySize] = useState(2);
@@ -45,6 +49,13 @@ export default function ReservationForm({
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [done, setDone] = useState<null | "confirmed" | "pending">(null);
   const [showSignup, setShowSignup] = useState(false);
+  const [email, setEmail] = useState(prefill?.email ?? "");
+  // Whether this booking will get an email update: a logged-in member (account
+  // email) or a guest who typed an email. Drives the field hint + success message.
+  const willEmail = isMember || email.trim().length > 0;
+  // Logged-in extras.
+  const [updatePhone, setUpdatePhone] = useState(false);
+  const [subscribePromo, setSubscribePromo] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -103,6 +114,8 @@ export default function ReservationForm({
         guestPhone: (form.get("guestPhone") as string)?.trim(),
         guestEmail: (form.get("guestEmail") as string)?.trim() || undefined,
         note: (form.get("note") as string)?.trim() || undefined,
+        updatePhone: isMember && hasSavedPhone ? updatePhone : undefined,
+        subscribePromo: isMember && !isSubscriber ? subscribePromo : undefined,
         website: form.get("website") || "",
         elapsed: Date.now() - mountedAt.current,
       }),
@@ -127,9 +140,35 @@ export default function ReservationForm({
           <p className="text-sm text-muted">
             {done === "confirmed"
               ? `Te așteptăm la ${restaurantName}.`
+              : willEmail
+              ? `${restaurantName} îți va confirma rezervarea în curând. Vei primi un email cu confirmarea.`
               : `${restaurantName} îți va confirma rezervarea în curând, telefonic.`}
           </p>
         </div>
+
+        {/* Logged-in members: point them to their account to view/manage this booking. */}
+        {isMember && (
+          <div className="bg-surface border border-hairline rounded-2xl p-5">
+            <div className="flex items-start gap-3">
+              <span className="w-9 h-9 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
+                <CalendarDays className="w-5 h-5 text-accent" aria-hidden />
+              </span>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-serif text-lg font-semibold text-ink leading-snug">Rezervarea e în contul tău</h3>
+                <p className="text-sm text-muted mt-0.5 mb-3">
+                  O găsești oricând apăsând pe numele tău din colțul de sus → Rezervări, de unde o poți
+                  vedea sau anula.
+                </p>
+                <Link
+                  href="/profil/rezervari"
+                  className="inline-flex items-center justify-center bg-accent text-white font-semibold text-sm px-4 py-2.5 rounded-xl hover:bg-accent-hover transition-colors"
+                >
+                  Vezi rezervările mele
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Gentle inline account invite under the confirmation — dismissible, not a modal. */}
         {showSignup && (
@@ -146,9 +185,10 @@ export default function ReservationForm({
                 <Sparkles className="w-5 h-5 text-accent" aria-hidden />
               </span>
               <div className="flex-1 min-w-0">
-                <h3 className="font-serif text-lg font-semibold text-ink leading-snug">Descoperă Brașovul</h3>
+                <h3 className="font-serif text-lg font-semibold text-ink leading-snug">Creează un cont gratuit</h3>
                 <p className="text-sm text-muted mt-0.5 mb-3">
-                  Evenimente, localuri noi și anunțuri din oraș — toate într-un singur cont, gratuit.
+                  Îți gestionezi rezervările (le vezi și le anulezi) și, dacă vrei, primești oferte de la
+                  restaurantele din Brașov — totul din contul tău.
                 </p>
                 <Link
                   href="/cont-nou?callbackUrl=%2F&from=rezervare"
@@ -171,6 +211,18 @@ export default function ReservationForm({
   return (
     <form onSubmit={handleSubmit} className="bg-surface rounded-2xl border border-hairline p-6 space-y-6">
       {error && <div role="alert" className="bg-red-50 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
+
+      {/* Logged-out prompt — non-blocking. Booking never requires an account;
+          this offers login/signup so they can manage the reservation afterward. */}
+      {!isMember && (
+        <div className="bg-cream/40 border border-hairline rounded-xl px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <span className="text-sm text-ink font-medium">Ai un cont?</span>
+          <Link href="/intra" className="text-sm text-accent font-semibold hover:underline">Conectează-te</Link>
+          <span className="text-faint text-sm">sau</span>
+          <Link href="/cont-nou?callbackUrl=%2F&from=rezervare" className="text-sm text-accent font-semibold hover:underline">Creează cont</Link>
+          <span className="text-xs text-muted w-full">ca să-ți gestionezi rezervările — dar poți rezerva și fără cont.</span>
+        </div>
+      )}
 
       {/* 1 — Party size */}
       <div>
@@ -294,17 +346,49 @@ export default function ReservationForm({
             <div className="flex flex-col gap-1">
               <label htmlFor="guestPhone" className="font-medium text-ink text-sm">Telefon *</label>
               <input id="guestPhone" name="guestPhone" type="tel" required defaultValue={prefill?.phone ?? ""} autoComplete="tel" className={inputClass} />
+              {isMember && hasSavedPhone && (
+                <label className="flex items-center gap-2 text-xs text-muted mt-1 cursor-pointer">
+                  <input type="checkbox" checked={updatePhone} onChange={(e) => setUpdatePhone(e.target.checked)} className="accent-accent" />
+                  Actualizează numărul în cont pentru rezervări viitoare
+                </label>
+              )}
             </div>
           </div>
           <div className="flex flex-col gap-1">
-            <label htmlFor="guestEmail" className="font-medium text-ink text-sm">Email (opțional)</label>
-            <input id="guestEmail" name="guestEmail" type="email" defaultValue={prefill?.email ?? ""} autoComplete="email" className={inputClass} />
-            <span className="text-xs text-faint">Îți trimitem confirmarea pe email dacă îl completezi.</span>
+            <label htmlFor="guestEmail" className="font-medium text-ink text-sm">
+              Email {isMember ? "" : "(opțional)"}
+            </label>
+            <input
+              id="guestEmail" name="guestEmail" type="email"
+              value={email} onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email" className={inputClass}
+            />
+            {/* Manual mode + no way to email → warn they'll only learn by phone. */}
+            {confirmMode === "manual" && !willEmail ? (
+              <span className="text-xs text-amber-700">
+                Fără email, nu vei ști imediat dacă restaurantul acceptă rezervarea — vei fi contactat
+                telefonic de un membru al echipei. Completează emailul ca să primești confirmarea automat.
+              </span>
+            ) : (
+              <span className="text-xs text-faint">
+                {confirmMode === "manual"
+                  ? "Îți trimitem pe email confirmarea sau refuzul rezervării."
+                  : "Îți trimitem confirmarea pe email dacă îl completezi."}
+              </span>
+            )}
           </div>
           <div className="flex flex-col gap-1">
             <label htmlFor="note" className="font-medium text-ink text-sm">Mențiuni (opțional)</label>
             <textarea id="note" name="note" rows={2} className={inputClass} placeholder="Ex: masă la geam, scaun pentru copil…" />
           </div>
+
+          {/* Promo opt-in — only for logged-in members who aren't already subscribed. */}
+          {isMember && !isSubscriber && (
+            <label className="flex items-start gap-2 text-sm text-ink bg-cream/40 border border-hairline rounded-lg px-3 py-2.5 cursor-pointer">
+              <input type="checkbox" checked={subscribePromo} onChange={(e) => setSubscribePromo(e.target.checked)} className="accent-accent mt-0.5" />
+              <span>Vreau să primesc oferte de la restaurantele din Brașov (te poți dezabona oricând).</span>
+            </label>
+          )}
 
           {/* Honeypot */}
           <input type="text" name="website" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden="true" />
@@ -316,7 +400,11 @@ export default function ReservationForm({
             {loading ? "Se trimite…" : confirmMode === "auto" ? "Rezervă masa" : "Trimite cererea de rezervare"}
           </button>
           {confirmMode === "manual" && (
-            <p className="text-xs text-faint text-center">Rezervarea va fi confirmată de restaurant telefonic sau pe email.</p>
+            <p className="text-xs text-faint text-center">
+              {willEmail
+                ? "Rezervarea va fi confirmată de restaurant — primești un email cu răspunsul."
+                : "Rezervarea va fi confirmată de restaurant telefonic."}
+            </p>
           )}
         </div>
       )}

@@ -35,7 +35,9 @@ export default async function RezervariSetariPage({
       ownerEnabled: restaurants.reservationsEnabledByOwner,
       confirmMode: restaurants.reservationConfirmMode,
       maxParty: restaurants.reservationMaxPartySize,
+      turnMinutes: restaurants.reservationTurnMinutes,
       areasEnabled: restaurants.reservationAreasEnabled,
+      showInLocaluri: restaurants.showInLocaluri,
     })
     .from(restaurants)
     .where(eq(restaurants.id, restaurant.id))
@@ -62,14 +64,29 @@ export default async function RezervariSetariPage({
           echipa Din Brașov.
         </div>
       ) : (
-        <ReservationSettings
-          restaurantId={restaurant.id}
-          initialEnabled={row.ownerEnabled}
-          initialMode={row.confirmMode === "auto" ? "auto" : "manual"}
-          initialMaxParty={row.maxParty ?? 12}
-          initialAreasEnabled={row.areasEnabled ?? false}
-          initialHours={hours}
-        />
+        <>
+          {row.ownerEnabled && !row.showInLocaluri && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-900">
+              <p className="font-medium">Rezervările sunt activate, dar restaurantul nu apare încă public în Localuri.</p>
+              <p className="mt-1 text-amber-800">
+                Clienții nu văd butonul „Rezervă o masă” până nu activezi vizibilitatea publică. Mergi la{" "}
+                <Link href={`/restaurant/${slug}/aspect`} className="font-semibold underline">
+                  Setări meniu
+                </Link>{" "}
+                și pornește „Arată în Localuri”.
+              </p>
+            </div>
+          )}
+          <ReservationSettings
+            restaurantId={restaurant.id}
+            initialEnabled={row.ownerEnabled}
+            initialMode={row.confirmMode === "auto" ? "auto" : "manual"}
+            initialMaxParty={row.maxParty ?? 12}
+            initialTurnMinutes={row.turnMinutes ?? 90}
+            initialAreasEnabled={row.areasEnabled ?? false}
+            initialHours={hours}
+          />
+        </>
       )}
     </div>
   );

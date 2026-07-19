@@ -129,6 +129,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (granted && user.email) {
           await sendFoundingWelcomeEmail(user.email, user.name ?? "").catch(() => {});
         }
+        // Link any reservations made anonymously with this Google email.
+        if (user.email) {
+          const { linkAnonReservations } = await import("@/lib/reservations");
+          await linkAnonReservations(user.id, user.email).catch(() => {});
+        }
       } catch {
         // Never block sign-up if the grant/email fails.
       }

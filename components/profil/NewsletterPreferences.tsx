@@ -12,7 +12,7 @@ interface Prefs {
 const OPTIONS: { key: keyof Prefs; label: string }[] = [
   { key: "wantsNews", label: "Știri" },
   { key: "wantsEvents", label: "Evenimente" },
-  { key: "wantsPlaces", label: "Localuri noi" },
+  { key: "wantsPlaces", label: "Noutăți și oferte localuri" },
   { key: "wantsExperiences", label: "Experiențe noi" },
 ];
 

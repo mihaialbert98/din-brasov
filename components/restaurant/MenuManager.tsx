@@ -154,7 +154,7 @@ export default function MenuManager({
   }
 
   async function saveItem(form: ItemFormValues) {
-    const { categoryId, item } = itemForm!;
+    const { item } = itemForm!;
     const body = {
       name: form.name,
       nameEn: form.nameEn,
@@ -167,10 +167,12 @@ export default function MenuManager({
       calories: form.calories,
       isVegan: form.isVegan,
       isAvailable: form.isAvailable,
+      // categoryId on PATCH moves the item to another section; on POST it's the target.
+      categoryId: form.categoryId,
     };
     const r = item
       ? await call(`${base}/items/${item.id}`, "PATCH", body)
-      : await call(`${base}/items`, "POST", { ...body, categoryId });
+      : await call(`${base}/items`, "POST", body);
     if (r) { setItemForm(null); router.refresh(); }
   }
 
@@ -336,6 +338,8 @@ export default function MenuManager({
         <ItemFormModal
           initial={itemForm.item}
           busy={busy}
+          categories={initialCategories.map((c) => ({ id: c.id, name: c.name }))}
+          currentCategoryId={itemForm.categoryId}
           onCancel={() => setItemForm(null)}
           onSave={saveItem}
         />
@@ -356,19 +360,25 @@ interface ItemFormValues {
   calories: number | null;
   isVegan: boolean;
   isAvailable: boolean;
+  categoryId: string; // chosen section — lets an existing item be MOVED here
 }
 
 function ItemFormModal({
   initial,
   busy,
+  categories,
+  currentCategoryId,
   onCancel,
   onSave,
 }: {
   initial: MenuItemData | null;
   busy: boolean;
+  categories: { id: string; name: string }[];
+  currentCategoryId: string;
   onCancel: () => void;
   onSave: (v: ItemFormValues) => void;
 }) {
+  const [categoryId, setCategoryId] = useState(currentCategoryId);
   const [name, setName] = useState(initial?.name ?? "");
   const [nameEn, setNameEn] = useState(initial?.nameEn ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
@@ -383,9 +393,11 @@ function ItemFormModal({
   const [formError, setFormError] = useState<string | null>(null);
 
   function submit() {
-    if (!name.trim()) { setFormError("Numele este obligatoriu."); return; }
+    setFormError(null);
+    if (!name.trim()) { setFormError("Completează numele produsului (în română) — este singurul câmp obligatoriu."); return; }
     const kcal = calories.trim() === "" ? null : parseInt(calories, 10);
-    if (kcal !== null && (isNaN(kcal) || kcal < 0)) { setFormError("Caloriile trebuie să fie un număr pozitiv."); return; }
+    if (kcal !== null && (isNaN(kcal) || kcal < 0)) { setFormError("Caloriile trebuie să fie un număr întreg pozitiv (sau lasă câmpul gol)."); return; }
+    if (price.trim().length > 40) { setFormError("Prețul este prea lung."); return; }
     onSave({
       name: name.trim(),
       nameEn: nameEn.trim(),
@@ -398,6 +410,7 @@ function ItemFormModal({
       calories: kcal,
       isVegan,
       isAvailable,
+      categoryId,
     });
   }
 
@@ -411,10 +424,40 @@ function ItemFormModal({
 
         {formError && <p className="text-sm text-red-600">{formError}</p>}
 
+        {/* Section — lets an existing item be moved to another category. */}
+        {categories.length > 1 && (
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700">Secțiune</label>
+            <select
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+              className={field}
+            >
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            {initial && categoryId !== currentCategoryId && (
+              <span className="text-xs text-[#c84b1e]">Produsul va fi mutat în această secțiune.</span>
+            )}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">Nume (română) *</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} className={field} maxLength={200} />
+            <label className="text-sm font-medium text-gray-700">
+              Nume (română) <span className="text-[#c84b1e]">*</span>
+            </label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className={`${field} ${!name.trim() ? "border-[#c84b1e]/60" : ""}`}
+              maxLength={200}
+              aria-required="true"
+              aria-invalid={!name.trim()}
+              placeholder="ex: Ciorbă de burtă"
+            />
+            {!name.trim() && <span className="text-xs text-[#c84b1e]">Obligatoriu</span>}
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-gray-700">Name (English)</label>
@@ -493,7 +536,12 @@ function ItemFormModal({
           <button onClick={onCancel} className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg hover:bg-gray-50 transition-colors">
             Anulează
           </button>
-          <button onClick={submit} disabled={busy} className="flex-1 bg-[#c84b1e] text-white font-semibold py-2.5 rounded-lg hover:bg-[#d9603a] transition-colors disabled:opacity-60">
+          <button
+            onClick={submit}
+            disabled={busy || !name.trim()}
+            title={!name.trim() ? "Completează numele produsului" : undefined}
+            className="flex-1 bg-[#c84b1e] text-white font-semibold py-2.5 rounded-lg hover:bg-[#d9603a] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          >
             {busy ? "Se salvează..." : "Salvează"}
           </button>
         </div>

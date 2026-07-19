@@ -78,25 +78,10 @@ export default function TablesManager({
   // The card is the server-composited PNG (QR + name overlaid on the brand template).
   const cardUrl = (t: TableData) => `${base}/${t.id}/card`;
 
-  function printCard(t: TableData) {
-    const w = window.open("", "_blank", "width=820,height=560");
-    if (!w) return;
-    w.document.write(`
-      <html><head><title>${restaurantName} — ${t.label}</title>
-      <style>
-        @page { margin: 10mm; }
-        body{margin:0;padding:16px;background:#fff;text-align:center;}
-        img{max-width:100%;height:auto;}
-      </style></head><body>
-        <img src="${cardUrl(t)}" alt="Card ${t.label}" onload="window.print()" />
-      </body></html>`);
-    w.document.close();
-  }
-
   function downloadCard(t: TableData) {
     const a = document.createElement("a");
     a.href = cardUrl(t);
-    a.download = `card-${t.label.replace(/\s+/g, "-").toLowerCase()}.png`;
+    a.download = `qr-${t.label.replace(/\s+/g, "-").toLowerCase()}.png`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -161,28 +146,30 @@ export default function TablesManager({
                   {t.isActive ? "Activă" : "Dezactivată"}
                 </button>
               </div>
-              {/* Composited business card (QR + name + table label on the template). */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={`${cardUrl(t)}?v=${cacheKey}`}
-                alt={`Card ${t.label}`}
-                className={`w-full rounded-xl border border-gray-200 shadow-sm ${t.isActive ? "" : "opacity-50"}`}
-              />
-              {isAdmin && (
-                <div className="flex gap-2 flex-wrap">
-                  <button onClick={() => printCard(t)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#c84b1e] text-white hover:bg-[#d9603a]">
-                    Printează
-                  </button>
-                  <button onClick={() => downloadCard(t)} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-[#c84b1e] text-[#c84b1e] hover:bg-[#c84b1e]/5">
-                    Descarcă
-                  </button>
-                  <button onClick={() => regenerate(t)} className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50">
-                    Cod nou
-                  </button>
-                  <button onClick={() => deleteTable(t)} className="text-xs font-medium px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50">
-                    Șterge
-                  </button>
-                </div>
+              {/* The QR code + download are for platform staff only. Owners just
+                  see/manage the table (toggle active). */}
+              {isAdmin ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`${cardUrl(t)}?v=${cacheKey}`}
+                    alt={`Cod QR ${t.label}`}
+                    className={`w-40 h-40 rounded-xl border border-gray-200 shadow-sm bg-white ${t.isActive ? "" : "opacity-50"}`}
+                  />
+                  <div className="flex gap-2 flex-wrap">
+                    <button onClick={() => downloadCard(t)} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#c84b1e] text-white hover:bg-[#d9603a]">
+                      Descarcă QR
+                    </button>
+                    <button onClick={() => regenerate(t)} className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50">
+                      Cod nou
+                    </button>
+                    <button onClick={() => deleteTable(t)} className="text-xs font-medium px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50">
+                      Șterge
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <p className="text-xs text-gray-400">Codul QR este gestionat de echipa Din Brașov.</p>
               )}
             </div>
           ))}

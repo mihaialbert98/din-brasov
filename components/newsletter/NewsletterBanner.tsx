@@ -65,7 +65,7 @@ export function NewsletterBanner() {
   const availableSections = [
     { key: "news", label: "Știri", already: alreadyNews, checked: wantsNews, set: setWantsNews },
     { key: "events", label: "Evenimente", already: alreadyEvents, checked: wantsEvents, set: setWantsEvents },
-    { key: "places", label: "Localuri noi", already: alreadyPlaces, checked: wantsPlaces, set: setWantsPlaces },
+    { key: "places", label: "Noutăți și oferte localuri", already: alreadyPlaces, checked: wantsPlaces, set: setWantsPlaces },
     { key: "experiences", label: "Experiențe noi", already: alreadyExperiences, checked: wantsExperiences, set: setWantsExperiences },
   ].filter((s) => !(isLoggedIn && s.already));
 

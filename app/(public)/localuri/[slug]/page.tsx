@@ -89,6 +89,12 @@ export default async function LocalPage({ params }: Props) {
             image: images[0],
             latitude: place.latitude,
             longitude: place.longitude,
+            // Restaurant enrichment — set when this local is a menu/reservations restaurant.
+            isRestaurant: actions.menu || actions.reserve,
+            cuisine: place.cuisineType,
+            menuPath: actions.menu ? `/localuri/${place.slug}/meniu` : null,
+            acceptsReservations: actions.reserve,
+            reservePath: actions.reserve ? `/localuri/${place.slug}/rezervare` : null,
           }),
           breadcrumbJsonLd([
             { name: "Acasă", path: "/" },

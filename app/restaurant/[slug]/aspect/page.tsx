@@ -60,7 +60,7 @@ export default async function AspectPage({
 
   return (
     <div className="max-w-3xl">
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">Aspect meniu</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-1">Setări meniu</h1>
       <p className="text-sm text-gray-500 mb-6">
         Alege cum arată meniul pe care îl văd clienții când scanează codul QR. Poți schimba designul și
         paleta de culori oricând.

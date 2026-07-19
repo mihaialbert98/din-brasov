@@ -10,7 +10,7 @@ import { canReserve } from "@/lib/reservations";
 import { resolveTheme, themeStyle } from "@/lib/menu-themes";
 import PublicMenuView from "@/components/restaurant/PublicMenuView";
 import JsonLd from "@/components/seo/JsonLd";
-import { pageMetadata, localBusinessJsonLd, breadcrumbJsonLd } from "@/lib/seo";
+import { pageMetadata, localBusinessJsonLd, breadcrumbJsonLd, menuJsonLd } from "@/lib/seo";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -37,6 +37,7 @@ async function getPlaceMenu(slug: string) {
       menuDesign: restaurants.menuDesign,
       menuTheme: restaurants.menuTheme,
       menuPublic: restaurants.menuPublic,
+      cuisineType: restaurants.cuisineType,
     })
     .from(restaurants)
     .where(
@@ -86,6 +87,16 @@ export default async function PlaceMenuPage({ params }: Props) {
             path: `/localuri/${place.slug}/meniu`,
             category: "Restaurant",
             image: restaurant.coverUrl ?? restaurant.logoUrl,
+            isRestaurant: true,
+            cuisine: restaurant.cuisineType,
+            menuPath: `/localuri/${place.slug}/meniu`,
+            acceptsReservations: reservable,
+            reservePath: reservable ? `/localuri/${place.slug}/rezervare` : null,
+          }),
+          menuJsonLd({
+            restaurantName: place.name,
+            menuPath: `/localuri/${place.slug}/meniu`,
+            categories,
           }),
           breadcrumbJsonLd([
             { name: "Acasă", path: "/" },

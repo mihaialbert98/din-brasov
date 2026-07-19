@@ -46,8 +46,8 @@ export default async function MesePage({
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Mese & coduri QR</h1>
       <p className="text-sm text-gray-500 mb-6">
         {isAdmin
-          ? "Fiecare masă are un card cu cod QR unic, în stil Din Brașov. Printează sau descarcă cardul și pune-l pe masă."
-          : "Cardurile cu cod QR sunt tipărite de echipa Din Brașov. Poți dezactiva temporar o masă (ex: în reparație) — clienții nu vor putea chema ospătarul de la ea."}
+          ? "Fiecare masă are un cod QR unic. Descarcă-l și pune-l pe masă — clienții îl scanează pentru meniu."
+          : "Codurile QR sunt gestionate de echipa Din Brașov. Poți dezactiva temporar o masă (ex: în reparație) — clienții nu vor putea chema ospătarul de la ea."}
       </p>
       <TablesManager
         restaurantId={restaurant.id}

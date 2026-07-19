@@ -1,10 +1,10 @@
 import { db } from "@/lib/db";
-import { places } from "@/lib/db/schema";
-import { eq, desc, count } from "drizzle-orm";
+import { places, restaurants, restaurantMembers, reservationHours, users } from "@/lib/db/schema";
+import { eq, and, desc, count } from "drizzle-orm";
 import Link from "next/link";
 import type { Metadata } from "next";
 import Pagination from "@/components/ui/Pagination";
-import PlacesTable from "@/components/admin/PlacesTable";
+import LocalsList, { type LocalRow } from "@/components/admin/LocalsList";
 
 export const metadata: Metadata = { title: "Admin — Localuri" };
 
@@ -12,6 +12,14 @@ const PER_PAGE = 20;
 
 function buildHref(page: number) {
   return page === 1 ? "/admin/localuri" : `/admin/localuri?p=${page}`;
+}
+
+function firstImage(imagesJson: string | null): string | null {
+  try {
+    return (JSON.parse(imagesJson ?? "[]") as string[])[0] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 interface Props {
@@ -22,14 +30,88 @@ export default async function AdminLocaluriPage({ searchParams }: Props) {
   const params = await searchParams;
   const page = Math.max(1, parseInt(params.p ?? "1"));
 
-  const [[{ total }], published, pending] = await Promise.all([
+  // A "local" = one places row. LEFT JOIN the restaurant capability layer (placeId)
+  // so each local shows whether it has menu/reservations, plus its owner.
+  const [[{ total }], publishedRows, pending] = await Promise.all([
     db.select({ total: count() }).from(places).where(eq(places.status, "published")),
-    db.select().from(places).where(eq(places.status, "published"))
+    db
+      .select({
+        id: places.id,
+        name: places.name,
+        slug: places.slug,
+        category: places.category,
+        status: places.status,
+        imagesJson: places.imagesJson,
+        address: places.address,
+        restaurantId: restaurants.id,
+        restaurantSlug: restaurants.slug,
+        reservationsGranted: restaurants.reservationsEnabledByAdmin,
+        reservationsEnabledByOwner: restaurants.reservationsEnabledByOwner,
+        restaurantStatus: restaurants.status,
+      })
+      .from(places)
+      .leftJoin(restaurants, eq(restaurants.placeId, places.id))
+      .where(eq(places.status, "published"))
       .orderBy(desc(places.createdAt))
-      .limit(PER_PAGE).offset((page - 1) * PER_PAGE),
+      .limit(PER_PAGE)
+      .offset((page - 1) * PER_PAGE),
     // Drafts awaiting admin approval (e.g. a restaurant that opted into Localuri).
     db.select().from(places).where(eq(places.status, "draft")).orderBy(desc(places.createdAt)),
   ]);
+
+  // Owner email + true reservation-readiness per local that has a restaurant
+  // (small dataset; per-row read).
+  const items: LocalRow[] = await Promise.all(
+    publishedRows.map(async (r) => {
+      let ownerEmail: string | null = null;
+      let hasHours = false;
+      if (r.restaurantId) {
+        const [[owner], [hour]] = await Promise.all([
+          db
+            .select({ email: users.email })
+            .from(restaurantMembers)
+            .innerJoin(users, eq(restaurantMembers.userId, users.id))
+            .where(and(eq(restaurantMembers.restaurantId, r.restaurantId), eq(restaurantMembers.memberRole, "owner")))
+            .limit(1),
+          db
+            .select({ id: reservationHours.id })
+            .from(reservationHours)
+            .where(eq(reservationHours.restaurantId, r.restaurantId))
+            .limit(1),
+        ]);
+        ownerEmail = owner?.email ?? null;
+        hasHours = !!hour;
+      }
+
+      // Three-state reservation readiness for the badge:
+      //  bookable = a diner can actually reserve now (mirrors canReserve()).
+      //  granted  = admin granted, but owner hasn't finished setup (owner flag / hours).
+      //  off      = admin grant is off.
+      const granted = r.reservationsGranted ?? false;
+      const bookable =
+        granted && !!r.reservationsEnabledByOwner && r.restaurantStatus === "active" && hasHours;
+      const reservationState: LocalRow["reservationState"] = !granted
+        ? "off"
+        : bookable
+        ? "bookable"
+        : "granted";
+
+      return {
+        id: r.id,
+        name: r.name,
+        slug: r.slug,
+        category: r.category,
+        status: r.status,
+        imageUrl: firstImage(r.imagesJson),
+        address: r.address,
+        restaurantId: r.restaurantId ?? null,
+        restaurantSlug: r.restaurantSlug ?? null,
+        reservationsGranted: granted,
+        reservationState,
+        ownerEmail,
+      };
+    })
+  );
 
   const totalPages = Math.ceil(total / PER_PAGE);
 
@@ -45,6 +127,10 @@ export default async function AdminLocaluriPage({ searchParams }: Props) {
         </Link>
       </div>
 
+      <p className="text-sm text-gray-500 -mt-4">
+        Fiecare local poate avea meniu și rezervări. Activează-le pe cele care sunt restaurante și asociază un proprietar.
+      </p>
+
       {/* Pending approval — drafts (e.g. restaurants that opted into Localuri). */}
       {pending.length > 0 && (
         <section className="bg-amber-50 border border-amber-200 rounded-xl p-5">
@@ -56,7 +142,7 @@ export default async function AdminLocaluriPage({ searchParams }: Props) {
           </p>
           <div className="space-y-3">
             {pending.map((p) => {
-              const img = (() => { try { return (JSON.parse(p.imagesJson ?? "[]") as string[])[0]; } catch { return null; } })();
+              const img = firstImage(p.imagesJson);
               return (
                 <div key={p.id} className="bg-white border border-amber-100 rounded-lg p-4 flex items-start gap-4">
                   {img && (
@@ -98,7 +184,7 @@ export default async function AdminLocaluriPage({ searchParams }: Props) {
       ) : total > 0 ? (
         <>
           <h2 className="text-base font-semibold text-gray-700">Publicate</h2>
-          <PlacesTable items={published} />
+          <LocalsList items={items} />
           <Pagination currentPage={page} totalPages={totalPages} buildHref={buildHref} />
         </>
       ) : null}

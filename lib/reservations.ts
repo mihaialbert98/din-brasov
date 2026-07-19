@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
-import { restaurants, reservationHours, reservations, adminAuditLog } from "@/lib/db/schema";
-import { eq, and, gte, ne, asc, inArray } from "drizzle-orm";
-import { sendAdminReservationSettingsChangedEmail } from "@/lib/email";
+import { restaurants, reservationHours, reservations, adminAuditLog, places, users } from "@/lib/db/schema";
+import { eq, and, gte, ne, asc, inArray, isNull, sql } from "drizzle-orm";
+import { sendReservationConfirmedEmail, sendReservationDeclinedEmail } from "@/lib/email";
 import { isPlatformStaff } from "@/lib/restaurant-permissions";
 import type { Session } from "next-auth";
 
@@ -71,7 +71,9 @@ export async function getReservationHours(restaurantId: string): Promise<Reserva
 
 /**
  * When a PLATFORM ADMIN (not the owner) changes a restaurant's reservation config,
- * write an audit-log row and email the acting admin a confirmation. No-op for owners.
+ * write an audit-log row. No email is sent — changes are frequent and per-change
+ * emails were noise; the append-only audit log is the record of accountability.
+ * No-op for owners.
  */
 export async function auditAdminReservationChange(
   session: Session | null,
@@ -81,9 +83,6 @@ export async function auditAdminReservationChange(
 ): Promise<void> {
   if (!isPlatformStaff(role) || !session?.user?.id) return;
 
-  const [r] = await db.select({ name: restaurants.name }).from(restaurants).where(eq(restaurants.id, restaurantId)).limit(1);
-  const restaurantName = r?.name ?? "Restaurant";
-
   await db.insert(adminAuditLog).values({
     adminId: session.user.id,
     action: "edit_reservation_settings",
@@ -91,15 +90,6 @@ export async function auditAdminReservationChange(
     entityId: restaurantId,
     metadataJson: JSON.stringify({ change }),
   });
-
-  const email = session.user.email;
-  if (email) {
-    await sendAdminReservationSettingsChangedEmail(email, {
-      adminName: session.user.name ?? "Administrator",
-      restaurantName,
-      change,
-    }).catch(() => {});
-  }
 }
 
 /** The single-party cap for a restaurant (independent of per-slot seat capacity). */
@@ -110,6 +100,19 @@ export async function getMaxPartySize(restaurantId: string): Promise<number> {
     .where(eq(restaurants.id, restaurantId))
     .limit(1);
   return r?.cap ?? 12;
+}
+
+/**
+ * Turn time (minutes) — how long a booking occupies its seats. Drives the
+ * sliding-window availability check so overlapping starts can't reuse seats.
+ */
+export async function getTurnMinutes(restaurantId: string): Promise<number> {
+  const [r] = await db
+    .select({ turn: restaurants.reservationTurnMinutes })
+    .from(restaurants)
+    .where(eq(restaurants.id, restaurantId))
+    .limit(1);
+  return r?.turn && r.turn > 0 ? r.turn : 90;
 }
 
 function toMinutes(hhmm: string): number {
@@ -155,10 +158,18 @@ export function slotsForDay(hours: ReservationHour[]): string[] {
   return [...slotsWithCapacity(hours).keys()].sort();
 }
 
+// Capacity-check tick granularity for the sliding window. Bookings' occupancy
+// windows are evaluated at every TICK minutes so an overlapping start can't reuse
+// seats held by an earlier, still-seated party.
+const CAPACITY_TICK = 15;
+
 /**
- * Live availability for a date + party size (+ optional area): for each of the
- * day's slots, subtract the seats already taken (pending + confirmed, IN THAT AREA
- * when given) and return only slots with room for this party.
+ * Live availability for a date + party size (+ optional area), using a SLIDING
+ * WINDOW based on the restaurant's turn time. Each pending/confirmed booking holds
+ * its seats across [start, start + turn). A candidate start T is bookable only if,
+ * at every 15-min tick within [T, T + turn), the seats consumed by overlapping
+ * bookings (in the requested area when given) plus this party fit the tick's
+ * capacity. Returns the passing start times, sorted.
  */
 export async function availableSlotsForDay(
   restaurantId: string,
@@ -170,7 +181,8 @@ export async function availableSlotsForDay(
   const hours = (await getReservationHours(restaurantId)).filter((h) => h.dayOfWeek === day);
   if (hours.length === 0) return [];
 
-  const caps = slotsWithCapacity(hours, area);
+  const caps = slotsWithCapacity(hours, area); // candidate start times → window capacity
+  const turn = await getTurnMinutes(restaurantId);
 
   const booked = await db
     .select({ time: reservations.time, partySize: reservations.partySize, area: reservations.area })
@@ -183,17 +195,41 @@ export async function availableSlotsForDay(
       )
     );
 
-  const taken = new Map<string, number>();
-  for (const b of booked) {
-    // When an area is requested, only bookings in the same area consume its seats.
-    if (area && b.area !== area) continue;
-    taken.set(b.time, (taken.get(b.time) ?? 0) + b.partySize);
-  }
+  // Existing occupancy as [startMin, endMin) windows (same-area only when given).
+  const windows = booked
+    .filter((b) => !area || b.area === area)
+    .map((b) => ({ start: toMinutes(b.time), end: toMinutes(b.time) + turn, size: b.partySize }));
 
-  return [...caps.entries()]
-    .filter(([time, cap]) => cap - (taken.get(time) ?? 0) >= partySize)
-    .map(([time]) => time)
-    .sort();
+  // Seats already held at a given minute by overlapping bookings.
+  const takenAt = (tick: number) =>
+    windows.reduce((sum, w) => (tick >= w.start && tick < w.end ? sum + w.size : sum), 0);
+
+  // Capacity that applies at an arbitrary minute — the max window capacity covering
+  // it (mirrors slotsWithCapacity's "larger window wins"); 0 outside all windows.
+  const capacityAt = (tick: number) => {
+    let cap = 0;
+    for (const h of hours) {
+      const s = toMinutes(h.startTime);
+      const e = toMinutes(h.endTime);
+      if (tick >= s && tick < e) cap = Math.max(cap, windowCapacity(h, area));
+    }
+    return cap;
+  };
+
+  const result: string[] = [];
+  for (const [time] of caps) {
+    const startMin = toMinutes(time);
+    const windowEnd = startMin + turn;
+    let fits = true;
+    for (let t = startMin; t < windowEnd; t += CAPACITY_TICK) {
+      const cap = capacityAt(t);
+      // Outside opening hours the seat pool is 0 → seating there still counts as the
+      // party occupying the room; only enforce capacity where a window defines one.
+      if (cap > 0 && takenAt(t) + partySize > cap) { fits = false; break; }
+    }
+    if (fits) result.push(time);
+  }
+  return result.sort();
 }
 
 /**
@@ -315,8 +351,10 @@ export async function listUpcomingReservations(restaurantId: string) {
 
 /**
  * Set a reservation's status (confirmed | declined | cancelled) after verifying it
- * belongs to the given restaurant. No guest email is sent — the restaurant contacts
- * the guest by phone. Returns false if the reservation isn't found.
+ * belongs to the given restaurant. When the guest gave an email (or is linked to an
+ * account), a confirmed/declined email is sent — best-effort, never blocks the
+ * status change. Guests without an email are contacted by phone. Returns false if
+ * the reservation isn't found.
  */
 export async function setReservationStatus(
   restaurantId: string,
@@ -324,8 +362,18 @@ export async function setReservationStatus(
   status: "confirmed" | "declined" | "cancelled",
 ): Promise<boolean> {
   const [res] = await db
-    .select({ id: reservations.id })
+    .select({
+      id: reservations.id,
+      guestName: reservations.guestName,
+      guestEmail: reservations.guestEmail,
+      userId: reservations.userId,
+      date: reservations.date,
+      time: reservations.time,
+      partySize: reservations.partySize,
+      restaurantName: restaurants.name,
+    })
     .from(reservations)
+    .innerJoin(restaurants, eq(reservations.restaurantId, restaurants.id))
     .where(and(eq(reservations.id, reservationId), eq(reservations.restaurantId, restaurantId)))
     .limit(1);
   if (!res) return false;
@@ -334,5 +382,95 @@ export async function setReservationStatus(
     .update(reservations)
     .set({ status, updatedAt: new Date() })
     .where(eq(reservations.id, reservationId));
+
+  // Notify the guest by email on confirm/decline — if we have one (booking email,
+  // else the linked account's email). Fire-and-forget; email failure never blocks.
+  if (status === "confirmed" || status === "declined") {
+    void notifyReservationStatus(res, status);
+  }
   return true;
+}
+
+/** Resolve the guest's email (booking email or linked account) and send the email. */
+async function notifyReservationStatus(
+  res: { guestName: string; guestEmail: string | null; userId: string | null; date: string; time: string; partySize: number; restaurantName: string },
+  status: "confirmed" | "declined",
+): Promise<void> {
+  try {
+    let email = res.guestEmail;
+    if (!email && res.userId) {
+      const [u] = await db.select({ email: users.email }).from(users).where(eq(users.id, res.userId)).limit(1);
+      email = u?.email ?? null;
+    }
+    if (!email) return;
+
+    const data = {
+      restaurantName: res.restaurantName,
+      date: res.date,
+      time: res.time,
+      partySize: res.partySize,
+      guestName: res.guestName,
+    };
+    if (status === "confirmed") await sendReservationConfirmedEmail(email, data);
+    else await sendReservationDeclinedEmail(email, data);
+  } catch {
+    /* email is best-effort — never block the status change */
+  }
+}
+
+/**
+ * Link anonymous reservations to a newly-created/confirmed account by matching the
+ * booking's guest email to the account's (verified) email. Called on signup/confirm
+ * so a table booked while logged out shows up in the user's account. Case-insensitive;
+ * only touches rows with no userId yet. Best-effort.
+ */
+export async function linkAnonReservations(userId: string, email: string): Promise<void> {
+  await db
+    .update(reservations)
+    .set({ userId, updatedAt: new Date() })
+    .where(
+      and(
+        sql`lower(${reservations.guestEmail}) = ${email.toLowerCase()}`,
+        isNull(reservations.userId),
+      )
+    );
+}
+
+/**
+ * A user cancels their OWN reservation. Verifies the reservation belongs to the
+ * user and is still cancellable (pending/confirmed). Cancelling frees the seats
+ * (availability counts only pending+confirmed). Returns the place slug so the UI
+ * can offer "cancel & rebook".
+ */
+export async function cancelOwnReservation(
+  userId: string,
+  reservationId: string,
+): Promise<{ ok: true; placeSlug: string | null } | { ok: false; reason: string }> {
+  const [res] = await db
+    .select({ id: reservations.id, status: reservations.status, restaurantId: reservations.restaurantId })
+    .from(reservations)
+    .where(and(eq(reservations.id, reservationId), eq(reservations.userId, userId)))
+    .limit(1);
+  if (!res) return { ok: false, reason: "Rezervare negăsită." };
+  if (res.status !== "pending" && res.status !== "confirmed") {
+    return { ok: false, reason: "Rezervarea nu mai poate fi anulată." };
+  }
+
+  await db
+    .update(reservations)
+    .set({ status: "cancelled", updatedAt: new Date() })
+    .where(eq(reservations.id, reservationId));
+
+  // The linked place slug (for the rebook link).
+  const [r] = await db
+    .select({ placeId: restaurants.placeId })
+    .from(restaurants)
+    .where(eq(restaurants.id, res.restaurantId))
+    .limit(1);
+  let placeSlug: string | null = null;
+  if (r?.placeId) {
+    const [p] = await db.select({ slug: places.slug }).from(places).where(eq(places.id, r.placeId)).limit(1);
+    placeSlug = p?.slug ?? null;
+  }
+  return { ok: true, placeSlug };
 }

@@ -7,10 +7,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { restaurants, reservations } from "@/lib/db/schema";
+import { restaurants, reservations, users, newsletterSubscribers } from "@/lib/db/schema";
 import { auth } from "@/lib/auth";
 import { canReserve, validateBooking } from "@/lib/reservations";
-import { checkReservationLimit } from "@/lib/rate-limit";
+import { sendReservationConfirmedEmail } from "@/lib/email";
+import { checkReservationLimit, hashIp, getIp } from "@/lib/rate-limit";
 
 const schema = z.object({
   restaurantId: z.string().min(1),
@@ -22,6 +23,9 @@ const schema = z.object({
   guestEmail: z.string().email().max(200).optional().or(z.literal("")),
   area: z.enum(["inside", "outside"]).optional(),
   note: z.string().max(500).optional(),
+  // Logged-in extras: update the account phone; subscribe to Brașov restaurant promos.
+  updatePhone: z.boolean().optional(),
+  subscribePromo: z.boolean().optional(),
   // Anti-bot: honeypot must stay empty; elapsed must be ≥ 2s.
   website: z.string().optional(),
   elapsed: z.number().optional(),
@@ -66,6 +70,8 @@ export async function POST(req: Request) {
   const session = await auth().catch(() => null);
   const status = r.confirmMode === "auto" ? "confirmed" : "pending";
 
+  const userId = session?.user?.id ?? null;
+
   await db.insert(reservations).values({
     restaurantId: d.restaurantId,
     date: d.date,
@@ -75,12 +81,56 @@ export async function POST(req: Request) {
     guestPhone: d.guestPhone,
     guestEmail: d.guestEmail || null,
     area: d.area ?? null,
-    userId: session?.user?.id ?? null,
+    userId,
     status,
     note: d.note || null,
   });
 
-  // No guest email is sent — the restaurant handles confirmation by phone. The
-  // client sees an on-screen result + a gentle signup invite instead.
+  // Guest email for a confirmation mail: the booking email, else the account email.
+  let notifyEmail = d.guestEmail || null;
+
+  // Logged-in extras.
+  if (userId) {
+    // Persist the phone to the account: on first booking (no phone yet), or when
+    // the user explicitly asked to update it for future reservations.
+    const [u] = await db.select({ phone: users.phone, email: users.email, name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
+    if (u && !notifyEmail) notifyEmail = u.email;
+    if (u && (!u.phone || d.updatePhone)) {
+      await db.update(users).set({ phone: d.guestPhone, updatedAt: new Date() }).where(eq(users.id, userId));
+    }
+
+    // Promo opt-in: an authenticated, explicit tick → active subscription directly
+    // (no double-opt-in email needed; the account email is already verified). Skips
+    // if they already have a subscriber row.
+    if (d.subscribePromo && u) {
+      const [existing] = await db.select({ id: newsletterSubscribers.id }).from(newsletterSubscribers).where(eq(newsletterSubscribers.email, u.email)).limit(1);
+      if (!existing) {
+        await db.insert(newsletterSubscribers).values({
+          email: u.email,
+          userId,
+          wantsPlaces: true, // restaurants live under Localuri/places
+          status: "active",
+          verificationToken: crypto.randomUUID(),
+          verifiedAt: new Date(),
+          consentGivenAt: new Date(),
+          ipHash: hashIp(getIp(req)),
+        });
+      }
+    }
+  }
+
+  // Auto-confirm mode → email the guest their confirmation immediately (if we have
+  // an email). In manual mode nothing is sent here — the email goes out when a staff
+  // member confirms/declines the pending request. Best-effort; never blocks the booking.
+  if (status === "confirmed" && notifyEmail) {
+    void sendReservationConfirmedEmail(notifyEmail, {
+      restaurantName: r.name,
+      date: d.date,
+      time: d.time,
+      partySize: d.partySize,
+      guestName: d.guestName,
+    }).catch(() => {});
+  }
+
   return NextResponse.json({ ok: true, status });
 }
