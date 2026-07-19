@@ -4,8 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import ImageField from "@/components/admin/ImageField";
-
-const CATEGORIES = ["Restaurant", "Cafenea", "Bar", "Magazin", "Servicii", "Sănătate", "Cultură", "Altele"];
+import { PLACE_CATEGORIES } from "@/lib/place-categories";
 
 export default function EditLocalPage() {
   const params = useParams<{ id: string }>();
@@ -151,7 +150,11 @@ export default function EditLocalPage() {
               className="border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:border-[#c84b1e] bg-white"
             >
               <option value="">Fără categorie</option>
-              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              {/* Show a legacy value (not in the canonical list) so it stays visible until changed. */}
+              {category && !PLACE_CATEGORIES.includes(category as (typeof PLACE_CATEGORIES)[number]) && (
+                <option value={category}>{category} (vechi)</option>
+              )}
+              {PLACE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1">

@@ -201,10 +201,18 @@ export function localBusinessJsonLd(p: {
   image?: string | null;
   latitude?: string | null;
   longitude?: string | null;
+  // Restaurant enrichment (all optional — set when the place is a restaurant that
+  // opted into Localuri). Absent → plain LocalBusiness, unchanged behavior.
+  isRestaurant?: boolean;
+  cuisine?: string | null;
+  menuPath?: string | null; // public menu URL → hasMenu (rich menu results)
+  acceptsReservations?: boolean;
+  reservePath?: string | null; // booking URL → ReserveAction ("Reserve" in search)
 }) {
+  const restaurant = !!p.isRestaurant;
   return {
     "@context": "https://schema.org",
-    "@type": "LocalBusiness",
+    "@type": restaurant ? "Restaurant" : "LocalBusiness",
     name: p.name,
     description: metaDescription(p.description),
     image: p.image ? [absoluteUrl(p.image)] : undefined,
@@ -214,7 +222,67 @@ export function localBusinessJsonLd(p: {
     ...(p.latitude && p.longitude
       ? { geo: { "@type": "GeoCoordinates", latitude: p.latitude, longitude: p.longitude } }
       : {}),
+    ...(restaurant && p.cuisine ? { servesCuisine: p.cuisine } : {}),
+    ...(restaurant && p.menuPath ? { hasMenu: absoluteUrl(p.menuPath) } : {}),
+    ...(restaurant && p.acceptsReservations
+      ? {
+          acceptsReservations: "True",
+          ...(p.reservePath
+            ? {
+                potentialAction: {
+                  "@type": "ReserveAction",
+                  target: {
+                    "@type": "EntryPoint",
+                    urlTemplate: absoluteUrl(p.reservePath),
+                    inLanguage: "ro-RO",
+                    actionPlatform: [
+                      "http://schema.org/DesktopWebPlatform",
+                      "http://schema.org/MobileWebPlatform",
+                    ],
+                  },
+                  result: { "@type": "Reservation", name: `Rezervare la ${p.name}` },
+                },
+              }
+            : {}),
+        }
+      : {}),
     url: absoluteUrl(p.path),
+  };
+}
+
+/**
+ * Menu structured data for a restaurant's public menu page — Menu → MenuSection →
+ * MenuItem, so Google can read individual dishes/prices. Built from the same
+ * category/item data the page already renders (dynamic per restaurant).
+ */
+export function menuJsonLd(m: {
+  restaurantName: string;
+  menuPath: string;
+  categories: { name: string; items: { name: string; description?: string | null; price?: string | null; currency?: string | null }[] }[];
+}) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Menu",
+    name: `Meniu — ${m.restaurantName}`,
+    url: absoluteUrl(m.menuPath),
+    hasMenuSection: m.categories.map((c) => ({
+      "@type": "MenuSection",
+      name: c.name,
+      hasMenuItem: c.items.map((it) => ({
+        "@type": "MenuItem",
+        name: it.name,
+        ...(it.description ? { description: metaDescription(it.description) } : {}),
+        ...(it.price
+          ? {
+              offers: {
+                "@type": "Offer",
+                price: it.price.replace(/[^0-9.]/g, "") || it.price,
+                priceCurrency: it.currency ?? "RON",
+              },
+            }
+          : {}),
+      })),
+    })),
   };
 }
 

@@ -10,6 +10,7 @@ import { db } from "@/lib/db";
 import { places } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { pageMetadata } from "@/lib/seo";
+import { PLACE_CATEGORIES } from "@/lib/place-categories";
 
 export const metadata: Metadata = pageMetadata({
   title: "Localuri din Brașov",
@@ -35,7 +36,12 @@ export default async function LocaluriPage({
 
   const { items, total, pageSize } = result;
   const totalPages = Math.ceil(total / pageSize);
-  const categories = [...new Set(allPlaces.map((p) => p.category).filter(Boolean))] as string[];
+  // Filter pills: the canonical food/drink categories that actually have places,
+  // in canonical order, plus any legacy category still present (so nothing hides).
+  const present = new Set(allPlaces.map((p) => p.category).filter(Boolean) as string[]);
+  const canonical = PLACE_CATEGORIES.filter((c) => present.has(c));
+  const legacy = [...present].filter((c) => !(PLACE_CATEGORIES as readonly string[]).includes(c));
+  const categories = [...canonical, ...legacy];
 
   function buildHref(p: number) {
     const sp = new URLSearchParams();
@@ -50,7 +56,7 @@ export default async function LocaluriPage({
     <div className="max-w-5xl mx-auto px-4 py-10">
       <PageHeader
         title="Localuri din Brașov"
-        subtitle="Restaurante, cafenele, magazine și alte locuri de descoperit în oraș."
+        subtitle="Restaurante, cafenele și alte locuri de descoperit în oraș."
       />
 
       {categories.length > 0 && (
