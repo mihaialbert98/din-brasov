@@ -11,6 +11,7 @@
 import { db } from "@/lib/db";
 import { restaurants, restaurantMembers, restaurantEditUnlocks } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
+import { slugify } from "@/lib/slugify";
 import type { RestaurantMember } from "@/lib/db/schema";
 
 export type MemberRole = "owner" | "waiter";
@@ -144,6 +145,25 @@ export async function authorizeReservationSettings(
     return { error: "Neautorizat", status: 403 };
   }
   return { userId };
+}
+
+/**
+ * Build a unique restaurant slug from a name (no date suffix — it's a brand URL).
+ * Shared by admin onboarding and the "enable restaurant on a local" flow.
+ */
+export async function uniqueRestaurantSlug(name: string): Promise<string> {
+  const base = slugify(name) || "restaurant";
+  let slug = base;
+  for (let i = 2; i < 100; i++) {
+    const [existing] = await db
+      .select({ id: restaurants.id })
+      .from(restaurants)
+      .where(eq(restaurants.slug, slug))
+      .limit(1);
+    if (!existing) return slug;
+    slug = `${base}-${i}`;
+  }
+  return `${base}-${crypto.randomUUID().slice(0, 6)}`;
 }
 
 /** Resolve a restaurant by slug (used by the owner/waiter area pages). */

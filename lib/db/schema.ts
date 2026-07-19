@@ -613,6 +613,10 @@ export const restaurants = pgTable(
     reservationConfirmMode: text("reservation_confirm_mode").notNull().default("manual"), // auto | manual
     // A single party may not exceed this size (independent of per-slot seat capacity).
     reservationMaxPartySize: integer("reservation_max_party_size").notNull().default(12),
+    // Turn time — how long a booking occupies its seats (minutes). A booking at 19:15
+    // holds its seats across [19:15, 19:15+turn) for the sliding-window availability
+    // check, so a later start that overlaps can't reuse the same seats. Restaurant-wide.
+    reservationTurnMinutes: integer("reservation_turn_minutes").notNull().default(90),
     // Optional cuisine/type (Italian, Fast-food, Pizzerie…). Free text; suggestions
     // offered in the UI. Shown as a badge on the Localuri card + detail page.
     cuisineType: text("cuisine_type"),
@@ -748,7 +752,7 @@ export const reservationHours = pgTable(
     dayOfWeek: integer("day_of_week").notNull(), // 0 = Sunday … 6 = Saturday
     startTime: text("start_time").notNull(), // "HH:MM"
     endTime: text("end_time").notNull(), // "HH:MM"
-    slotMinutes: integer("slot_minutes").notNull().default(30),
+    slotMinutes: integer("slot_minutes").notNull().default(15),
     // Total covers (seats) available in each time slot. Each booking subtracts its
     // party size; a slot that fills disappears from the guest's choices. Used when
     // areas are OFF (single capacity).

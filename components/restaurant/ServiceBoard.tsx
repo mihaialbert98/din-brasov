@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { notify } from "@/lib/chime";
+import { useVisiblePoll } from "@/lib/useVisiblePoll";
+import NotifyPermission from "@/components/restaurant/NotifyPermission";
 
 interface ServiceRequest {
   id: string;
@@ -54,24 +57,17 @@ export default function ServiceBoard({ basePath }: { basePath: string }) {
       setRequests(data ?? []);
       setLoaded(true);
 
-      // Tab title badge + a short beep when a NEW request arrives.
-      const count = data?.length ?? 0;
+      // Tab title badge + chime/notification when a NEW request arrives.
+      const list: ServiceRequest[] = data ?? [];
+      const count = list.length;
       if (count > prevCount.current) {
         document.title = `(${count}) Serviciu — Din Brașov`;
-        try {
-          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.frequency.value = 880;
-          gain.gain.setValueAtTime(0.1, ctx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.3);
-          osc.start();
-          osc.stop(ctx.currentTime + 0.3);
-        } catch {
-          /* audio not allowed until user interaction — ignore */
-        }
+        // Describe the newest request (last by createdAt) for the OS notification.
+        const newest = [...list].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).at(-1);
+        notify({
+          title: "Cerere nouă la masă",
+          body: newest ? `${newest.tableLabel} — ${requestLabel(newest)}` : undefined,
+        });
       } else if (count === 0) {
         document.title = "Serviciu — Din Brașov";
       }
@@ -81,14 +77,10 @@ export default function ServiceBoard({ basePath }: { basePath: string }) {
     }
   }, [basePath]);
 
-  useEffect(() => {
-    fetchRequests();
-    const interval = setInterval(fetchRequests, 4000);
-    return () => {
-      clearInterval(interval);
-      document.title = "Din Brașov";
-    };
-  }, [fetchRequests]);
+  // Poll every 8s while visible, 30s when the tab is hidden (background OS
+  // notifications still fire, at a lower rate to save requests at scale).
+  useVisiblePoll(fetchRequests, 8000, 30000);
+  useEffect(() => () => { document.title = "Din Brașov"; }, []);
 
   async function ack(id: string) {
     setAcking(id);
@@ -107,14 +99,18 @@ export default function ServiceBoard({ basePath }: { basePath: string }) {
 
   if (loaded && requests.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400">
-        Nicio cerere în acest moment. Cererile noi apar automat aici.
-      </div>
+      <>
+        <NotifyPermission />
+        <div className="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400">
+          Nicio cerere în acest moment. Cererile noi apar automat aici.
+        </div>
+      </>
     );
   }
 
   return (
     <div className="space-y-3">
+      <NotifyPermission />
       {requests.map((r) => (
         <div
           key={r.id}

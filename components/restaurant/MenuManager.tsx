@@ -383,9 +383,11 @@ function ItemFormModal({
   const [formError, setFormError] = useState<string | null>(null);
 
   function submit() {
-    if (!name.trim()) { setFormError("Numele este obligatoriu."); return; }
+    setFormError(null);
+    if (!name.trim()) { setFormError("Completează numele produsului (în română) — este singurul câmp obligatoriu."); return; }
     const kcal = calories.trim() === "" ? null : parseInt(calories, 10);
-    if (kcal !== null && (isNaN(kcal) || kcal < 0)) { setFormError("Caloriile trebuie să fie un număr pozitiv."); return; }
+    if (kcal !== null && (isNaN(kcal) || kcal < 0)) { setFormError("Caloriile trebuie să fie un număr întreg pozitiv (sau lasă câmpul gol)."); return; }
+    if (price.trim().length > 40) { setFormError("Prețul este prea lung."); return; }
     onSave({
       name: name.trim(),
       nameEn: nameEn.trim(),
@@ -413,8 +415,19 @@ function ItemFormModal({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">Nume (română) *</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} className={field} maxLength={200} />
+            <label className="text-sm font-medium text-gray-700">
+              Nume (română) <span className="text-[#c84b1e]">*</span>
+            </label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className={`${field} ${!name.trim() ? "border-[#c84b1e]/60" : ""}`}
+              maxLength={200}
+              aria-required="true"
+              aria-invalid={!name.trim()}
+              placeholder="ex: Ciorbă de burtă"
+            />
+            {!name.trim() && <span className="text-xs text-[#c84b1e]">Obligatoriu</span>}
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-gray-700">Name (English)</label>
@@ -493,7 +506,12 @@ function ItemFormModal({
           <button onClick={onCancel} className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg hover:bg-gray-50 transition-colors">
             Anulează
           </button>
-          <button onClick={submit} disabled={busy} className="flex-1 bg-[#c84b1e] text-white font-semibold py-2.5 rounded-lg hover:bg-[#d9603a] transition-colors disabled:opacity-60">
+          <button
+            onClick={submit}
+            disabled={busy || !name.trim()}
+            title={!name.trim() ? "Completează numele produsului" : undefined}
+            className="flex-1 bg-[#c84b1e] text-white font-semibold py-2.5 rounded-lg hover:bg-[#d9603a] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          >
             {busy ? "Se salvează..." : "Salvează"}
           </button>
         </div>

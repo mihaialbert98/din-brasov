@@ -14,6 +14,7 @@ export default function ReservationSettings({
   initialEnabled,
   initialMode,
   initialMaxParty,
+  initialTurnMinutes,
   initialAreasEnabled,
   initialHours,
 }: {
@@ -21,6 +22,7 @@ export default function ReservationSettings({
   initialEnabled: boolean;
   initialMode: "auto" | "manual";
   initialMaxParty: number;
+  initialTurnMinutes: number;
   initialAreasEnabled: boolean;
   initialHours: ReservationHour[];
 }) {
@@ -28,6 +30,7 @@ export default function ReservationSettings({
   const [enabled, setEnabled] = useState(initialEnabled);
   const [mode, setMode] = useState<"auto" | "manual">(initialMode);
   const [maxParty, setMaxParty] = useState<number | "">(initialMaxParty);
+  const [turn, setTurn] = useState(initialTurnMinutes);
   const [areas, setAreas] = useState(initialAreasEnabled);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -37,7 +40,7 @@ export default function ReservationSettings({
   const [day, setDay] = useState(1);
   const [start, setStart] = useState("18:00");
   const [end, setEnd] = useState("22:00");
-  const [slot, setSlot] = useState(30);
+  const [slot, setSlot] = useState(15);
   const [seats, setSeats] = useState<number | "">(20);
   const [seatsIn, setSeatsIn] = useState<number | "">(20);
   const [seatsOut, setSeatsOut] = useState<number | "">(12);
@@ -48,7 +51,7 @@ export default function ReservationSettings({
   // Windows missing per-area seats (nudge after enabling areas).
   const windowsMissingAreas = initialHours.filter((h) => h.seatsInside == null && h.seatsOutside == null);
 
-  async function patchSettings(next: { enabled?: boolean; confirmMode?: "auto" | "manual"; maxPartySize?: number; areasEnabled?: boolean }) {
+  async function patchSettings(next: { enabled?: boolean; confirmMode?: "auto" | "manual"; maxPartySize?: number; areasEnabled?: boolean; turnMinutes?: number }) {
     setBusy(true);
     setError(null);
     const res = await fetch(`/api/restaurants/${restaurantId}/reservations-settings`, {
@@ -195,6 +198,38 @@ export default function ReservationSettings({
                   className="w-20 border border-gray-300 rounded-lg px-2 py-2 text-sm text-center"
                 />
                 <span className="text-sm text-gray-500">pers.</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 3a — Turn time (how long a booking holds its seats) */}
+          <div className={cardClass}>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <span className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                  <Clock className="w-5 h-5 text-gray-500" aria-hidden />
+                </span>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Durata unei mese</h3>
+                  <p className="text-sm text-gray-500">
+                    Cât timp ocupă o rezervare locurile. O rezervare la 19:00 ține locurile până la ora
+                    de sfârșit a duratei — o altă rezervare nu le poate refolosi în acest timp.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={turn}
+                  onChange={(e) => { const v = Number(e.target.value); setTurn(v); patchSettings({ turnMinutes: v }); }}
+                  disabled={busy}
+                  className="border border-gray-300 rounded-lg px-2 py-2 text-sm"
+                >
+                  <option value={60}>1 oră</option>
+                  <option value={90}>1 oră 30 min</option>
+                  <option value={120}>2 ore</option>
+                  <option value={150}>2 ore 30 min</option>
+                  <option value={180}>3 ore</option>
+                </select>
               </div>
             </div>
           </div>

@@ -1,7 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Phone, Mail, Users, Clock, Check, X, CalendarClock, Plus } from "lucide-react";
+import { notify } from "@/lib/chime";
+import { useVisiblePoll } from "@/lib/useVisiblePoll";
+import NotifyPermission from "@/components/restaurant/NotifyPermission";
 
 interface Reservation {
   id: string;
@@ -46,22 +49,38 @@ export default function ReservationsBoard({ basePath }: { basePath: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [filter, setFilter] = useState<"azi" | "maine" | "toate">("azi");
   const [adding, setAdding] = useState(false);
+  // Chime + tab badge when a NEW pending reservation arrives (board must be open).
+  const prevPending = useRef<number | null>(null);
 
   const fetchRows = useCallback(async () => {
     try {
       const res = await fetch(`${basePath}/reservations`, { cache: "no-store" });
       if (!res.ok) return;
       const { data } = await res.json();
-      setRows(data ?? []);
+      const list: Reservation[] = data ?? [];
+      setRows(list);
       setLoaded(true);
+
+      const pendingRows = list.filter((r) => r.status === "pending");
+      const pending = pendingRows.length;
+      if (prevPending.current !== null && pending > prevPending.current) {
+        document.title = `(${pending}) Rezervări — Din Brașov`;
+        // Describe the most recent pending reservation for the OS notification.
+        const newest = [...pendingRows].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)).at(-1);
+        notify({
+          title: "Rezervare nouă",
+          body: newest ? `${newest.guestName} — ${newest.partySize} pers. la ${newest.time}` : undefined,
+        });
+      } else if (pending === 0) {
+        document.title = "Rezervări — Din Brașov";
+      }
+      prevPending.current = pending;
     } catch { /* retry */ }
   }, [basePath]);
 
-  useEffect(() => {
-    fetchRows();
-    const interval = setInterval(fetchRows, 15000);
-    return () => clearInterval(interval);
-  }, [fetchRows]);
+  // Poll every 20s while visible, 30s when hidden.
+  useVisiblePoll(fetchRows, 20000, 30000);
+  useEffect(() => () => { document.title = "Din Brașov"; }, []);
 
   async function setStatus(id: string, status: "confirmed" | "declined" | "cancelled") {
     // Confirm destructive actions — a decline/cancel can't be undone.
@@ -105,6 +124,7 @@ export default function ReservationsBoard({ basePath }: { basePath: string }) {
 
   return (
     <div>
+      <NotifyPermission />
       {/* Summary strip */}
       <div className="grid grid-cols-3 gap-3 mb-5">
         {[

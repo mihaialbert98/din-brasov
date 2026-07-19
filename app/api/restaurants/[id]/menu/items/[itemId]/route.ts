@@ -8,17 +8,17 @@ import { menuItems, menuCategories } from "@/lib/db/schema";
 import { authorizeMenuEdit } from "@/lib/restaurant-permissions";
 
 const patchSchema = z.object({
-  categoryId: z.string().min(1).optional(),
-  name: z.string().min(1).max(200).optional(),
-  nameEn: z.string().max(200).optional(),
-  description: z.string().max(2000).optional(),
-  descriptionEn: z.string().max(2000).optional(),
-  price: z.string().max(40).optional(),
-  imageUrl: z.string().url().optional().or(z.literal("")),
+  categoryId: z.string().min(1, "Alege o categorie pentru produs.").optional(),
+  name: z.string().min(1, "Numele produsului este obligatoriu.").max(200, "Numele este prea lung (max. 200 de caractere).").optional(),
+  nameEn: z.string().max(200, "Numele în engleză este prea lung (max. 200 de caractere).").optional(),
+  description: z.string().max(2000, "Descrierea este prea lungă (max. 2000 de caractere).").optional(),
+  descriptionEn: z.string().max(2000, "Descrierea în engleză este prea lungă (max. 2000 de caractere).").optional(),
+  price: z.string().max(40, "Prețul este prea lung.").optional(),
+  imageUrl: z.string().url("Imaginea nu s-a încărcat corect. Încearcă din nou.").optional().or(z.literal("")),
   // Free text (legacy rows may hold a JSON array — normalized on read).
-  allergens: z.string().max(300).optional(),
-  allergensEn: z.string().max(300).optional(),
-  calories: z.number().int().min(0).max(10000).nullable().optional(),
+  allergens: z.string().max(300, "Lista de alergeni este prea lungă (max. 300 de caractere).").optional(),
+  allergensEn: z.string().max(300, "Lista de alergeni în engleză este prea lungă (max. 300 de caractere).").optional(),
+  calories: z.number().int().min(0).max(10000, "Caloriile trebuie să fie între 0 și 10000.").nullable().optional(),
   isVegan: z.boolean().optional(),
   isAvailable: z.boolean().optional(),
 });
@@ -38,7 +38,9 @@ export async function PATCH(
   if ("error" in a) return NextResponse.json({ error: a.error }, { status: a.status });
 
   const parsed = patchSchema.safeParse(await req.json().catch(() => ({})));
-  if (!parsed.success) return NextResponse.json({ error: "Date invalide." }, { status: 400 });
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Date invalide." }, { status: 400 });
+  }
   const d = parsed.data;
 
   // If moving to another category, it must belong to this restaurant.

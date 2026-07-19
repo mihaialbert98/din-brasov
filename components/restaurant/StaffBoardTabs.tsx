@@ -3,6 +3,7 @@
 import { useState } from "react";
 import ServiceBoard from "@/components/restaurant/ServiceBoard";
 import ReservationsBoard from "@/components/restaurant/ReservationsBoard";
+import NavBadge from "@/components/restaurant/NavBadge";
 
 /**
  * Tabbed staff surface: the live service queue and (when the restaurant takes
@@ -25,17 +26,18 @@ export default function StaffBoardTabs({
     <div>
       <div className="flex gap-1 mb-5">
         {([
-          { k: "serviciu", label: "Serviciu" },
-          { k: "rezervari", label: "Rezervări" },
+          { k: "serviciu", label: "Serviciu", badge: "service" },
+          { k: "rezervari", label: "Rezervări", badge: "reservations" },
         ] as const).map((t) => (
           <button
             key={t.k}
             onClick={() => setTab(t.k)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               tab === t.k ? "bg-[#1a1a1a] text-white" : "bg-white text-gray-600 hover:bg-gray-100"
             }`}
           >
             {t.label}
+            <NavBadge basePath={basePath} kind={t.badge} skip={tab === t.k} />
           </button>
         ))}
       </div>

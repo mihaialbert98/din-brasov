@@ -6,6 +6,7 @@ import {
   getMembership,
   isPlatformStaff,
 } from "@/lib/restaurant-permissions";
+import NavBadge from "@/components/restaurant/NavBadge";
 
 /**
  * Per-restaurant gate + nav. Access requires a membership row (owner|waiter) for
@@ -34,13 +35,14 @@ export default async function RestaurantLayout({
   const canManage = platform || membership?.memberRole === "owner";
   if (!canManage) notFound();
 
-  const nav = [
+  const apiBase = `/api/restaurants/${restaurant.id}`;
+  const nav: { href: string; label: string; badge?: "service" | "reservations" }[] = [
     { href: `/restaurant/${slug}`, label: "Prezentare" },
     { href: `/restaurant/${slug}/meniu`, label: "Meniu" },
-    { href: `/restaurant/${slug}/aspect`, label: "Aspect meniu" },
+    { href: `/restaurant/${slug}/aspect`, label: "Setări meniu" },
     { href: `/restaurant/${slug}/mese`, label: "Mese & QR" },
-    { href: `/restaurant/${slug}/serviciu`, label: "Serviciu" },
-    { href: `/restaurant/${slug}/rezervari`, label: "Rezervări" },
+    { href: `/restaurant/${slug}/serviciu`, label: "Serviciu", badge: "service" },
+    { href: `/restaurant/${slug}/rezervari`, label: "Rezervări", badge: "reservations" },
     { href: `/restaurant/${slug}/rezervari-setari`, label: "Setări rezervări" },
     { href: `/restaurant/${slug}/clienti`, label: "Clienți" },
     { href: `/restaurant/${slug}/personal`, label: "Membri echipă" },
@@ -60,9 +62,10 @@ export default async function RestaurantLayout({
             <Link
               key={item.href}
               href={item.href}
-              className="block px-3 py-2.5 rounded-lg hover:bg-white/10 transition-colors text-sm font-medium"
+              className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg hover:bg-white/10 transition-colors text-sm font-medium"
             >
-              {item.label}
+              <span>{item.label}</span>
+              {item.badge && <NavBadge basePath={apiBase} kind={item.badge} boardPath={item.href} />}
             </Link>
           ))}
         </nav>

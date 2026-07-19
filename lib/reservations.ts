@@ -112,6 +112,19 @@ export async function getMaxPartySize(restaurantId: string): Promise<number> {
   return r?.cap ?? 12;
 }
 
+/**
+ * Turn time (minutes) — how long a booking occupies its seats. Drives the
+ * sliding-window availability check so overlapping starts can't reuse seats.
+ */
+export async function getTurnMinutes(restaurantId: string): Promise<number> {
+  const [r] = await db
+    .select({ turn: restaurants.reservationTurnMinutes })
+    .from(restaurants)
+    .where(eq(restaurants.id, restaurantId))
+    .limit(1);
+  return r?.turn && r.turn > 0 ? r.turn : 90;
+}
+
 function toMinutes(hhmm: string): number {
   const [h, m] = hhmm.split(":").map(Number);
   return h * 60 + m;
@@ -155,10 +168,18 @@ export function slotsForDay(hours: ReservationHour[]): string[] {
   return [...slotsWithCapacity(hours).keys()].sort();
 }
 
+// Capacity-check tick granularity for the sliding window. Bookings' occupancy
+// windows are evaluated at every TICK minutes so an overlapping start can't reuse
+// seats held by an earlier, still-seated party.
+const CAPACITY_TICK = 15;
+
 /**
- * Live availability for a date + party size (+ optional area): for each of the
- * day's slots, subtract the seats already taken (pending + confirmed, IN THAT AREA
- * when given) and return only slots with room for this party.
+ * Live availability for a date + party size (+ optional area), using a SLIDING
+ * WINDOW based on the restaurant's turn time. Each pending/confirmed booking holds
+ * its seats across [start, start + turn). A candidate start T is bookable only if,
+ * at every 15-min tick within [T, T + turn), the seats consumed by overlapping
+ * bookings (in the requested area when given) plus this party fit the tick's
+ * capacity. Returns the passing start times, sorted.
  */
 export async function availableSlotsForDay(
   restaurantId: string,
@@ -170,7 +191,8 @@ export async function availableSlotsForDay(
   const hours = (await getReservationHours(restaurantId)).filter((h) => h.dayOfWeek === day);
   if (hours.length === 0) return [];
 
-  const caps = slotsWithCapacity(hours, area);
+  const caps = slotsWithCapacity(hours, area); // candidate start times → window capacity
+  const turn = await getTurnMinutes(restaurantId);
 
   const booked = await db
     .select({ time: reservations.time, partySize: reservations.partySize, area: reservations.area })
@@ -183,17 +205,41 @@ export async function availableSlotsForDay(
       )
     );
 
-  const taken = new Map<string, number>();
-  for (const b of booked) {
-    // When an area is requested, only bookings in the same area consume its seats.
-    if (area && b.area !== area) continue;
-    taken.set(b.time, (taken.get(b.time) ?? 0) + b.partySize);
-  }
+  // Existing occupancy as [startMin, endMin) windows (same-area only when given).
+  const windows = booked
+    .filter((b) => !area || b.area === area)
+    .map((b) => ({ start: toMinutes(b.time), end: toMinutes(b.time) + turn, size: b.partySize }));
 
-  return [...caps.entries()]
-    .filter(([time, cap]) => cap - (taken.get(time) ?? 0) >= partySize)
-    .map(([time]) => time)
-    .sort();
+  // Seats already held at a given minute by overlapping bookings.
+  const takenAt = (tick: number) =>
+    windows.reduce((sum, w) => (tick >= w.start && tick < w.end ? sum + w.size : sum), 0);
+
+  // Capacity that applies at an arbitrary minute — the max window capacity covering
+  // it (mirrors slotsWithCapacity's "larger window wins"); 0 outside all windows.
+  const capacityAt = (tick: number) => {
+    let cap = 0;
+    for (const h of hours) {
+      const s = toMinutes(h.startTime);
+      const e = toMinutes(h.endTime);
+      if (tick >= s && tick < e) cap = Math.max(cap, windowCapacity(h, area));
+    }
+    return cap;
+  };
+
+  const result: string[] = [];
+  for (const [time] of caps) {
+    const startMin = toMinutes(time);
+    const windowEnd = startMin + turn;
+    let fits = true;
+    for (let t = startMin; t < windowEnd; t += CAPACITY_TICK) {
+      const cap = capacityAt(t);
+      // Outside opening hours the seat pool is 0 → seating there still counts as the
+      // party occupying the room; only enforce capacity where a window defines one.
+      if (cap > 0 && takenAt(t) + partySize > cap) { fits = false; break; }
+    }
+    if (fits) result.push(time);
+  }
+  return result.sort();
 }
 
 /**
