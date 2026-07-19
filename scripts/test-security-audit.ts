@@ -26,7 +26,7 @@ const ok = (c: boolean, m: string) => { console.log(`  ${c ? "✓" : "✗"} ${m}
 const sec = (s: string) => console.log(`\n=== ${s} ===`);
 function dateForDow(dow: number): string {
   const d = new Date();
-  for (let i = 1; i <= 8; i++) { const t = new Date(d); t.setDate(d.getDate() + i); if (t.getDay() === dow) return t.toISOString().slice(0, 10); }
+  for (let i = 1; i <= 8; i++) { const t = new Date(d); t.setDate(d.getDate() + i); const s = t.toISOString().slice(0, 10); if (new Date(s + "T00:00:00").getDay() === dow) return s; }
   return d.toISOString().slice(0, 10);
 }
 
