@@ -3,7 +3,7 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { users, newsletterSubscribers } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { sendAccountConfirmationEmail } from "@/lib/email";
 import { grantFoundingIfEligible } from "@/lib/permissions";
 
@@ -56,6 +56,9 @@ export async function POST(req: Request) {
   const founding = newUser?.id ? await grantFoundingIfEligible(newUser.id) : false;
 
   // Newsletter prefs chosen at sign-up are pre-verified (email proven via account).
+  // Upsert by email: if they already subscribed anonymously via the banner, LINK
+  // that row to the new account and merge the newly-ticked sections (never downgrade
+  // an existing opt-in). Otherwise insert a fresh active subscription.
   if (wantsNews || wantsEvents || wantsPlaces || wantsExperiences) {
     await db.insert(newsletterSubscribers).values({
       email,
@@ -68,6 +71,17 @@ export async function POST(req: Request) {
       verificationToken: crypto.randomUUID(), // stable unsubscribe token
       verifiedAt: new Date(),
       consentGivenAt: new Date(),
+    }).onConflictDoUpdate({
+      target: newsletterSubscribers.email,
+      set: {
+        userId: newUser?.id ?? null,
+        // OR-merge: keep any section they were already subscribed to.
+        wantsNews: sql`${newsletterSubscribers.wantsNews} OR ${!!wantsNews}`,
+        wantsEvents: sql`${newsletterSubscribers.wantsEvents} OR ${!!wantsEvents}`,
+        wantsPlaces: sql`${newsletterSubscribers.wantsPlaces} OR ${!!wantsPlaces}`,
+        wantsExperiences: sql`${newsletterSubscribers.wantsExperiences} OR ${!!wantsExperiences}`,
+        status: "active",
+      },
     }).catch(() => {}); // don't fail registration if newsletter insert fails
   }
 
