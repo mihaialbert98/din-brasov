@@ -35,6 +35,8 @@ export default function PublicMenuView({
       lang={lang}
       onLangChange={setLang}
       showAccountCta={false}
+      // Sits under the sticky site Navbar (h-16 = 64px) on the public web menu.
+      stickyTop={64}
     />
   );
 }

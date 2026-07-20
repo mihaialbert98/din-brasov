@@ -55,6 +55,7 @@ export default function MenuView({
   lang,
   onLangChange,
   showAccountCta = false,
+  stickyTop = 0,
 }: {
   design: MenuDesignId;
   restaurantName: string;
@@ -65,6 +66,12 @@ export default function MenuView({
   lang: MenuLang;
   onLangChange: (l: MenuLang) => void;
   showAccountCta?: boolean;
+  /**
+   * Offset (px) the sticky category nav should stop at — the height of any fixed
+   * chrome above it. 0 on the QR menu (no site navbar); 64 on the public web menu,
+   * which sits under the sticky site Navbar (h-16).
+   */
+  stickyTop?: number;
 }) {
   const [activeId, setActiveId] = useState(categories[0]?.id ?? "");
   const [sheetItem, setSheetItem] = useState<MenuViewItem | null>(null);
@@ -96,7 +103,9 @@ export default function MenuView({
     clickScrolling.current = true;
     const el = sectionRefs.current[id];
     if (el) {
-      const y = el.getBoundingClientRect().top + window.scrollY - 78;
+      // Offset by the sticky chrome above: the category nav (~78px) plus any
+      // fixed site navbar (stickyTop) so the heading isn't hidden behind them.
+      const y = el.getBoundingClientRect().top + window.scrollY - (78 + stickyTop);
       window.scrollTo({ top: y, behavior: "smooth" });
     }
     window.setTimeout(() => { clickScrolling.current = false; }, 600);
@@ -145,8 +154,13 @@ export default function MenuView({
       {/* ── Sticky category nav ─────────────────────────────────────────────── */}
       {categories.length > 1 && (
         <nav
-          className="sticky top-0 z-20 border-b"
-          style={{ background: "color-mix(in srgb, var(--menu-paper) 90%, transparent)", borderColor: "var(--menu-border)", backdropFilter: "blur(10px)" }}
+          className="sticky z-20 border-b"
+          style={{
+            top: stickyTop,
+            background: "color-mix(in srgb, var(--menu-paper) 90%, transparent)",
+            borderColor: "var(--menu-border)",
+            backdropFilter: "blur(10px)",
+          }}
         >
           <div className="flex gap-1 overflow-x-auto px-4 scrollbar-none max-w-2xl mx-auto">
             {categories.map((c) => {
@@ -179,7 +193,9 @@ export default function MenuView({
             key={cat.id}
             id={cat.id}
             ref={(el) => { sectionRefs.current[cat.id] = el; }}
-            className={`scroll-mt-16 ${ci === 0 ? "" : isCompact ? "mt-8" : "mt-12"}`}
+            // Land the heading just below the sticky chrome (site navbar + category nav).
+            style={{ scrollMarginTop: stickyTop + 56 }}
+            className={ci === 0 ? "" : isCompact ? "mt-8" : "mt-12"}
           >
             <SectionHeading name={catName(cat, lang)} design={design} />
             {isModern && <ModernList items={cat.items} lang={lang} onOpen={open} />}
