@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { menuCategories, menuItems, restaurantTables } from "@/lib/db/schema";
+import { menuCategories, menuItems, restaurantTables, places } from "@/lib/db/schema";
 import { eq, asc } from "drizzle-orm";
 import {
   getRestaurantBySlug,
@@ -67,7 +67,11 @@ export default async function MeniuPage({
   const isAdmin = isPlatformStaff(role);
   const initiallyUnlocked = isAdmin || (await canEditMenuNow(session.user.id, restaurant.id, role));
 
-  // Any table's token opens the same customer menu — used for the live preview link.
+  // "See it as a customer" preview. Two possible targets, so the link works even
+  // for a restaurant with no tables yet:
+  //  1. the public Localuri menu (what a customer sees on the web) — when the
+  //     restaurant is linked to a published place and opted into Localuri;
+  //  2. otherwise any table's QR menu (what a diner at the table sees).
   const [firstTable] = await db
     .select({ qrToken: restaurantTables.qrToken })
     .from(restaurantTables)
@@ -75,18 +79,37 @@ export default async function MeniuPage({
     .orderBy(asc(restaurantTables.createdAt))
     .limit(1);
 
+  const [linkedPlace] = restaurant.placeId
+    ? await db
+        .select({ slug: places.slug, status: places.status })
+        .from(places)
+        .where(eq(places.id, restaurant.placeId))
+        .limit(1)
+    : [];
+
+  const publicMenuHref =
+    linkedPlace && linkedPlace.status === "published" && restaurant.showInLocaluri && restaurant.menuPublic
+      ? `/localuri/${linkedPlace.slug}/meniu`
+      : null;
+  const previewHref = publicMenuHref ?? (firstTable ? `/m/${firstTable.qrToken}` : null);
+
   return (
     <div className="max-w-3xl">
       <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
         <h1 className="text-2xl font-bold text-gray-900">Meniu</h1>
-        {firstTable && (
+        {previewHref ? (
           <Link
-            href={`/m/${firstTable.qrToken}`}
+            href={previewHref}
             target="_blank"
             className="text-sm font-semibold text-[#c84b1e] border border-[#c84b1e] px-4 py-2 rounded-lg hover:bg-[#c84b1e]/5 transition-colors"
           >
             Vezi meniul ca un client ↗
           </Link>
+        ) : (
+          <span className="text-xs text-gray-400 max-w-xs text-right">
+            Ca să previzualizezi meniul, adaugă o masă în „Mese &amp; QR” sau activează „Arată în
+            Localuri” din Setări meniu.
+          </span>
         )}
       </div>
       <MenuManager
