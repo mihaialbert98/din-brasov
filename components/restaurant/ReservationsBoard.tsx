@@ -30,8 +30,12 @@ const STATUS_CLASS: Record<Reservation["status"], string> = {
   cancelled: "bg-gray-100 text-gray-500",
 };
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
-const tomorrowStr = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); };
+// Local "YYYY-MM-DD" (browser-local date parts). NOT toISOString(), which converts
+// to UTC and can roll to the previous day in the small hours (e.g. 02:00 in UTC+3).
+const localISODate = (d: Date): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const todayStr = () => localISODate(new Date());
+const tomorrowStr = () => { const d = new Date(); d.setDate(d.getDate() + 1); return localISODate(d); };
 
 function formatDay(date: string): string {
   if (date === todayStr()) return "Azi";
@@ -325,7 +329,7 @@ function ManualReservationModal({
   }
 
   const field = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#c84b1e]";
-  const maxDate = new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10);
+  const maxDate = localISODate(new Date(Date.now() + 60 * 86400000));
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40" onClick={onClose}>

@@ -30,7 +30,7 @@ export default function ReservationsGrantButton({
     <button
       onClick={handleClick}
       disabled={loading}
-      className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 ${
+      className={`text-xs font-semibold px-3 h-11 inline-flex items-center rounded-lg transition-colors disabled:opacity-50 ${
         granted
           ? "bg-green-600 text-white hover:bg-green-700"
           : "border border-gray-300 text-gray-600 hover:bg-gray-50"

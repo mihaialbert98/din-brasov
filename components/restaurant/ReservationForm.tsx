@@ -10,6 +10,19 @@ type Prefill = { name?: string | null; phone?: string | null; email?: string | n
 const WEEKDAYS = ["Dum", "Lun", "Mar", "Mie", "Joi", "Vin", "Sâm"];
 
 /**
+ * Local "YYYY-MM-DD" — uses the browser's LOCAL date parts, unlike
+ * `toISOString()` which converts to UTC and can roll to the previous/next day in
+ * the small hours (e.g. 02:00 in UTC+3 → the day before). The whole booking flow
+ * keys off local weekdays (`getDay()`), so the date string must be local too.
+ */
+function localISODate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/**
  * Public table-reservation form. Flow: party size → day → time. Days are chips of
  * the next ~14 open days; time slots are fetched live per (day, party) so full
  * slots never appear. Name + phone required, email optional.
@@ -72,7 +85,7 @@ export default function ReservationForm({
       d.setDate(d.getDate() + i);
       if (!bookableDays.has(d.getDay())) continue;
       out.push({
-        value: d.toISOString().slice(0, 10),
+        value: localISODate(d),
         weekday: i === 0 ? "Azi" : i === 1 ? "Mâine" : WEEKDAYS[d.getDay()],
         dayNum: d.getDate(),
         month: d.toLocaleDateString("ro-RO", { month: "short" }),
@@ -308,8 +321,8 @@ export default function ReservationForm({
             <input
               type="date"
               value={date}
-              min={new Date().toISOString().slice(0, 10)}
-              max={new Date(Date.now() + advanceDays * 86400000).toISOString().slice(0, 10)}
+              min={localISODate(new Date())}
+              max={localISODate(new Date(Date.now() + advanceDays * 86400000))}
               onChange={(e) => {
                 const v = e.target.value;
                 if (!v) { setDate(""); setDateError(null); return; }
