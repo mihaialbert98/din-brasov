@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CalendarClock } from "lucide-react";
+import { ArrowLeft, CalendarClock, MapPin } from "lucide-react";
 import { eq, and } from "drizzle-orm";
 import type { Metadata } from "next";
 import { db } from "@/lib/db";
@@ -11,6 +11,7 @@ import { resolveTheme, themeStyle } from "@/lib/menu-themes";
 import PublicMenuView from "@/components/restaurant/PublicMenuView";
 import JsonLd from "@/components/seo/JsonLd";
 import { pageMetadata, localBusinessJsonLd, breadcrumbJsonLd, menuJsonLd } from "@/lib/seo";
+import { mapsUrl } from "@/lib/maps";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -21,7 +22,10 @@ type Props = { params: Promise<{ slug: string }> };
  */
 async function getPlaceMenu(slug: string) {
   const [place] = await db
-    .select({ id: places.id, name: places.name, slug: places.slug, status: places.status })
+    .select({
+      id: places.id, name: places.name, slug: places.slug, status: places.status,
+      address: places.address, latitude: places.latitude, longitude: places.longitude,
+    })
     .from(places)
     .where(eq(places.slug, slug))
     .limit(1);
@@ -76,6 +80,12 @@ export default async function PlaceMenuPage({ params }: Props) {
   const categories = await getRestaurantMenu(restaurant.id);
   const { design, theme } = resolveTheme(restaurant.menuDesign, restaurant.menuTheme);
   const reservable = await canReserve(restaurant.id);
+  const mapsHref = mapsUrl({
+    address: place.address,
+    name: place.name,
+    latitude: place.latitude,
+    longitude: place.longitude,
+  });
 
   return (
     <div>
@@ -115,15 +125,29 @@ export default async function PlaceMenuPage({ params }: Props) {
           <ArrowLeft className="w-4 h-4" aria-hidden />
           Înapoi la {place.name}
         </Link>
-        {reservable && (
-          <Link
-            href={`/localuri/${place.slug}/rezervare`}
-            className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:text-accent-hover transition-colors"
-          >
-            <CalendarClock className="w-4 h-4" aria-hidden />
-            Rezervă o masă
-          </Link>
-        )}
+        <div className="flex items-center gap-4">
+          {mapsHref && (
+            <a
+              href={mapsHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-accent transition-colors"
+              title="Deschide în Google Maps"
+            >
+              <MapPin className="w-4 h-4" aria-hidden />
+              Vezi pe hartă
+            </a>
+          )}
+          {reservable && (
+            <Link
+              href={`/localuri/${place.slug}/rezervare`}
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:text-accent-hover transition-colors"
+            >
+              <CalendarClock className="w-4 h-4" aria-hidden />
+              Rezervă o masă
+            </Link>
+          )}
+        </div>
       </div>
 
       {categories.length === 0 ? (

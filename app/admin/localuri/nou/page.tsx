@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ImageField from "@/components/admin/ImageField";
+import AddressMapCheck from "@/components/admin/AddressMapCheck";
 import { PLACE_CATEGORIES } from "@/lib/place-categories";
 
 export default function NouLocalPage() {
@@ -11,6 +12,8 @@ export default function NouLocalPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState("");
+  const [address, setAddress] = useState("");
+  const [name, setName] = useState("");
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -64,6 +67,7 @@ export default function NouLocalPage() {
           <label htmlFor="name" className="font-medium text-gray-700">Nume *</label>
           <input
             id="name" name="name" type="text" required maxLength={200}
+            value={name} onChange={(e) => setName(e.target.value)}
             placeholder="ex: Cafeneaua Brașovului"
             className="border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:border-[#c84b1e] focus:ring-1 focus:ring-[#c84b1e]"
           />
@@ -103,9 +107,11 @@ export default function NouLocalPage() {
           <label htmlFor="address" className="font-medium text-gray-700">Adresă</label>
           <input
             id="address" name="address" type="text" maxLength={300}
+            value={address} onChange={(e) => setAddress(e.target.value)}
             placeholder="ex: Strada Mureșenilor 10, Brașov"
             className="border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:border-[#c84b1e]"
           />
+          <AddressMapCheck address={address} name={name} />
         </div>
 
         <div className="flex flex-col gap-1">
