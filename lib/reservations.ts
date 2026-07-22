@@ -226,6 +226,32 @@ export function slotsForDay(hours: ReservationHour[]): string[] {
 // seats held by an earlier, still-seated party.
 const CAPACITY_TICK = 15;
 
+// Reservations are wall-clock local to the venue (Brașov). "Today" and past-slot
+// checks must use THIS timezone, never the server's UTC — otherwise the small hours
+// roll the date (the same class of bug the booking form's date chips had).
+const RESERVATION_TZ = "Europe/Bucharest";
+
+/** Current { date: "YYYY-MM-DD", minutes: since local midnight } in the venue TZ. */
+function nowInReservationTZ(): { date: string; minutes: number } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: RESERVATION_TZ,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  }).formatToParts(new Date());
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "0";
+  let hour = parseInt(get("hour"), 10);
+  if (hour === 24) hour = 0; // some ICU builds render local midnight as "24"
+  return { date: `${get("year")}-${get("month")}-${get("day")}`, minutes: hour * 60 + parseInt(get("minute"), 10) };
+}
+
+/** Hide slots earlier than now WHEN dateStr is today (venue TZ). Other days pass
+ *  through untouched; a slot at exactly the current minute is kept. */
+function dropPastSlotsForToday(dateStr: string, slots: string[]): string[] {
+  const now = nowInReservationTZ();
+  if (dateStr !== now.date) return slots;
+  return slots.filter((s) => toMinutes(s) >= now.minutes);
+}
+
 /**
  * Live availability for a date + party size (+ optional area), using a SLIDING
  * WINDOW based on the restaurant's turn time. Each pending/confirmed booking holds
@@ -247,7 +273,7 @@ export async function availableSlotsForDay(
   // Tables mode uses the table-inventory algorithm instead of the seat pool.
   const { mode, maxJoin, turn: turnCfg } = await getReservationConfig(restaurantId);
   if (mode === "tables") {
-    return availableSlotsForDayTables(restaurantId, dateStr, partySize, hours, maxJoin, turnCfg, area);
+    return dropPastSlotsForToday(dateStr, await availableSlotsForDayTables(restaurantId, dateStr, partySize, hours, maxJoin, turnCfg, area));
   }
 
   const caps = slotsWithCapacity(hours, area); // candidate start times → window capacity
@@ -300,7 +326,7 @@ export async function availableSlotsForDay(
     }
     if (fits) result.push(time);
   }
-  return result.sort();
+  return dropPastSlotsForToday(dateStr, result.sort());
 }
 
 /** Parse a reservation's assignedTableIds JSON into a string[] (empty on null/bad). */

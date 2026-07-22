@@ -31,7 +31,7 @@ export default function EnableRestaurantButton({ placeId }: { placeId: string })
     <button
       onClick={handleClick}
       disabled={loading}
-      className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-[#c84b1e] text-[#c84b1e] hover:bg-[#c84b1e]/10 inline-flex items-center gap-1 disabled:opacity-50"
+      className="text-xs font-semibold px-3 h-11 rounded-lg border border-[#c84b1e] text-[#c84b1e] hover:bg-[#c84b1e]/10 inline-flex items-center gap-1 disabled:opacity-50"
       title="Creează meniu și rezervări pentru acest local"
     >
       <Store className="w-3.5 h-3.5" aria-hidden /> {loading ? "..." : "Activează meniu/rezervări"}

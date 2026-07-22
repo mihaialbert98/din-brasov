@@ -50,7 +50,7 @@ export default function AssignOwnerButton({
     <>
       <button
         onClick={() => setOpen(true)}
-        className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 inline-flex items-center gap-1"
+        className="text-xs font-semibold px-3 h-11 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 inline-flex items-center gap-1"
         title={currentOwnerEmail ? "Schimbă proprietarul" : "Asociază un proprietar"}
       >
         <UserPlus className="w-3.5 h-3.5" aria-hidden />

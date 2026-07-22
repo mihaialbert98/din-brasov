@@ -23,6 +23,9 @@ const schema = z.object({
   imageUrl: z.string().url().optional(),
   ctaLabel: z.string().max(60).optional(),
   ctaHref: z.string().url().optional(),
+  // When present, restrict the send to these clients (still ∩ subscribers below).
+  // Absent → target ALL of the restaurant's subscribed clients.
+  userIds: z.array(z.string()).max(10000).optional(),
   dryRun: z.boolean().optional(),
 });
 
@@ -56,7 +59,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .selectDistinct({ userId: reservations.userId })
     .from(reservations)
     .where(and(eq(reservations.restaurantId, id), isNotNull(reservations.userId)));
-  const clientIds = clientRows.map((r) => r.userId).filter((x): x is string => !!x);
+  let clientIds = clientRows.map((r) => r.userId).filter((x): x is string => !!x);
+
+  // Admin picked a subset on the clients page → keep only those (that are real
+  // clients of THIS restaurant). Never trusts the client to bypass the consent gate.
+  if (Array.isArray(d.userIds)) {
+    const sel = new Set(d.userIds);
+    clientIds = clientIds.filter((x) => sel.has(x));
+  }
 
   if (clientIds.length === 0) {
     return NextResponse.json({ ok: true, dryRun, sent: 0, skipped: 0, failed: 0, recipients: [] });
@@ -102,7 +112,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       action: "send_restaurant_client_email",
       entityType: "restaurant",
       entityId: id,
-      metadataJson: JSON.stringify({ restaurant: rest?.name, subject: d.subject, sent: result.sent, skipped: result.skipped, failed: result.failed }),
+      metadataJson: JSON.stringify({ restaurant: rest?.name, subject: d.subject, selected: d.userIds?.length ?? null, sent: result.sent, skipped: result.skipped, failed: result.failed }),
     });
   }
 

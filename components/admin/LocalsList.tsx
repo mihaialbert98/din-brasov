@@ -3,10 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Check, X as XIcon, ExternalLink, Utensils, CalendarCheck, MapPin } from "lucide-react";
+import { Check, X as XIcon, ExternalLink, Utensils, CalendarCheck, MapPin, Users } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import ReservationsGrantButton from "@/components/admin/ReservationsGrantButton";
-import EmailClientsButton from "@/components/admin/EmailClientsButton";
 import EnableRestaurantButton from "@/components/admin/EnableRestaurantButton";
 import AssignOwnerButton from "@/components/admin/AssignOwnerButton";
 
@@ -27,6 +26,8 @@ export interface LocalRow {
   //  off = admin grant off.
   reservationState: "bookable" | "granted" | "off";
   ownerEmail: string | null;
+  // Distinct account-holding clients who have reserved (0 when directory-only).
+  clientCount: number;
 }
 
 function Badge({ on, label, icon: Icon }: { on: boolean; label: string; icon: React.ElementType }) {
@@ -154,12 +155,17 @@ export default function LocalsList({ items }: { items: LocalRow[] }) {
                   <>
                     <Link
                       href={`/restaurant/${l.restaurantSlug}`}
-                      className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#c84b1e] text-white hover:bg-[#d9603a] inline-flex items-center gap-1"
+                      className="text-xs font-semibold px-3 h-11 rounded-lg bg-[#c84b1e] text-white hover:bg-[#d9603a] inline-flex items-center gap-1"
                     >
                       Panou restaurant <ExternalLink className="w-3 h-3" aria-hidden />
                     </Link>
                     <ReservationsGrantButton id={l.restaurantId!} granted={l.reservationsGranted} />
-                    <EmailClientsButton restaurantId={l.restaurantId!} restaurantName={l.name} />
+                    <Link
+                      href={`/admin/localuri/${l.id}/clienti`}
+                      className="text-xs font-semibold px-3 h-11 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1"
+                    >
+                      <Users className="w-3.5 h-3.5" aria-hidden /> Clienți ({l.clientCount})
+                    </Link>
                     <AssignOwnerButton placeId={l.id} localName={l.name} currentOwnerEmail={l.ownerEmail} />
                   </>
                 ) : (
@@ -170,13 +176,13 @@ export default function LocalsList({ items }: { items: LocalRow[] }) {
                 )}
                 <Link
                   href={`/admin/localuri/${l.id}`}
-                  className="text-xs text-gray-600 border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="text-xs text-gray-600 border border-gray-300 px-3 h-11 inline-flex items-center rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   Editează
                 </Link>
                 <button
                   onClick={() => setConfirm({ id: l.id, name: l.name })}
-                  className="text-xs text-red-600 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                  className="text-xs text-red-600 border border-red-200 px-3 h-11 inline-flex items-center rounded-lg hover:bg-red-50 transition-colors"
                 >
                   Șterge
                 </button>
