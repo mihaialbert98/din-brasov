@@ -205,7 +205,10 @@ export function slotsWithCapacity(hours: ReservationHour[], area?: Area): Map<st
     const end = toMinutes(h.endTime);
     const step = h.slotMinutes > 0 ? h.slotMinutes : 30;
     const cap = windowCapacity(h, area);
-    for (let t = start; t <= end - step; t += step) {
+    // The interval end is the LAST seating time (inclusive) — a booking at the end
+    // still runs its turn time past close. So a 10:00–20:00 window is bookable at
+    // 20:00. (capacityAt below is likewise inclusive of the end so this is enforced.)
+    for (let t = start; t <= end; t += step) {
       const key = toHHMM(t);
       caps.set(key, Math.max(caps.get(key) ?? 0, cap));
     }
@@ -272,12 +275,14 @@ export async function availableSlotsForDay(
 
   // Capacity that applies at an arbitrary minute — the max window capacity covering
   // it (mirrors slotsWithCapacity's "larger window wins"); 0 outside all windows.
+  // End is inclusive so a booking AT the window's last seating time is still capped
+  // (all bookings overlapping it started at/before that tick, so it's enough).
   const capacityAt = (tick: number) => {
     let cap = 0;
     for (const h of hours) {
       const s = toMinutes(h.startTime);
       const e = toMinutes(h.endTime);
-      if (tick >= s && tick < e) cap = Math.max(cap, windowCapacity(h, area));
+      if (tick >= s && tick <= e) cap = Math.max(cap, windowCapacity(h, area));
     }
     return cap;
   };

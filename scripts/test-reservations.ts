@@ -78,7 +78,8 @@ async function main() {
   const hours = await getReservationHours(r.id);
   const monHours = hours.filter((h) => h.dayOfWeek === 1);
   const slots = slotsForDay(monHours);
-  assert("slots generated (18:00..21:30)", slots.includes("18:00") && slots.includes("21:30") && !slots.includes("22:00"), slots.join(","));
+  // End is inclusive (last seating): 18:00 window 18:00–22:00 → 18:00 … 22:00.
+  assert("slots generated (18:00..22:00 inclusive)", slots.includes("18:00") && slots.includes("21:30") && slots.includes("22:00"), slots.join(","));
   const monday = nextDateForDay(1);
   assert("valid booking passes", (await validateBooking(r.id, monday, "19:00", 4)).ok);
   assert("out-of-window time rejected", !(await validateBooking(r.id, monday, "12:00", 2)).ok);

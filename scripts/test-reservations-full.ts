@@ -61,7 +61,7 @@ async function main() {
   sec("PHASE 1 — SEATS mode, no areas: sliding window");
   const s1 = await mkRestaurant("seats", { reservationCapacityMode: "seats", reservationConfirmMode: "manual" });
   await db.insert(reservationHours).values({ restaurantId: s1, dayOfWeek: dow, startTime: "18:00", endTime: "22:00", slotMinutes: 30, seatsPerSlot: 10 });
-  ok((await availableSlotsForDay(s1, date, 2)).length === 8, "8 start times (18:00–21:30, every 30 min)");
+  ok((await availableSlotsForDay(s1, date, 2)).length === 9, "9 start times (18:00–22:00 inclusive, every 30 min)");
   await book(s1, date, "19:00", 10, null, null); // fill 10 seats @19:00
   const after1 = await availableSlotsForDay(s1, date, 1);
   ok(!["19:00", "19:30", "20:00"].some((t) => after1.includes(t)), "full slot blocks 19:00–20:00 (sliding window)");
