@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2, Plus, Power, CheckCircle2, Clock, Users, Home, Trees } from "lucide-react";
+import { Trash2, Plus, Power, CheckCircle2, Clock, Users, Home, Trees, LayoutGrid } from "lucide-react";
 import type { ReservationHour } from "@/lib/reservations";
+import ReservationTablesManager, { type ResTableRow } from "@/components/restaurant/ReservationTablesManager";
 
 const DAYS = ["Duminică", "Luni", "Marți", "Miercuri", "Joi", "Vineri", "Sâmbătă"];
 const DAYS_SHORT = ["Dum", "Lun", "Mar", "Mie", "Joi", "Vin", "Sâm"];
@@ -17,6 +18,10 @@ export default function ReservationSettings({
   initialTurnMinutes,
   initialAreasEnabled,
   initialHours,
+  initialCapacityMode,
+  initialMaxJoin,
+  initialAdvanceDays,
+  initialResTables,
 }: {
   restaurantId: string;
   initialEnabled: boolean;
@@ -25,6 +30,10 @@ export default function ReservationSettings({
   initialTurnMinutes: number;
   initialAreasEnabled: boolean;
   initialHours: ReservationHour[];
+  initialCapacityMode: "seats" | "tables";
+  initialMaxJoin: number;
+  initialAdvanceDays: number;
+  initialResTables: ResTableRow[];
 }) {
   const router = useRouter();
   const [enabled, setEnabled] = useState(initialEnabled);
@@ -32,6 +41,9 @@ export default function ReservationSettings({
   const [maxParty, setMaxParty] = useState<number | "">(initialMaxParty);
   const [turn, setTurn] = useState(initialTurnMinutes);
   const [areas, setAreas] = useState(initialAreasEnabled);
+  const [capacityMode, setCapacityMode] = useState<"seats" | "tables">(initialCapacityMode);
+  const [maxJoin, setMaxJoin] = useState(initialMaxJoin);
+  const [advanceDays, setAdvanceDays] = useState<number | "">(initialAdvanceDays);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -51,7 +63,7 @@ export default function ReservationSettings({
   // Windows missing per-area seats (nudge after enabling areas).
   const windowsMissingAreas = initialHours.filter((h) => h.seatsInside == null && h.seatsOutside == null);
 
-  async function patchSettings(next: { enabled?: boolean; confirmMode?: "auto" | "manual"; maxPartySize?: number; areasEnabled?: boolean; turnMinutes?: number }) {
+  async function patchSettings(next: { enabled?: boolean; confirmMode?: "auto" | "manual"; maxPartySize?: number; areasEnabled?: boolean; turnMinutes?: number; capacityMode?: "seats" | "tables"; maxJoin?: number; advanceDays?: number }) {
     setBusy(true);
     setError(null);
     const res = await fetch(`/api/restaurants/${restaurantId}/reservations-settings`, {
@@ -234,6 +246,91 @@ export default function ReservationSettings({
             </div>
           </div>
 
+          {/* Card 3a2 — Advance booking window */}
+          <div className={cardClass}>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <span className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                  <Clock className="w-5 h-5 text-gray-500" aria-hidden />
+                </span>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Cu cât timp înainte</h3>
+                  <p className="text-sm text-gray-500">Cât de departe în viitor pot rezerva clienții.</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number" min={1} max={365} value={advanceDays}
+                  onChange={(e) => setAdvanceDays(e.target.value === "" ? "" : Number(e.target.value))}
+                  onBlur={() => { const v = advanceDays === "" ? 60 : advanceDays; setAdvanceDays(v); patchSettings({ advanceDays: v }); }}
+                  className="w-20 border border-gray-300 rounded-lg px-2 py-2 text-sm text-center"
+                />
+                <span className="text-sm text-gray-500">zile</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 3a3 — Capacity mode: total seats vs individual tables */}
+          <div className={cardClass}>
+            <div className="flex items-start gap-3 mb-3">
+              <span className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                <LayoutGrid className="w-5 h-5 text-gray-500" aria-hidden />
+              </span>
+              <div>
+                <h3 className="font-semibold text-gray-900">Mod capacitate</h3>
+                <p className="text-sm text-gray-500">
+                  Cum se calculează disponibilitatea: după numărul total de locuri, sau după mese
+                  individuale (cu posibilitatea de a le uni).
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { v: "seats", label: "Capacitate totală", desc: "Un număr de locuri per interval." },
+                { v: "tables", label: "Mese individuale", desc: "Mese cu locuri; se pot uni." },
+              ] as const).map((o) => (
+                <button
+                  key={o.v}
+                  onClick={async () => { if (o.v === capacityMode) return; setCapacityMode(o.v); await patchSettings({ capacityMode: o.v }); }}
+                  disabled={busy}
+                  className={`text-left px-4 py-3 rounded-lg border-2 transition-colors disabled:opacity-60 ${capacityMode === o.v ? "border-[#c84b1e] bg-[#c84b1e]/5" : "border-gray-200 hover:border-gray-300"}`}
+                >
+                  <p className="font-medium text-gray-900 text-sm">{o.label}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{o.desc}</p>
+                </button>
+              ))}
+            </div>
+            {capacityMode === "tables" && (
+              <p className="text-xs text-amber-700 mt-3">
+                Schimbă modul când ai puține rezervări viitoare — rezervările făcute în modul „capacitate
+                totală” nu au o masă atribuită.
+              </p>
+            )}
+          </div>
+
+          {/* Card 3a4 — Tables inventory + join limit (tables mode only) */}
+          {capacityMode === "tables" && (
+            <>
+              <div className={cardClass}>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">Mese maxime unite</h3>
+                    <p className="text-sm text-gray-500">Câte mese se pot uni pentru un grup mare.</p>
+                  </div>
+                  <select
+                    value={maxJoin}
+                    onChange={(e) => { const v = Number(e.target.value); setMaxJoin(v); patchSettings({ maxJoin: v }); }}
+                    disabled={busy}
+                    className="border border-gray-300 rounded-lg px-2 py-2 text-sm"
+                  >
+                    {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n === 1 ? "Fără unire" : `${n} mese`}</option>)}
+                  </select>
+                </div>
+              </div>
+              <ReservationTablesManager restaurantId={restaurantId} areasEnabled={areas} initialTables={initialResTables} />
+            </>
+          )}
+
           {/* Card 3b — Areas (interior / terrace) */}
           <div className={cardClass}>
             <div className="flex items-center justify-between gap-4">
@@ -271,10 +368,12 @@ export default function ReservationSettings({
 
           {/* Card 4 — Program & seats */}
           <div className={cardClass}>
-            <h3 className="font-semibold text-gray-900 mb-1">Program & locuri</h3>
+            <h3 className="font-semibold text-gray-900 mb-1">{capacityMode === "tables" ? "Program" : "Program & locuri"}</h3>
             <p className="text-sm text-gray-500 mb-4">
               Adaugă intervalele în care primești rezervări.{" "}
-              {areas
+              {capacityMode === "tables"
+                ? "În modul „Mese individuale”, capacitatea vine din mese — aici setezi doar orele."
+                : areas
                 ? "Setează câte locuri sunt disponibile la interior și pe terasă."
                 : "Locuri = câte persoane încap în total."}{" "}
               „Start la fiecare” = cât de des poate începe o rezervare (ex: la 15 min), diferit de
@@ -295,7 +394,7 @@ export default function ReservationSettings({
                         <span key={h.id} className="inline-flex items-center gap-2.5 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
                           <span className="text-gray-800 font-medium tabular-nums">{h.startTime}–{h.endTime}</span>
                           <span className="text-gray-400">{h.slotMinutes}min</span>
-                          {areas && (h.seatsInside != null || h.seatsOutside != null) ? (
+                          {capacityMode === "tables" ? null : areas && (h.seatsInside != null || h.seatsOutside != null) ? (
                             <>
                               <span className="inline-flex items-center gap-1 text-gray-500" title="Interior"><Home className="w-3.5 h-3.5" aria-hidden />{h.seatsInside ?? 0}</span>
                               <span className="inline-flex items-center gap-1 text-gray-500" title="Terasă"><Trees className="w-3.5 h-3.5" aria-hidden />{h.seatsOutside ?? 0}</span>
@@ -334,7 +433,8 @@ export default function ReservationSettings({
                     {[15, 30].map((m) => <option key={m} value={m}>{m} min</option>)}
                   </select>
                 </label>
-                {areas ? (
+                {/* Seat inputs only in seats mode — tables mode gets capacity from the tables. */}
+                {capacityMode === "tables" ? null : areas ? (
                   <>
                     <label className={labelClass} title="Locuri interior">Interior
                       <input type="number" min={0} max={200} value={seatsIn} onChange={(e) => setSeatsIn(numOrEmpty(e.target.value))} className={fieldClass} />

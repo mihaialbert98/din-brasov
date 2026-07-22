@@ -10,6 +10,7 @@ import Badge from "@/components/ui/Badge";
 import JsonLd from "@/components/seo/JsonLd";
 import { pageMetadata, localBusinessJsonLd, breadcrumbJsonLd } from "@/lib/seo";
 import { canReserve } from "@/lib/reservations";
+import { mapsUrl } from "@/lib/maps";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -146,12 +147,29 @@ export default async function LocalPage({ params }: Props) {
       )}
 
       <div className="bg-surface rounded-2xl border border-hairline p-5 mb-6 space-y-2.5 text-ink/80">
-        {place.address && (
-          <p className="flex items-center gap-2">
-            <MapPin className="w-4 h-4 flex-shrink-0 text-accent" aria-hidden />
-            <span>{place.address}</span>
-          </p>
-        )}
+        {place.address && (() => {
+          const href = mapsUrl({ address: place.address, name: place.name, latitude: place.latitude, longitude: place.longitude });
+          const inner = (
+            <>
+              <MapPin className="w-4 h-4 flex-shrink-0 text-accent" aria-hidden />
+              <span>{place.address}</span>
+            </>
+          );
+          return href ? (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 hover:text-accent transition-colors"
+              title="Deschide în Google Maps"
+            >
+              {inner}
+              <span className="text-xs text-accent whitespace-nowrap">Vezi pe hartă ↗</span>
+            </a>
+          ) : (
+            <p className="flex items-center gap-2">{inner}</p>
+          );
+        })()}
         {place.phone && (
           <a href={`tel:${place.phone}`} className="flex items-center gap-2 hover:text-accent transition-colors">
             <Phone className="w-4 h-4 flex-shrink-0 text-accent" aria-hidden />

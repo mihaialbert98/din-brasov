@@ -20,6 +20,10 @@ const schema = z.object({
   areasEnabled: z.boolean().optional(),
   // Turn time — how long a booking occupies its seats (minutes). 30 min – 6 h.
   turnMinutes: z.number().int().min(30).max(360).optional(),
+  // Capacity model + its knobs.
+  capacityMode: z.enum(["seats", "tables"]).optional(),
+  maxJoin: z.number().int().min(1).max(6).optional(),
+  advanceDays: z.number().int().min(1).max(365).optional(),
 });
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -54,6 +58,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (parsed.data.maxPartySize !== undefined) patch.reservationMaxPartySize = parsed.data.maxPartySize;
   if (parsed.data.areasEnabled !== undefined) patch.reservationAreasEnabled = parsed.data.areasEnabled;
   if (parsed.data.turnMinutes !== undefined) patch.reservationTurnMinutes = parsed.data.turnMinutes;
+  if (parsed.data.capacityMode !== undefined) patch.reservationCapacityMode = parsed.data.capacityMode;
+  if (parsed.data.maxJoin !== undefined) patch.reservationMaxJoin = parsed.data.maxJoin;
+  if (parsed.data.advanceDays !== undefined) patch.reservationAdvanceDays = parsed.data.advanceDays;
 
   await db.update(restaurants).set(patch).where(eq(restaurants.id, id));
 

@@ -37,9 +37,9 @@ async function main() {
     { id: u2, email: `acct-test-${u2}@test.local`, name: "Client Doi", role: "user" },
   ]);
 
-  // Clean slate: single Wednesday window, 6 seats, areas off.
+  // Clean slate: single Wednesday window, 6 seats, seats mode, areas off.
   const origAreas = r.reservationAreasEnabled;
-  await db.update(restaurants).set({ reservationAreasEnabled: false }).where(eq(restaurants.id, r.id));
+  await db.update(restaurants).set({ reservationCapacityMode: "seats", reservationAreasEnabled: false }).where(eq(restaurants.id, r.id));
   await db.delete(reservationHours).where(eq(reservationHours.restaurantId, r.id));
   await db.insert(reservationHours).values({ restaurantId: r.id, dayOfWeek: 3, startTime: "18:00", endTime: "22:00", slotMinutes: 30, seatsPerSlot: 6 });
   const wed = nextDateForDay(3);

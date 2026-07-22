@@ -27,6 +27,7 @@ export default function ReservationForm({
   isMember = false,
   hasSavedPhone = false,
   isSubscriber = false,
+  advanceDays = 60,
 }: {
   restaurantId: string;
   restaurantName: string;
@@ -38,11 +39,13 @@ export default function ReservationForm({
   isMember?: boolean;
   hasSavedPhone?: boolean;
   isSubscriber?: boolean;
+  advanceDays?: number;
 }) {
   const mountedAt = useRef(Date.now());
   const [partySize, setPartySize] = useState(2);
   const [area, setArea] = useState<Area | null>(areasEnabled ? null : "inside");
   const [date, setDate] = useState("");
+  const [dateError, setDateError] = useState<string | null>(null);
   const [time, setTime] = useState("");
   const [slots, setSlots] = useState<string[]>([]);
   const [otherAreaSlots, setOtherAreaSlots] = useState<string[]>([]);
@@ -297,6 +300,32 @@ export default function ReservationForm({
             ))}
           </div>
         )}
+
+        {/* Exact-date picker — book any open day within the advance window. */}
+        <div className="mt-3">
+          <label className="text-xs text-muted flex items-center gap-2 flex-wrap">
+            <span>sau alege data:</span>
+            <input
+              type="date"
+              value={date}
+              min={new Date().toISOString().slice(0, 10)}
+              max={new Date(Date.now() + advanceDays * 86400000).toISOString().slice(0, 10)}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (!v) { setDate(""); setDateError(null); return; }
+                if (!bookableDays.has(new Date(`${v}T00:00:00`).getDay())) {
+                  setDateError("Restaurantul e închis în această zi.");
+                  setDate("");
+                } else {
+                  setDateError(null);
+                  setDate(v);
+                }
+              }}
+              className="border border-hairline rounded-lg px-3 py-2 text-sm text-ink bg-surface focus:outline-none focus:border-accent"
+            />
+          </label>
+          {dateError && <p className="text-xs text-amber-700 mt-1">{dateError}</p>}
+        </div>
       </div>
       )}
 

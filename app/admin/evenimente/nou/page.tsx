@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ImageField from "@/components/admin/ImageField";
+import AddressMapCheck from "@/components/admin/AddressMapCheck";
 
 const CATEGORIES = ["Cultură", "Sport", "Muzică", "Food", "Business", "Educație", "Altele"];
 
@@ -254,6 +255,7 @@ export default function NouEvenimentPage() {
             value={fields.address} onChange={(e) => setField("address", e.target.value)}
             className="border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:border-[#c84b1e]"
           />
+          <AddressMapCheck address={fields.address} name={fields.locationName} />
         </div>
 
         <div className="flex flex-col gap-3">

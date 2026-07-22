@@ -27,6 +27,7 @@ async function getReservableRestaurant(slug: string) {
       name: restaurants.name,
       confirmMode: restaurants.reservationConfirmMode,
       areasEnabled: restaurants.reservationAreasEnabled,
+      advanceDays: restaurants.reservationAdvanceDays,
     })
     .from(restaurants)
     .where(and(eq(restaurants.placeId, place.id), eq(restaurants.status, "active")))
@@ -107,6 +108,7 @@ export default async function ReservationPage({ params }: Props) {
         isMember={!!session?.user?.id}
         hasSavedPhone={hasSavedPhone}
         isSubscriber={isSubscriber}
+        advanceDays={restaurant.advanceDays ?? 60}
       />
     </div>
   );

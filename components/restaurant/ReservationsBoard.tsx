@@ -16,6 +16,7 @@ interface Reservation {
   guestEmail: string | null;
   status: "pending" | "confirmed" | "declined" | "cancelled";
   area: "inside" | "outside" | null;
+  tables?: string[];
   note: string | null;
 }
 
@@ -225,6 +226,11 @@ export default function ReservationsBoard({
                             {r.area === "inside" ? "Interior" : "Terasă"}
                           </span>
                         )}
+                        {r.tables && r.tables.length > 0 && (
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-purple-50 text-purple-700" title="Masă atribuită">
+                            {r.tables.join(" + ")}
+                          </span>
+                        )}
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ml-auto ${STATUS_CLASS[r.status]}`}>
                           {STATUS_LABEL[r.status]}
                         </span>
@@ -284,7 +290,9 @@ function ManualReservationModal({
 }) {
   const [date, setDate] = useState(todayStr());
   const [time, setTime] = useState("19:00");
-  const [partySize, setPartySize] = useState(2);
+  // number | "" so the field can be fully cleared while typing (Number("")===0 would
+  // otherwise stick a 0 that can't be deleted); coerced to a valid number on submit.
+  const [partySize, setPartySize] = useState<number | "">(2);
   const [guestName, setGuestName] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
   const [note, setNote] = useState("");
@@ -297,12 +305,17 @@ function ManualReservationModal({
       setError("Completează numele și telefonul.");
       return;
     }
+    const nParty = partySize === "" ? 0 : partySize;
+    if (nParty < 1) {
+      setError("Numărul de persoane trebuie să fie cel puțin 1.");
+      return;
+    }
     setSaving(true);
     setError(null);
     const res = await fetch(`${basePath}/reservations/create`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date, time, partySize, guestName: guestName.trim(), guestPhone: guestPhone.trim(), note: note.trim() || undefined, force }),
+      body: JSON.stringify({ date, time, partySize: nParty, guestName: guestName.trim(), guestPhone: guestPhone.trim(), note: note.trim() || undefined, force }),
     });
     setSaving(false);
     if (res.ok) { onAdded(); return; }
@@ -342,7 +355,10 @@ function ManualReservationModal({
           </label>
         </div>
         <label className="block text-xs font-medium text-gray-500 mb-3">Persoane
-          <input type="number" min={1} max={50} value={partySize} onChange={(e) => setPartySize(Number(e.target.value))} className={`mt-1 ${field}`} />
+          <input type="number" min={1} max={50} value={partySize}
+            onChange={(e) => setPartySize(e.target.value === "" ? "" : Number(e.target.value))}
+            onBlur={() => { if (partySize === "" || partySize < 1) setPartySize(1); }}
+            className={`mt-1 ${field}`} />
         </label>
         <label className="block text-xs font-medium text-gray-500 mb-3">Nume *
           <input type="text" value={guestName} onChange={(e) => setGuestName(e.target.value)} className={`mt-1 ${field}`} />

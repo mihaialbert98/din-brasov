@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import ImageField from "@/components/admin/ImageField";
+import AddressMapCheck from "@/components/admin/AddressMapCheck";
 import { PLACE_CATEGORIES } from "@/lib/place-categories";
 
 export default function EditLocalPage() {
@@ -172,6 +173,7 @@ export default function EditLocalPage() {
             type="text" value={address} onChange={(e) => setAddress(e.target.value)} maxLength={300}
             className="border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:border-[#c84b1e]"
           />
+          <AddressMapCheck address={address} name={name} />
         </div>
 
         <div className="flex flex-col gap-1">

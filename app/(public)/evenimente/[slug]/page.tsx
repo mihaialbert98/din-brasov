@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { events } from "@/lib/db/schema";
 import { CalendarDays, MapPin, Ticket, CheckCircle2, Hourglass, ArrowUpRight } from "lucide-react";
 import { formatDate, isOptimizableImage } from "@/lib/utils";
+import { mapsUrl } from "@/lib/maps";
 import type { Metadata } from "next";
 import Badge from "@/components/ui/Badge";
 import JsonLd from "@/components/seo/JsonLd";
@@ -86,12 +87,29 @@ export default async function EvenimentPage({ params }: Props) {
           <CalendarDays className="w-4 h-4 flex-shrink-0 text-accent" aria-hidden />
           <span>{formatDate(ev.startsAt)}{ev.endsAt ? ` — ${formatDate(ev.endsAt)}` : ""}</span>
         </p>
-        {ev.locationName && (
-          <p className="flex items-center gap-2">
-            <MapPin className="w-4 h-4 flex-shrink-0 text-accent" aria-hidden />
-            <span>{ev.locationName}{ev.address ? `, ${ev.address}` : ""}</span>
-          </p>
-        )}
+        {ev.locationName && (() => {
+          const href = mapsUrl({ address: ev.address, name: ev.locationName, latitude: ev.latitude, longitude: ev.longitude });
+          const inner = (
+            <>
+              <MapPin className="w-4 h-4 flex-shrink-0 text-accent" aria-hidden />
+              <span>{ev.locationName}{ev.address ? `, ${ev.address}` : ""}</span>
+            </>
+          );
+          return href ? (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 hover:text-accent transition-colors"
+              title="Deschide în Google Maps"
+            >
+              {inner}
+              <span className="text-xs text-accent whitespace-nowrap">Vezi pe hartă ↗</span>
+            </a>
+          ) : (
+            <p className="flex items-center gap-2">{inner}</p>
+          );
+        })()}
         {(ev.isFree || ev.price) && (
           <p className="flex items-center gap-2">
             {ev.isFree ? (

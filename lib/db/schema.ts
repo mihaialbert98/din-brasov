@@ -617,6 +617,15 @@ export const restaurants = pgTable(
     // holds its seats across [19:15, 19:15+turn) for the sliding-window availability
     // check, so a later start that overlaps can't reuse the same seats. Restaurant-wide.
     reservationTurnMinutes: integer("reservation_turn_minutes").notNull().default(90),
+    // Capacity model: "seats" = a single seat pool (seatsPerSlot / per-area seats on
+    // reservation_hours); "tables" = individual reservation_tables, availability by
+    // whether a free table (or a join of joinable ones) fits the party. Default seats
+    // so existing restaurants are unchanged.
+    reservationCapacityMode: text("reservation_capacity_mode").notNull().default("seats"), // seats | tables
+    // Tables mode: max number of joinable tables combined to seat one party.
+    reservationMaxJoin: integer("reservation_max_join").notNull().default(2),
+    // How many days ahead a client may book (drives the booking-form date picker max).
+    reservationAdvanceDays: integer("reservation_advance_days").notNull().default(60),
     // Optional cuisine/type (Italian, Fast-food, Pizzerie…). Free text; suggestions
     // offered in the UI. Shown as a badge on the Localuri card + detail page.
     cuisineType: text("cuisine_type"),
@@ -785,6 +794,9 @@ export const reservations = pgTable(
     status: text("status").notNull().default("pending"), // pending | confirmed | declined | cancelled
     // Chosen seating area when the restaurant splits reservations. Null when areas off.
     area: text("area"), // inside | outside
+    // Tables mode: JSON array of reservation_tables ids this booking occupies (so
+    // overlapping bookings can't reuse them). Null in seats mode / unassigned.
+    assignedTableIds: text("assigned_table_ids"),
     note: text("note"),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
@@ -794,6 +806,27 @@ export const reservations = pgTable(
     index("reservations_status_idx").on(t.status),
     index("reservations_user_idx").on(t.userId),
   ]
+);
+
+// Reservation table inventory (tables mode) — SEPARATE from the QR service tables
+// (restaurant_tables). Each has a seat capacity and a joinable flag; availability in
+// tables mode is decided by whether a free table, or a join of free joinable tables,
+// seats the party. Area matches the interior/terasă split when that's on.
+export const reservationTables = pgTable(
+  "reservation_tables",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    label: text("label").notNull(), // e.g. "Masa 1"
+    seats: integer("seats").notNull(),
+    joinable: boolean("joinable").notNull().default(false),
+    area: text("area"), // inside | outside | null (when areas off)
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("reservation_tables_restaurant_idx").on(t.restaurantId)]
 );
 
 // Owner-private notes about an account-holding client (their preferences etc.).
@@ -880,6 +913,8 @@ export type MenuItem = typeof menuItems.$inferSelect;
 export type NewMenuItem = typeof menuItems.$inferInsert;
 export type RestaurantTable = typeof restaurantTables.$inferSelect;
 export type NewRestaurantTable = typeof restaurantTables.$inferInsert;
+export type ReservationTable = typeof reservationTables.$inferSelect;
+export type NewReservationTable = typeof reservationTables.$inferInsert;
 export type ServiceRequest = typeof serviceRequests.$inferSelect;
 export type NewServiceRequest = typeof serviceRequests.$inferInsert;
 export type RestaurantEditUnlock = typeof restaurantEditUnlocks.$inferSelect;
