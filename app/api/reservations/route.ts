@@ -81,6 +81,8 @@ export async function POST(req: Request) {
     guestPhone: d.guestPhone,
     guestEmail: d.guestEmail || null,
     area: d.area ?? null,
+    // Tables mode: the table(s) validateBooking assigned to this booking.
+    assignedTableIds: slot.assignedTableIds ? JSON.stringify(slot.assignedTableIds) : null,
     userId,
     status,
     note: d.note || null,

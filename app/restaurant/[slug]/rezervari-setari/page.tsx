@@ -3,11 +3,12 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { restaurants } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { restaurants, reservationTables } from "@/lib/db/schema";
+import { eq, asc } from "drizzle-orm";
 import { getRestaurantBySlug, canManageRestaurant } from "@/lib/restaurant-permissions";
 import { getReservationHours } from "@/lib/reservations";
 import ReservationSettings from "@/components/restaurant/ReservationSettings";
+import ReservationHelp from "@/components/restaurant/ReservationHelp";
 
 /**
  * Reservations SETTINGS — enable, confirmation mode, hours + seat capacity.
@@ -38,12 +39,20 @@ export default async function RezervariSetariPage({
       turnMinutes: restaurants.reservationTurnMinutes,
       areasEnabled: restaurants.reservationAreasEnabled,
       showInLocaluri: restaurants.showInLocaluri,
+      capacityMode: restaurants.reservationCapacityMode,
+      maxJoin: restaurants.reservationMaxJoin,
+      advanceDays: restaurants.reservationAdvanceDays,
     })
     .from(restaurants)
     .where(eq(restaurants.id, restaurant.id))
     .limit(1);
 
   const hours = await getReservationHours(restaurant.id);
+  const resTables = await db
+    .select()
+    .from(reservationTables)
+    .where(eq(reservationTables.restaurantId, restaurant.id))
+    .orderBy(asc(reservationTables.createdAt));
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -65,6 +74,7 @@ export default async function RezervariSetariPage({
         </div>
       ) : (
         <>
+          <ReservationHelp />
           {row.ownerEnabled && !row.showInLocaluri && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-900">
               <p className="font-medium">Rezervările sunt activate, dar restaurantul nu apare încă public în Localuri.</p>
@@ -85,6 +95,10 @@ export default async function RezervariSetariPage({
             initialTurnMinutes={row.turnMinutes ?? 90}
             initialAreasEnabled={row.areasEnabled ?? false}
             initialHours={hours}
+            initialCapacityMode={row.capacityMode === "tables" ? "tables" : "seats"}
+            initialMaxJoin={row.maxJoin ?? 2}
+            initialAdvanceDays={row.advanceDays ?? 60}
+            initialResTables={resTables}
           />
         </>
       )}

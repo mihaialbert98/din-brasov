@@ -59,6 +59,10 @@ async function main() {
   }
   await db.delete(reservationHours).where(eq(reservationHours.restaurantId, r.id));
 
+  // This suite asserts the SEAT-POOL model — pin the restaurant to seats mode + no
+  // areas so it's reliable regardless of what mode a prior test left it in.
+  await db.update(restaurants).set({ reservationCapacityMode: "seats", reservationAreasEnabled: false }).where(eq(restaurants.id, r.id));
+
   console.log("\n=== 1. Gating: canReserve false until doubly-enabled + hours exist ===");
   await db.update(restaurants).set({ reservationsEnabledByAdmin: false, reservationsEnabledByOwner: false }).where(eq(restaurants.id, r.id));
   assert("both off → cannot reserve", (await canReserve(r.id)) === false);
