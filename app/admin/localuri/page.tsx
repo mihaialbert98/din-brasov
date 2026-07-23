@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { places, restaurants, restaurantMembers, reservationHours, reservations, users } from "@/lib/db/schema";
-import { eq, and, desc, count, inArray, isNotNull, sql } from "drizzle-orm";
+import { eq, and, desc, count, inArray, sql } from "drizzle-orm";
 import Link from "next/link";
 import type { Metadata } from "next";
 import Pagination from "@/components/ui/Pagination";
@@ -59,16 +59,18 @@ export default async function AdminLocaluriPage({ searchParams }: Props) {
     db.select().from(places).where(eq(places.status, "draft")).orderBy(desc(places.createdAt)),
   ]);
 
-  // Distinct account-holding clients per restaurant on this page — one grouped query.
+  // Client count per restaurant — one grouped query. Counts account-holders (by
+  // userId) + guests who left an email (by email); phone-only guests coalesce to
+  // null and drop out.
   const restaurantIds = publishedRows.map((r) => r.restaurantId).filter((x): x is string => !!x);
   const countRows = restaurantIds.length
     ? await db
         .select({
           restaurantId: reservations.restaurantId,
-          clients: sql<number>`count(distinct ${reservations.userId})::int`,
+          clients: sql<number>`count(distinct coalesce(${reservations.userId}, lower(${reservations.guestEmail})))::int`,
         })
         .from(reservations)
-        .where(and(inArray(reservations.restaurantId, restaurantIds), isNotNull(reservations.userId)))
+        .where(inArray(reservations.restaurantId, restaurantIds))
         .groupBy(reservations.restaurantId)
     : [];
   const clientCountByRestaurant = new Map(countRows.map((r) => [r.restaurantId, r.clients]));

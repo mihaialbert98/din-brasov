@@ -192,7 +192,7 @@ export function NewsletterBanner() {
         setDone(true);
         setSubscribed(true);
       } else {
-        // Anonymous: double opt-in via the verification email.
+        // Anonymous: single opt-in — subscribed immediately, welcome email sent.
         const res = await fetch("/api/newsletter/subscribe", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -266,9 +266,9 @@ export function NewsletterBanner() {
               </>
             ) : (
               <>
-                <h2 className="font-bold text-xl mb-2">Aproape gata!</h2>
+                <h2 className="font-bold text-xl mb-2">Gata!</h2>
                 <p className="text-gray-300 text-sm">
-                  Ți-am trimis un email de confirmare. Verifică-ți inbox-ul (și folderul Spam) și apasă pe linkul de confirmare.
+                  Te-ai abonat cu succes. Vei primi pe email noutățile alese — te poți dezabona oricând dintr-un mesaj.
                 </p>
               </>
             )}

@@ -4,14 +4,13 @@ import { useState } from "react";
 import { UploadButton } from "@/lib/uploadthing-client";
 import { compressFiles } from "@/lib/image-compress";
 
-type Audience = "events" | "places" | "news" | "experiences" | "all";
+type Category = "news" | "events" | "places" | "experiences";
 
-const AUDIENCES: { value: Audience; label: string }[] = [
-  { value: "events", label: "Abonați la evenimente" },
-  { value: "places", label: "Abonați la localuri noi" },
-  { value: "news", label: "Abonați la știri" },
-  { value: "experiences", label: "Abonați la experiențe noi" },
-  { value: "all", label: "Toți abonații activi" },
+const CATEGORIES: { value: Category; label: string }[] = [
+  { value: "news", label: "Știri" },
+  { value: "events", label: "Evenimente" },
+  { value: "places", label: "Localuri" },
+  { value: "experiences", label: "Experiențe" },
 ];
 
 interface SendResult {
@@ -28,14 +27,15 @@ export default function NewsletterCampaignForm() {
   const [imageUrl, setImageUrl] = useState("");
   const [ctaLabel, setCtaLabel] = useState("");
   const [ctaHref, setCtaHref] = useState("");
-  const [audience, setAudience] = useState<Audience>("events");
+  const [categories, setCategories] = useState<Set<Category>>(new Set());
 
   const [loading, setLoading] = useState<"preview" | "send" | null>(null);
   const [preview, setPreview] = useState<SendResult | null>(null);
   const [result, setResult] = useState<SendResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const valid = subject.trim().length >= 3 && heading.trim().length >= 3 && body.trim().length >= 10;
+  const valid =
+    subject.trim().length >= 3 && heading.trim().length >= 3 && body.trim().length >= 10 && categories.size >= 1;
 
   async function call(dryRun: boolean) {
     setError(null);
@@ -52,7 +52,7 @@ export default function NewsletterCampaignForm() {
           imageUrl: imageUrl || undefined,
           ctaLabel: ctaLabel || undefined,
           ctaHref: ctaHref || undefined,
-          audience,
+          categories: [...categories],
           dryRun,
         }),
       });
@@ -75,7 +75,8 @@ export default function NewsletterCampaignForm() {
 
   async function handleSend() {
     const n = preview?.recipients.length ?? 0;
-    if (!confirm(`Trimiți campania "${subject}" către ${n} abonați?`)) return;
+    const cats = CATEGORIES.filter((c) => categories.has(c.value)).map((c) => c.label).join(", ");
+    if (!confirm(`Trimiți campania "${subject}" către ${n} abonați (${cats})?`)) return;
     await call(false);
   }
 
@@ -136,10 +137,40 @@ export default function NewsletterCampaignForm() {
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Destinatari</label>
-          <select value={audience} onChange={(e) => setAudience(e.target.value as Audience)} className={`${field} bg-white`}>
-            {AUDIENCES.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
-          </select>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Categorii destinatari *</label>
+          <p className="text-xs text-gray-500 mb-2">
+            Bifează despre ce este emailul. Îl primesc doar abonații la categoriile alese — nu toți abonații.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {CATEGORIES.map((c) => {
+              const on = categories.has(c.value);
+              return (
+                <label
+                  key={c.value}
+                  className={`inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border cursor-pointer transition-colors ${
+                    on ? "border-[#c84b1e] bg-[#c84b1e]/5 text-[#c84b1e] font-medium" : "border-gray-300 text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    onChange={() =>
+                      setCategories((prev) => {
+                        const n = new Set(prev);
+                        if (n.has(c.value)) n.delete(c.value); else n.add(c.value);
+                        return n;
+                      })
+                    }
+                    className="accent-[#c84b1e]"
+                  />
+                  {c.label}
+                </label>
+              );
+            })}
+          </div>
+          {categories.size === 0 && (
+            <p className="text-xs text-amber-700 mt-1">Alege cel puțin o categorie.</p>
+          )}
         </div>
       </div>
 

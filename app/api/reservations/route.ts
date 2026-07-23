@@ -5,12 +5,12 @@
  */
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { restaurants, reservations, users, newsletterSubscribers } from "@/lib/db/schema";
 import { auth } from "@/lib/auth";
 import { canReserve, validateBooking } from "@/lib/reservations";
-import { sendReservationConfirmedEmail } from "@/lib/email";
+import { sendReservationConfirmedEmail, sendNewsletterWelcomeEmail } from "@/lib/email";
 import { checkReservationLimit, hashIp, getIp } from "@/lib/rate-limit";
 
 const schema = z.object({
@@ -91,32 +91,49 @@ export async function POST(req: Request) {
   // Guest email for a confirmation mail: the booking email, else the account email.
   let notifyEmail = d.guestEmail || null;
 
-  // Logged-in extras.
+  // Logged-in extras: capture the account email + persist the phone to the account
+  // (on first booking, or when they asked to update it).
+  let accountEmail: string | null = null;
   if (userId) {
-    // Persist the phone to the account: on first booking (no phone yet), or when
-    // the user explicitly asked to update it for future reservations.
     const [u] = await db.select({ phone: users.phone, email: users.email, name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
-    if (u && !notifyEmail) notifyEmail = u.email;
-    if (u && (!u.phone || d.updatePhone)) {
-      await db.update(users).set({ phone: d.guestPhone, updatedAt: new Date() }).where(eq(users.id, userId));
+    if (u) {
+      accountEmail = u.email;
+      if (!notifyEmail) notifyEmail = u.email;
+      if (!u.phone || d.updatePhone) {
+        await db.update(users).set({ phone: d.guestPhone, updatedAt: new Date() }).where(eq(users.id, userId));
+      }
     }
+  }
 
-    // Promo opt-in: an authenticated, explicit tick → active subscription directly
-    // (no double-opt-in email needed; the account email is already verified). Skips
-    // if they already have a subscriber row.
-    if (d.subscribePromo && u) {
-      const [existing] = await db.select({ id: newsletterSubscribers.id }).from(newsletterSubscribers).where(eq(newsletterSubscribers.email, u.email)).limit(1);
-      if (!existing) {
-        await db.insert(newsletterSubscribers).values({
-          email: u.email,
-          userId,
-          wantsPlaces: true, // restaurants live under Localuri/places
-          status: "active",
-          verificationToken: crypto.randomUUID(),
-          verifiedAt: new Date(),
-          consentGivenAt: new Date(),
-          ipHash: hashIp(getIp(req)),
-        });
+  // Newsletter opt-in → evenimente + localuri. Single opt-in: the tick is the consent
+  // (logged below), so the subscriber is ACTIVE immediately — no confirmation link. A
+  // one-time welcome email (with unsubscribe) acknowledges it. Best-effort; never blocks the booking.
+  if (d.subscribePromo) {
+    const subEmail = (userId ? accountEmail : d.guestEmail || null)?.toLowerCase().trim() || null;
+    if (subEmail) {
+      try {
+        const [existing] = await db
+          .select({ id: newsletterSubscribers.id })
+          .from(newsletterSubscribers)
+          .where(sql`lower(${newsletterSubscribers.email}) = ${subEmail}`)
+          .limit(1);
+        if (!existing) {
+          const token = crypto.randomUUID();
+          await db.insert(newsletterSubscribers).values({
+            email: subEmail,
+            userId,
+            wantsEvents: true,
+            wantsPlaces: true,
+            status: "active",
+            verificationToken: token,
+            verifiedAt: new Date(),
+            consentGivenAt: new Date(),
+            ipHash: hashIp(getIp(req)),
+          });
+          void sendNewsletterWelcomeEmail(subEmail, token).catch(() => {});
+        }
+      } catch {
+        /* unique race or send failure → ignore; the booking already succeeded */
       }
     }
   }

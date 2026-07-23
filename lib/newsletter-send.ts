@@ -42,10 +42,10 @@ function sentRecently(sub: NewsletterSubscriber): boolean {
   return Date.now() - new Date(sub.lastSentAt).getTime() < 6 * 24 * 60 * 60 * 1000;
 }
 
-export type CampaignAudience = "news" | "events" | "places" | "experiences" | "all";
+export type CampaignCategory = "news" | "events" | "places" | "experiences";
 
-function matchesAudience(sub: NewsletterSubscriber, audience: CampaignAudience): boolean {
-  switch (audience) {
+function wantsCategory(sub: NewsletterSubscriber, c: CampaignCategory): boolean {
+  switch (c) {
     case "news":
       return sub.wantsNews;
     case "events":
@@ -54,8 +54,6 @@ function matchesAudience(sub: NewsletterSubscriber, audience: CampaignAudience):
       return sub.wantsPlaces;
     case "experiences":
       return sub.wantsExperiences;
-    case "all":
-      return true;
   }
 }
 
@@ -140,20 +138,22 @@ export async function sendWeeklyDigest({
 }
 
 /**
- * One-off custom campaign to a chosen audience. No lastSentAt guard (campaigns
- * are deliberate one-offs; the dry-run + confirm dialog is the safety).
+ * One-off custom campaign to one or more chosen categories. A subscriber receives it
+ * if they opted into ANY selected category (union) — so we only ever email what each
+ * person consented to (GDPR purpose limitation). At least one category is required.
+ * No lastSentAt guard (campaigns are deliberate one-offs; the dry-run + confirm is the safety).
  */
 export async function sendCampaign({
   content,
-  audience,
+  categories,
   dryRun = false,
 }: {
   content: CampaignContent;
-  audience: CampaignAudience;
+  categories: CampaignCategory[];
   dryRun?: boolean;
 }): Promise<SendResult> {
   const subs = await activeSubscribers();
-  const targets = subs.filter((s) => matchesAudience(s, audience));
+  const targets = subs.filter((s) => categories.some((c) => wantsCategory(s, c)));
 
   const result: SendResult = {
     sent: 0,

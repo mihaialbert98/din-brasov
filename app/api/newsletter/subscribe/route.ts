@@ -1,10 +1,9 @@
 /**
- * Newsletter subscription — double opt-in (GDPR Art. 7 compliant).
- *
- * Anonymous subscribers are created with status "pending" and must confirm via
- * a verification email before they are "active". Consent is recorded per the
- * boxes the user actually checked (no pre-ticking — CJEU Planet49).
- * Consent metadata (timestamp, ipHash, bannerVersion) is logged for Art. 7(1).
+ * Newsletter subscription — single opt-in. The user's un-ticked-by-default check is
+ * the affirmative consent (no pre-ticking — CJEU Planet49), so the subscriber is set
+ * ACTIVE immediately; no confirmation link. A one-time welcome email (with unsubscribe)
+ * acknowledges it. Consent metadata (timestamp, ipHash, bannerVersion) is logged for
+ * Art. 7(1), and every newsletter/campaign email carries an unsubscribe link (Art. 7(3)).
  */
 
 import { NextResponse } from "next/server";
@@ -13,7 +12,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { newsletterSubscribers } from "@/lib/db/schema";
 import { auth } from "@/lib/auth";
-import { sendNewsletterVerificationEmail } from "@/lib/email";
+import { sendNewsletterWelcomeEmail } from "@/lib/email";
 import { getIp, hashIp, checkNewsletterSubscribeLimit } from "@/lib/rate-limit";
 
 const schema = z.object({
@@ -77,7 +76,7 @@ export async function POST(req: Request) {
       if (existing.status === "active") {
         return NextResponse.json({ ok: true });
       }
-      // pending or unsubscribed → refresh preferences + new token, reset to pending.
+      // pending or unsubscribed → refresh preferences + (re)activate (single opt-in).
       await db
         .update(newsletterSubscribers)
         .set({
@@ -85,8 +84,9 @@ export async function POST(req: Request) {
           wantsEvents,
           wantsPlaces,
           wantsExperiences,
-          status: "pending",
+          status: "active",
           verificationToken,
+          verifiedAt: new Date(),
           unsubscribedAt: null,
           consentGivenAt: new Date(),
           ipHash,
@@ -102,8 +102,9 @@ export async function POST(req: Request) {
         wantsEvents,
         wantsPlaces,
         wantsExperiences,
-        status: "pending",
+        status: "active",
         verificationToken,
+        verifiedAt: new Date(),
         ipHash,
         bannerVersion: bannerVersion ?? null,
       });
@@ -116,7 +117,7 @@ export async function POST(req: Request) {
     }
   }
 
-  sendNewsletterVerificationEmail(email, verificationToken).catch(() => {});
+  sendNewsletterWelcomeEmail(email, verificationToken).catch(() => {});
 
   return NextResponse.json({ ok: true });
 }

@@ -7,7 +7,7 @@ interface SendResult { sent: number; skipped: number; failed: number; recipients
 
 /**
  * Modal composer that emails a restaurant's CONSENTED clients (active newsletter
- * subscribers). When `userIds` is passed the send is restricted to those clients
+ * subscribers). When `emails` is passed the send is restricted to those clients
  * (still intersected with subscribers server-side); otherwise it targets ALL of the
  * restaurant's subscribed clients. Subject / heading / body / optional CTA, with a
  * dry-run recipient preview before the real send. Used from the admin clients page
@@ -16,12 +16,12 @@ interface SendResult { sent: number; skipped: number; failed: number; recipients
 export default function EmailClientsComposer({
   restaurantId,
   restaurantName,
-  userIds,
+  emails,
   onClose,
 }: {
   restaurantId: string;
   restaurantName: string;
-  userIds?: string[];
+  emails?: string[];
   onClose: () => void;
 }) {
   const [subject, setSubject] = useState("");
@@ -34,7 +34,7 @@ export default function EmailClientsComposer({
   const [result, setResult] = useState<SendResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const scoped = Array.isArray(userIds);
+  const scoped = Array.isArray(emails);
   const valid = subject.trim().length >= 3 && heading.trim().length >= 3 && body.trim().length >= 10;
 
   async function call(dryRun: boolean) {
@@ -49,7 +49,7 @@ export default function EmailClientsComposer({
           subject, heading, body,
           ctaLabel: ctaLabel.trim() || undefined,
           ctaHref: ctaHref.trim() || undefined,
-          userIds: scoped ? userIds : undefined,
+          emails: scoped ? emails : undefined,
           dryRun,
         }),
       });
@@ -92,7 +92,7 @@ export default function EmailClientsComposer({
             {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
             {scoped && (
               <p className="text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
-                {userIds!.length} {userIds!.length === 1 ? "client selectat" : "clienți selectați"}. Vor primi email doar cei abonați.
+                {emails!.length} {emails!.length === 1 ? "client selectat" : "clienți selectați"}. Vor primi email doar cei abonați.
               </p>
             )}
             <label className="block text-xs font-medium text-gray-600">Subiect

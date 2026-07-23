@@ -6,6 +6,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   customType,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -364,7 +365,8 @@ export const cookieConsentLog = pgTable("cookie_consent_log", {
 
 // ─── Newsletter subscribers ───────────────────────────────────────────────────
 // GDPR-compliant: boxes default to false (consent = affirmative action, CJEU Planet49).
-// Anonymous subscribers go through double opt-in (status: pending → active on verify).
+// Single opt-in: subscribers are created active immediately (the affirmative tick is
+// the consent). `pending` remains only for any legacy rows awaiting the old verify link.
 // Account-based subscribers are pre-verified by their account.
 
 export const newsletterSubscribers = pgTable("newsletter_subscribers", {
@@ -827,6 +829,42 @@ export const reservationTables = pgTable(
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => [index("reservation_tables_restaurant_idx").on(t.restaurantId)]
+);
+
+// Join-groups (tables mode): declare WHICH tables can physically be pushed together.
+// A join is valid only among free members of the SAME group (combining up to ALL of
+// them — the group size is the cap). A table may belong to multiple groups. Ungrouped
+// joinable tables still combine loosely up to reservationMaxJoin. See canSeat().
+export const reservationTableGroups = pgTable(
+  "reservation_table_groups",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    label: text("label").notNull(), // e.g. "Masa 1–2"
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("reservation_table_groups_restaurant_idx").on(t.restaurantId)]
+);
+
+// Membership M:N between groups and tables. Cascade from either side cleans it up.
+export const reservationTableGroupMembers = pgTable(
+  "reservation_table_group_members",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    groupId: text("group_id")
+      .notNull()
+      .references(() => reservationTableGroups.id, { onDelete: "cascade" }),
+    tableId: text("table_id")
+      .notNull()
+      .references(() => reservationTables.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("reservation_table_group_members_group_idx").on(t.groupId),
+    uniqueIndex("reservation_table_group_members_unique").on(t.groupId, t.tableId),
+  ]
 );
 
 // Owner-private notes about an account-holding client (their preferences etc.).
