@@ -878,16 +878,19 @@ export const restaurantClientNotes = pgTable(
     restaurantId: text("restaurant_id")
       .notNull()
       .references(() => restaurants.id, { onDelete: "cascade" }),
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+    // Account clients are keyed by userId; accountless (phone-only) diners by
+    // guestPhone. Exactly one of the two is set — enforced by the partial unique
+    // indexes below. So a note survives repeat bookings under the same identity.
+    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
+    guestPhone: text("guest_phone"),
     note: text("note").notNull().default(""),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => [
-    // One note row per (restaurant, client).
-    index("restaurant_client_notes_unique_idx").on(t.restaurantId, t.userId),
+    // One note per account client, and one per phone-only guest.
+    uniqueIndex("rcn_user_idx").on(t.restaurantId, t.userId).where(sql`${t.userId} is not null`),
+    uniqueIndex("rcn_phone_idx").on(t.restaurantId, t.guestPhone).where(sql`${t.guestPhone} is not null`),
   ]
 );
 

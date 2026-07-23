@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Phone, Mail, Users, Clock, Check, X, CalendarClock, Plus } from "lucide-react";
+import { Phone, Mail, Users, Clock, Check, X, CalendarClock, Plus, StickyNote } from "lucide-react";
 import { notify } from "@/lib/chime";
 import { useVisiblePoll } from "@/lib/useVisiblePoll";
 import NotifyPermission from "@/components/restaurant/NotifyPermission";
@@ -18,6 +18,8 @@ interface Reservation {
   area: "inside" | "outside" | null;
   tables?: string[];
   note: string | null;
+  /** The client's saved CRM note (read-only here; edited on the Clienți page). */
+  clientNote: string | null;
 }
 
 const STATUS_LABEL: Record<Reservation["status"], string> = {
@@ -251,6 +253,12 @@ export default function ReservationsBoard({
                         )}
                       </div>
                       {r.note && <p className="text-sm text-gray-500 mt-1.5 italic">„{r.note}"</p>}
+                      {r.clientNote && (
+                        <p className="text-sm text-gray-600 mt-1.5 flex items-start gap-1.5 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5" title="Notiță salvată despre client">
+                          <StickyNote className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-amber-500" aria-hidden />
+                          <span className="italic">„{r.clientNote}"</span>
+                        </p>
+                      )}
 
                       {pending && (
                         <div className="flex gap-2 mt-3">
