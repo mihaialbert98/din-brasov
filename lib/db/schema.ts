@@ -1,5 +1,6 @@
 import {
   boolean,
+  foreignKey,
   index,
   integer,
   pgTable,
@@ -853,15 +854,16 @@ export const reservationTableGroupMembers = pgTable(
   "reservation_table_group_members",
   {
     id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    groupId: text("group_id")
-      .notNull()
-      .references(() => reservationTableGroups.id, { onDelete: "cascade" }),
-    tableId: text("table_id")
-      .notNull()
-      .references(() => reservationTables.id, { onDelete: "cascade" }),
+    groupId: text("group_id").notNull(),
+    tableId: text("table_id").notNull(),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => [
+    // Explicit SHORT fk names — the auto-generated ones (table + cols + ref-table)
+    // exceed Postgres's 63-char identifier limit and get truncated, which makes
+    // drizzle-kit re-churn them on every push. Short names keep pushes clean.
+    foreignKey({ columns: [t.groupId], foreignColumns: [reservationTableGroups.id], name: "rtgm_group_fk" }).onDelete("cascade"),
+    foreignKey({ columns: [t.tableId], foreignColumns: [reservationTables.id], name: "rtgm_table_fk" }).onDelete("cascade"),
     index("reservation_table_group_members_group_idx").on(t.groupId),
     uniqueIndex("reservation_table_group_members_unique").on(t.groupId, t.tableId),
   ]
