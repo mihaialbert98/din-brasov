@@ -15,7 +15,9 @@ const schema = z.object({
   imageUrl: z.string().url().optional(),
   ctaLabel: z.string().max(60).optional(),
   ctaHref: z.string().url().optional(),
-  audience: z.enum(["news", "events", "places", "experiences", "all"]),
+  // Mandatory: at least one category. The campaign reaches only subscribers who
+  // opted into one of these (union) — never a blanket send to everyone.
+  categories: z.array(z.enum(["news", "events", "places", "experiences"])).min(1).max(4),
   dryRun: z.boolean().optional(),
 });
 
@@ -64,9 +66,10 @@ export async function POST(req: Request) {
     ctaHref: hasCta ? d.ctaHref! : null,
   };
 
-  const result = await sendCampaign({ content, audience: d.audience, dryRun });
+  const result = await sendCampaign({ content, categories: d.categories, dryRun });
 
   if (!dryRun) {
+    const audience = d.categories.join(",");
     await db.insert(newsletterCampaigns).values({
       subject: d.subject,
       heading: d.heading,
@@ -74,7 +77,7 @@ export async function POST(req: Request) {
       imageUrl: content.imageUrl,
       ctaLabel: content.ctaLabel,
       ctaHref: content.ctaHref,
-      audience: d.audience,
+      audience,
       recipientCount: result.sent,
       sentBy: session.user.id,
     });
@@ -82,10 +85,10 @@ export async function POST(req: Request) {
       adminId: session.user.id,
       action: "send_newsletter_campaign",
       entityType: "newsletter",
-      entityId: d.audience,
+      entityId: audience,
       metadataJson: JSON.stringify({
         subject: d.subject,
-        audience: d.audience,
+        categories: d.categories,
         sent: result.sent,
         skipped: result.skipped,
         failed: result.failed,

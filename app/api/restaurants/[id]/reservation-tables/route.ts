@@ -4,7 +4,7 @@ import { z } from "zod";
 import { eq, and, asc } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { reservationTables } from "@/lib/db/schema";
+import { reservationTables, reservationTableGroupMembers } from "@/lib/db/schema";
 import { authorizeReservationSettings } from "@/lib/restaurant-permissions";
 import { auditAdminReservationChange } from "@/lib/reservations";
 
@@ -88,6 +88,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     .update(reservationTables)
     .set(patch)
     .where(and(eq(reservationTables.id, tableId), eq(reservationTables.restaurantId, id)));
+  // Master switch: a table that's no longer joinable can't belong to any group.
+  if (d.joinable === false) {
+    await db.delete(reservationTableGroupMembers).where(eq(reservationTableGroupMembers.tableId, tableId));
+  }
   await auditAdminReservationChange(session, role, id, "a modificat o masă de rezervare");
   return NextResponse.json({ ok: true });
 }

@@ -131,7 +131,7 @@ export default function ReservationForm({
         guestEmail: (form.get("guestEmail") as string)?.trim() || undefined,
         note: (form.get("note") as string)?.trim() || undefined,
         updatePhone: isMember && hasSavedPhone ? updatePhone : undefined,
-        subscribePromo: isMember && !isSubscriber ? subscribePromo : undefined,
+        subscribePromo: !isSubscriber ? subscribePromo : undefined,
         website: form.get("website") || "",
         elapsed: Date.now() - mountedAt.current,
       }),
@@ -161,6 +161,13 @@ export default function ReservationForm({
               : `${restaurantName} îți va confirma rezervarea în curând, telefonic.`}
           </p>
         </div>
+
+        {done === "confirmed" && (
+          <p className="text-xs text-muted bg-cream/40 border border-hairline rounded-lg px-3 py-2 flex items-start gap-2">
+            <Clock className="w-3.5 h-3.5 text-accent mt-0.5 flex-shrink-0" aria-hidden />
+            <span>Te rugăm să ajungi la timp. Dacă întârzii mai mult de 15 minute față de ora rezervării, aceasta poate fi anulată.</span>
+          </p>
+        )}
 
         {/* Logged-in members: point them to their account to view/manage this booking. */}
         {isMember && (
@@ -424,16 +431,27 @@ export default function ReservationForm({
             <textarea id="note" name="note" rows={2} className={inputClass} placeholder="Ex: masă la geam, scaun pentru copil…" />
           </div>
 
-          {/* Promo opt-in — only for logged-in members who aren't already subscribed. */}
-          {isMember && !isSubscriber && (
-            <label className="flex items-start gap-2 text-sm text-ink bg-cream/40 border border-hairline rounded-lg px-3 py-2.5 cursor-pointer">
-              <input type="checkbox" checked={subscribePromo} onChange={(e) => setSubscribePromo(e.target.checked)} className="accent-accent mt-0.5" />
-              <span>Vreau să primesc oferte de la restaurantele din Brașov (te poți dezabona oricând).</span>
-            </label>
+          {/* Newsletter opt-in — for anyone not already subscribed (guests + members).
+              Single opt-in: subscribed immediately, a one-time welcome email acknowledges it. */}
+          {!isSubscriber && (
+            <div className="flex flex-col gap-1">
+              <label className="flex items-start gap-2 text-sm text-ink bg-cream/40 border border-hairline rounded-lg px-3 py-2.5 cursor-pointer">
+                <input type="checkbox" checked={subscribePromo} onChange={(e) => setSubscribePromo(e.target.checked)} className="accent-accent mt-0.5" />
+                <span>Vreau să fiu la curent cu Brașovul — evenimente din oraș și oferte de la localuri, direct pe email. Mă pot dezabona oricând.</span>
+              </label>
+              {subscribePromo && !isMember && !email && (
+                <span className="text-xs text-amber-700">Adaugă emailul mai sus ca să te putem abona.</span>
+              )}
+            </div>
           )}
 
           {/* Honeypot */}
           <input type="text" name="website" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden="true" />
+
+          <p className="text-xs text-muted bg-cream/40 border border-hairline rounded-lg px-3 py-2 flex items-start gap-2">
+            <Clock className="w-3.5 h-3.5 text-accent mt-0.5 flex-shrink-0" aria-hidden />
+            <span>Te rugăm să ajungi la timp. Dacă întârzii mai mult de 15 minute față de ora rezervării, aceasta poate fi anulată.</span>
+          </p>
 
           <button
             type="submit" disabled={loading}

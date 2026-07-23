@@ -354,6 +354,9 @@ export async function sendReservationConfirmedEmail(to: string, r: ReservationEm
           </p>
         </td></tr>
       </table>
+      <p style="margin:0 0 10px;font-size:13px;line-height:1.6;color:#b45309;">
+        ⏱️ Te rugăm să ajungi la timp — dacă întârzii mai mult de 15 minute față de ora rezervării, aceasta poate fi anulată.
+      </p>
       <p style="margin:0;font-size:13px;line-height:1.6;color:#9ca3af;">
         Dacă nu mai poți ajunge, te rugăm să anunți restaurantul.
       </p>`,

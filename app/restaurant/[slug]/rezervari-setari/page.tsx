@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { restaurants, reservationTables } from "@/lib/db/schema";
 import { eq, asc } from "drizzle-orm";
 import { getRestaurantBySlug, canManageRestaurant } from "@/lib/restaurant-permissions";
-import { getReservationHours } from "@/lib/reservations";
+import { getReservationHours, getReservationTableGroups } from "@/lib/reservations";
 import ReservationSettings from "@/components/restaurant/ReservationSettings";
 import ReservationHelp from "@/components/restaurant/ReservationHelp";
 
@@ -53,6 +53,7 @@ export default async function RezervariSetariPage({
     .from(reservationTables)
     .where(eq(reservationTables.restaurantId, restaurant.id))
     .orderBy(asc(reservationTables.createdAt));
+  const resGroups = await getReservationTableGroups(restaurant.id);
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -99,6 +100,7 @@ export default async function RezervariSetariPage({
             initialMaxJoin={row.maxJoin ?? 2}
             initialAdvanceDays={row.advanceDays ?? 60}
             initialResTables={resTables}
+            initialGroups={resGroups}
           />
         </>
       )}

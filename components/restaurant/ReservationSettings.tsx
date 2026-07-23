@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Trash2, Plus, Power, CheckCircle2, Clock, Users, Home, Trees, LayoutGrid } from "lucide-react";
 import type { ReservationHour } from "@/lib/reservations";
 import ReservationTablesManager, { type ResTableRow } from "@/components/restaurant/ReservationTablesManager";
+import ReservationTableGroupsManager, { type GroupRow } from "@/components/restaurant/ReservationTableGroupsManager";
 
 const DAYS = ["Duminică", "Luni", "Marți", "Miercuri", "Joi", "Vineri", "Sâmbătă"];
 const DAYS_SHORT = ["Dum", "Lun", "Mar", "Mie", "Joi", "Vin", "Sâm"];
@@ -22,6 +23,7 @@ export default function ReservationSettings({
   initialMaxJoin,
   initialAdvanceDays,
   initialResTables,
+  initialGroups,
 }: {
   restaurantId: string;
   initialEnabled: boolean;
@@ -34,6 +36,7 @@ export default function ReservationSettings({
   initialMaxJoin: number;
   initialAdvanceDays: number;
   initialResTables: ResTableRow[];
+  initialGroups: GroupRow[];
 }) {
   const router = useRouter();
   const [enabled, setEnabled] = useState(initialEnabled);
@@ -270,6 +273,41 @@ export default function ReservationSettings({
             </div>
           </div>
 
+          {/* Card 3b — Areas (interior / terrace) */}
+          <div className={cardClass}>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <span className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                  <Trees className="w-5 h-5 text-gray-500" aria-hidden />
+                </span>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Interior și terasă</h3>
+                  <p className="text-sm text-gray-500">
+                    Separă locurile pe zone. Clientul alege interior sau terasă, iar fiecare zonă are
+                    propriile locuri per interval.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={toggleAreas}
+                disabled={busy}
+                role="switch"
+                aria-checked={areas}
+                aria-label="Interior și terasă"
+                style={{ width: 44, height: 24, minWidth: 44, minHeight: 24 }}
+                className={`relative inline-flex items-center rounded-full transition-colors flex-shrink-0 disabled:opacity-60 border ${areas ? "bg-green-600 border-green-600" : "bg-gray-200 border-gray-300"}`}
+              >
+                <span style={{ width: 18, height: 18, transform: areas ? "translateX(22px)" : "translateX(3px)" }} className="inline-block rounded-full bg-white shadow-sm transition-transform" />
+              </button>
+            </div>
+            {areas && windowsMissingAreas.length > 0 && (
+              <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mt-3">
+                {windowsMissingAreas.length} interval(e) au fost împărțite automat între interior și
+                terasă. Verifică numărul de locuri mai jos și ajustează-l dacă e nevoie.
+              </p>
+            )}
+          </div>
+
           {/* Card 3a3 — Capacity mode: total seats vs individual tables */}
           <div className={cardClass}>
             <div className="flex items-start gap-3 mb-3">
@@ -315,7 +353,7 @@ export default function ReservationSettings({
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <h3 className="font-semibold text-gray-900">Mese maxime unite</h3>
-                    <p className="text-sm text-gray-500">Câte mese se pot uni pentru un grup mare.</p>
+                    <p className="text-sm text-gray-500">Câte mese „se pot uni" (care nu sunt într-un grup) se pot combina. În grupuri, se pot uni toate mesele grupului.</p>
                   </div>
                   <select
                     value={maxJoin}
@@ -328,43 +366,9 @@ export default function ReservationSettings({
                 </div>
               </div>
               <ReservationTablesManager restaurantId={restaurantId} areasEnabled={areas} initialTables={initialResTables} />
+              <ReservationTableGroupsManager restaurantId={restaurantId} tables={initialResTables} initialGroups={initialGroups} />
             </>
           )}
-
-          {/* Card 3b — Areas (interior / terrace) */}
-          <div className={cardClass}>
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <span className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                  <Trees className="w-5 h-5 text-gray-500" aria-hidden />
-                </span>
-                <div>
-                  <h3 className="font-semibold text-gray-900">Interior și terasă</h3>
-                  <p className="text-sm text-gray-500">
-                    Separă locurile pe zone. Clientul alege interior sau terasă, iar fiecare zonă are
-                    propriile locuri per interval.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={toggleAreas}
-                disabled={busy}
-                role="switch"
-                aria-checked={areas}
-                aria-label="Interior și terasă"
-                style={{ width: 44, height: 24, minWidth: 44, minHeight: 24 }}
-                className={`relative inline-flex items-center rounded-full transition-colors flex-shrink-0 disabled:opacity-60 border ${areas ? "bg-green-600 border-green-600" : "bg-gray-200 border-gray-300"}`}
-              >
-                <span style={{ width: 18, height: 18, transform: areas ? "translateX(22px)" : "translateX(3px)" }} className="inline-block rounded-full bg-white shadow-sm transition-transform" />
-              </button>
-            </div>
-            {areas && windowsMissingAreas.length > 0 && (
-              <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mt-3">
-                {windowsMissingAreas.length} interval(e) au fost împărțite automat între interior și
-                terasă. Verifică numărul de locuri mai jos și ajustează-l dacă e nevoie.
-              </p>
-            )}
-          </div>
 
           {/* Card 4 — Program & seats */}
           <div className={cardClass}>

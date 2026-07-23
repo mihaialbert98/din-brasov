@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { restaurants, reservationHours, reservations, reservationTables, adminAuditLog, places, users } from "@/lib/db/schema";
+import { restaurants, reservationHours, reservations, reservationTables, reservationTableGroups, reservationTableGroupMembers, adminAuditLog, places, users } from "@/lib/db/schema";
 import { eq, and, gte, ne, asc, inArray, isNull, sql } from "drizzle-orm";
 import { sendReservationConfirmedEmail, sendReservationDeclinedEmail } from "@/lib/email";
 import { isPlatformStaff } from "@/lib/restaurant-permissions";
@@ -150,29 +150,83 @@ export async function getReservationTables(restaurantId: string, area?: Area): P
   return area ? rows.filter((t) => t.area === area) : rows;
 }
 
+/** A join-group: the tables that can physically be pushed together. */
+export type TableGroup = { id: string; label: string; tableIds: string[] };
+
+/** Join-groups for a restaurant (each with its member table ids). */
+export async function getReservationTableGroups(restaurantId: string): Promise<TableGroup[]> {
+  const rows = await db
+    .select({ groupId: reservationTableGroups.id, label: reservationTableGroups.label, tableId: reservationTableGroupMembers.tableId })
+    .from(reservationTableGroups)
+    .leftJoin(reservationTableGroupMembers, eq(reservationTableGroupMembers.groupId, reservationTableGroups.id))
+    .where(eq(reservationTableGroups.restaurantId, restaurantId));
+  const map = new Map<string, TableGroup>();
+  for (const r of rows) {
+    let g = map.get(r.groupId);
+    if (!g) { g = { id: r.groupId, label: r.label, tableIds: [] }; map.set(r.groupId, g); }
+    if (r.tableId) g.tableIds.push(r.tableId);
+  }
+  return [...map.values()];
+}
+
 /**
  * Choose table(s) to seat a party from a set of FREE tables, or null if none fit.
  * Policy: prefer the smallest single table that fits (least waste); a party is only
  * put on a bigger table when nothing smaller is free, and never refused while a fit
- * exists. If no single table fits, combine free *joinable* tables (largest-first, up
- * to `maxJoin`) until their seats sum to the party. Pure — no I/O.
+ * exists. If no single table fits, combine tables:
+ *   • within a join-GROUP — free JOINABLE members of the same group, up to ALL of
+ *     them (the group size is the cap; the global maxJoin does not limit inside a group);
+ *   • else the loose pool — free `joinable` tables in NO group, up to `maxJoin`.
+ * Among all fitting combinations the least-waste one wins (fewest tables, then fewest
+ * seats). No groups → only the loose pool runs = the original behaviour. Pure — no I/O.
  */
-export function canSeat(partySize: number, free: ResTable[], maxJoin: number): string[] | null {
-  // Smallest single table that fits (considers all free tables, joinable or not).
+export function canSeat(partySize: number, free: ResTable[], maxJoin: number, groups: TableGroup[] = []): string[] | null {
+  // 1. Smallest single table that fits (considers all free tables, joinable or not).
   const single = [...free].sort((a, b) => a.seats - b.seats).find((t) => t.seats >= partySize);
   if (single) return [single.id];
 
-  // Otherwise combine joinable free tables, largest first, up to maxJoin.
-  const joinables = free.filter((t) => t.joinable).sort((a, b) => b.seats - a.seats);
-  const picked: ResTable[] = [];
-  let sum = 0;
-  for (const t of joinables) {
-    picked.push(t);
-    sum += t.seats;
-    if (sum >= partySize) return picked.map((p) => p.id);
-    if (picked.length >= maxJoin) break;
+  const freeById = new Map(free.map((t) => [t.id, t]));
+  const candidates: ResTable[][] = [];
+
+  // Greedily combine tables largest-first until they seat the party; `cap` bounds how
+  // many may combine. Returns the picked tables, or null if they can't reach the party.
+  const combine = (pool: ResTable[], cap: number): ResTable[] | null => {
+    const sorted = [...pool].sort((a, b) => b.seats - a.seats);
+    const picked: ResTable[] = [];
+    let sum = 0;
+    for (const t of sorted) {
+      if (picked.length >= cap) break;
+      picked.push(t);
+      sum += t.seats;
+      if (sum >= partySize) return picked;
+    }
+    return null;
+  };
+
+  // 2. Within each group: free JOINABLE members, up to ALL of them (group size is the
+  //    cap). "se poate uni" is the master switch — a non-joinable table is never
+  //    combined, even if it's still listed in a group.
+  for (const g of groups) {
+    const members = g.tableIds.map((id) => freeById.get(id)).filter((t): t is ResTable => !!t && t.joinable);
+    const combo = combine(members, members.length);
+    if (combo) candidates.push(combo);
   }
-  return null;
+
+  // 3. Loose pool: free joinable tables in NO group, up to the global maxJoin.
+  const grouped = new Set(groups.flatMap((g) => g.tableIds));
+  const loose = free.filter((t) => t.joinable && !grouped.has(t.id));
+  const looseCombo = combine(loose, maxJoin);
+  if (looseCombo) candidates.push(looseCombo);
+
+  if (candidates.length === 0) return null;
+
+  // 4. Least waste: fewest tables, then fewest total seats.
+  candidates.sort((a, b) =>
+    a.length !== b.length
+      ? a.length - b.length
+      : a.reduce((s, t) => s + t.seats, 0) - b.reduce((s, t) => s + t.seats, 0)
+  );
+  return candidates[0].map((t) => t.id);
 }
 
 function toMinutes(hhmm: string): number {
@@ -358,6 +412,7 @@ async function availableSlotsForDayTables(
 ): Promise<string[]> {
   const tables = await getReservationTables(restaurantId, area);
   if (tables.length === 0) return [];
+  const groups = await getReservationTableGroups(restaurantId);
 
   const booked = await db
     .select({ time: reservations.time, assignedTableIds: reservations.assignedTableIds })
@@ -382,7 +437,7 @@ async function availableSlotsForDayTables(
       if (start < w.end && w.start < end) w.tableIds.forEach((id) => busy.add(id));
     }
     const free = tables.filter((t) => !busy.has(t.id));
-    if (canSeat(partySize, free, maxJoin)) result.push(time);
+    if (canSeat(partySize, free, maxJoin, groups)) result.push(time);
   }
   return result.sort();
 }
@@ -407,6 +462,7 @@ export async function assignTablesFor(
   const { maxJoin, turn } = await getReservationConfig(restaurantId);
   const tables = await getReservationTables(restaurantId, area);
   if (tables.length === 0) return null;
+  const groups = await getReservationTableGroups(restaurantId);
 
   const booked = await db
     .select({ time: reservations.time, assignedTableIds: reservations.assignedTableIds })
@@ -427,7 +483,7 @@ export async function assignTablesFor(
     if (start < bs + turn && bs < end) parseTableIds(b.assignedTableIds).forEach((id) => busy.add(id));
   }
   const free = tables.filter((t) => !busy.has(t.id));
-  return canSeat(partySize, free, maxJoin);
+  return canSeat(partySize, free, maxJoin, groups);
 }
 
 /**
