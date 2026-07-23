@@ -3,14 +3,19 @@
 import { useState } from "react";
 import { Check, Pencil } from "lucide-react";
 
-/** Inline editable private note about a client (owner-only). */
+/**
+ * Inline editable private note about a client (owner-only). Identified by an
+ * account (userId) or, for accountless diners, by phone — exactly one is passed.
+ */
 export default function ClientNote({
   restaurantId,
   userId,
+  phone,
   initialNote,
 }: {
   restaurantId: string;
-  userId: string;
+  userId?: string;
+  phone?: string;
   initialNote: string;
 }) {
   const [note, setNote] = useState(initialNote);
@@ -21,10 +26,10 @@ export default function ClientNote({
   async function save() {
     setSaving(true);
     setSaved(false);
-    const res = await fetch(`/api/restaurants/${restaurantId}/clients/${userId}/note`, {
+    const res = await fetch(`/api/restaurants/${restaurantId}/client-note`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ note }),
+      body: JSON.stringify(userId ? { userId, note } : { phone, note }),
     });
     setSaving(false);
     if (res.ok) {

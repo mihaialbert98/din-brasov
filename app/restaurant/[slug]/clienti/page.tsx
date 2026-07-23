@@ -1,10 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import { Phone, Users } from "lucide-react";
-import { sql, eq, and, isNotNull, desc } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { reservations, users, restaurantClientNotes } from "@/lib/db/schema";
 import { getRestaurantBySlug, canManageRestaurant } from "@/lib/restaurant-permissions";
+import { listRestaurantClients } from "@/lib/reservations";
 import { formatDate } from "@/lib/utils";
 import ClientNote from "@/components/restaurant/ClientNote";
 import ClientSearch from "@/components/restaurant/ClientSearch";
@@ -13,10 +11,11 @@ import Pagination from "@/components/ui/Pagination";
 const PER_PAGE = 20;
 
 /**
- * Restaurant CRM — the de-duplicated list of account-holding clients who have
- * reserved here (one row per user, regardless of how many bookings). Owner/admin
- * only. Shows the client's PHONE (email is hidden — the platform admin emails
- * clients), visit count, last visit, and an editable private note.
+ * Restaurant CRM — every diner who has reserved here, so the owner can keep a
+ * private note about each. Account-holders are keyed by their account (the note
+ * follows them across bookings); accountless diners are keyed by phone (the note
+ * follows that phone across bookings). Owner/admin only. Shows phone, visit count,
+ * last visit and the editable note — email stays hidden (the platform admin emails).
  */
 export default async function ClientiPage({
   params,
@@ -38,64 +37,14 @@ export default async function ClientiPage({
   const role = (session.user as any)?.role as string | undefined;
   if (!(await canManageRestaurant(session.user.id, restaurant.id, role))) notFound();
 
-  const baseWhere = and(eq(reservations.restaurantId, restaurant.id), isNotNull(reservations.userId));
-
-  // Single search box → matches a client's name OR any of their phone numbers
-  // (the account phone or any booking's guest phone). Applied as HAVING because
-  // the phone match spans aggregated guest_phone values.
-  const having = query
-    ? sql`(
-        ${users.name} ilike ${"%" + query + "%"}
-        or coalesce(${users.phone}, '') ilike ${"%" + query + "%"}
-        or bool_or(${reservations.guestPhone} ilike ${"%" + query + "%"})
-      )`
-    : undefined;
-
-  // Aggregate reservations by userId → one row per client. Phone falls back to the
-  // most recent booking's guest phone when the account has none saved. A fresh
-  // builder per use (Drizzle consumes a builder once it's turned into a subquery).
-  const groupedClients = () =>
-    db
-      .select({
-        userId: reservations.userId,
-        name: users.name,
-        phone: sql<string | null>`coalesce(${users.phone}, max(${reservations.guestPhone}))`,
-        visits: sql<number>`count(*)::int`,
-        lastVisit: sql<string>`max(${reservations.date})`,
-        note: restaurantClientNotes.note,
-      })
-      .from(reservations)
-      .innerJoin(users, eq(reservations.userId, users.id))
-      .leftJoin(
-        restaurantClientNotes,
-        and(
-          eq(restaurantClientNotes.restaurantId, restaurant.id),
-          eq(restaurantClientNotes.userId, reservations.userId),
-        ),
-      )
-      .where(baseWhere)
-      .groupBy(reservations.userId, users.name, users.phone, restaurantClientNotes.note)
-      .having(having);
-
-  // Count matching client rows (one per user) by wrapping the grouped query.
-  const countSub = groupedClients().as("client_rows");
-
-  const [[{ total }], clients] = await Promise.all([
-    db.select({ total: sql<number>`count(*)::int` }).from(countSub),
-    groupedClients()
-      .orderBy(desc(sql`max(${reservations.date})`))
-      .limit(PER_PAGE)
-      .offset((page - 1) * PER_PAGE),
-  ]);
-
-  const totalPages = Math.ceil(total / PER_PAGE);
+  const { clients, totalPages } = await listRestaurantClients(restaurant.id, { query, page, perPage: PER_PAGE });
 
   return (
     <div className="max-w-3xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Clienți</h1>
         <p className="text-sm text-gray-500">
-          Clienții cu cont care au rezervat la tine. Adaugă notițe private despre preferințele lor.
+          Toți clienții care au rezervat la tine — cu cont sau ca invitați. Adaugă notițe private despre preferințele lor.
         </p>
       </div>
 
@@ -105,16 +54,23 @@ export default async function ClientiPage({
         <p className="text-gray-400 text-sm">
           {query
             ? `Niciun client găsit pentru „${query}”.`
-            : "Încă niciun client cu cont. Clienții apar aici după ce rezervă fiind conectați pe Din Brașov."}
+            : "Încă niciun client. Clienții apar aici după ce rezervă la tine."}
         </p>
       ) : (
         <>
           <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
             {clients.map((c) => (
-              <div key={c.userId} className="p-4">
+              <div key={c.isGuest ? `p:${c.phone}` : `u:${c.userId}`} className="p-4">
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div className="min-w-0">
-                    <p className="font-semibold text-gray-900">{c.name ?? "Client"}</p>
+                    <p className="font-semibold text-gray-900">
+                      {c.name ?? "Client"}
+                      {c.isGuest && (
+                        <span className="ml-2 align-middle text-[11px] font-medium bg-gray-100 text-gray-500 rounded-full px-2 py-0.5">
+                          fără cont
+                        </span>
+                      )}
+                    </p>
                     {c.phone && (
                       <a href={`tel:${c.phone}`} className="inline-flex items-center gap-1 text-sm text-gray-500 mt-0.5 hover:text-gray-800">
                         <Phone className="w-3.5 h-3.5" aria-hidden /> {c.phone}
@@ -131,7 +87,12 @@ export default async function ClientiPage({
                   </div>
                 </div>
                 <div className="mt-2">
-                  <ClientNote restaurantId={restaurant.id} userId={c.userId!} initialNote={c.note ?? ""} />
+                  <ClientNote
+                    restaurantId={restaurant.id}
+                    userId={c.isGuest ? undefined : c.userId ?? undefined}
+                    phone={c.isGuest ? c.phone ?? undefined : undefined}
+                    initialNote={c.note}
+                  />
                 </div>
               </div>
             ))}

@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
-import { restaurants, reservationHours, reservations, reservationTables, reservationTableGroups, reservationTableGroupMembers, adminAuditLog, places, users } from "@/lib/db/schema";
-import { eq, and, gte, ne, asc, inArray, isNull, sql } from "drizzle-orm";
+import { restaurants, reservationHours, reservations, reservationTables, reservationTableGroups, reservationTableGroupMembers, restaurantClientNotes, adminAuditLog, places, users } from "@/lib/db/schema";
+import { eq, and, gte, ne, asc, inArray, isNull, isNotNull, sql, type AnyColumn } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { sendReservationConfirmedEmail, sendReservationDeclinedEmail } from "@/lib/email";
 import { isPlatformStaff } from "@/lib/restaurant-permissions";
 import type { Session } from "next-auth";
@@ -610,6 +611,11 @@ export async function createManualReservation(
 /** Upcoming reservations for the board (today onward, excluding declined). */
 export async function listUpcomingReservations(restaurantId: string) {
   const today = new Date().toISOString().slice(0, 10);
+  // The client's private CRM note (read-only on the board), resolved by account
+  // (userId) or, for accountless diners, by phone — each at most one row (partial
+  // unique indexes), so these left joins never multiply reservation rows.
+  const cnUser = alias(restaurantClientNotes, "cn_user");
+  const cnPhone = alias(restaurantClientNotes, "cn_phone");
   const rows = await db
     .select({
       id: reservations.id,
@@ -623,9 +629,12 @@ export async function listUpcomingReservations(restaurantId: string) {
       area: reservations.area,
       assignedTableIds: reservations.assignedTableIds,
       note: reservations.note,
+      clientNote: sql<string | null>`coalesce(${cnUser.note}, ${cnPhone.note})`,
       createdAt: reservations.createdAt,
     })
     .from(reservations)
+    .leftJoin(cnUser, and(eq(cnUser.restaurantId, restaurantId), eq(cnUser.userId, reservations.userId)))
+    .leftJoin(cnPhone, and(eq(cnPhone.restaurantId, restaurantId), isNull(reservations.userId), eq(cnPhone.guestPhone, phoneDigits(reservations.guestPhone))))
     .where(and(eq(reservations.restaurantId, restaurantId), gte(reservations.date, today), ne(reservations.status, "declined")))
     .orderBy(asc(reservations.date), asc(reservations.time));
 
@@ -643,6 +652,125 @@ export async function listUpcomingReservations(restaurantId: string) {
     ...r,
     tables: parseTableIds(assignedTableIds).map((id) => labelById.get(id) ?? "?").filter(Boolean),
   }));
+}
+
+/** Phone identity for CRM notes — compared without formatting so `0740 111 222`
+ * and `0740111222` count as the same person. `normPhone` is the JS form (dedup +
+ * note key); `phoneDigits` is the equivalent SQL for grouping/joining. Both strip
+ * every non-digit, so they always agree on the canonical value. */
+const normPhone = (p: string | null | undefined) => (p ?? "").replace(/\D/g, "");
+const phoneDigits = (col: AnyColumn) => sql`regexp_replace(${col}, '[^0-9]', '', 'g')`;
+
+export type RestaurantClient = {
+  /** true = accountless diner (keyed by phone); false = account-holder (keyed by userId). */
+  isGuest: boolean;
+  userId: string | null;
+  phone: string | null;
+  name: string | null;
+  visits: number;
+  lastVisit: string;
+  note: string;
+};
+
+/**
+ * Restaurant CRM client list — every diner who has reserved here, one row per
+ * identity: account-holders by userId, accountless diners by phone, each with
+ * their private note left-joined. A guest booking under an account's phone
+ * collapses into that account. Merged, searched and paginated in memory (a single
+ * restaurant's distinct clients is a small set). Used by the owner Clienți page.
+ */
+export async function listRestaurantClients(
+  restaurantId: string,
+  { query = "", page = 1, perPage = 20 }: { query?: string; page?: number; perPage?: number } = {},
+): Promise<{ clients: RestaurantClient[]; total: number; totalPages: number }> {
+  const [accountRows, guestRows] = await Promise.all([
+    db
+      .select({
+        userId: reservations.userId,
+        name: users.name,
+        phone: sql<string | null>`coalesce(${users.phone}, max(${reservations.guestPhone}))`,
+        visits: sql<number>`count(*)::int`,
+        lastVisit: sql<string>`max(${reservations.date})`,
+        note: restaurantClientNotes.note,
+      })
+      .from(reservations)
+      .innerJoin(users, eq(reservations.userId, users.id))
+      .leftJoin(
+        restaurantClientNotes,
+        and(eq(restaurantClientNotes.restaurantId, restaurantId), eq(restaurantClientNotes.userId, reservations.userId)),
+      )
+      .where(and(eq(reservations.restaurantId, restaurantId), isNotNull(reservations.userId)))
+      .groupBy(reservations.userId, users.name, users.phone, restaurantClientNotes.note),
+    db
+      .select({
+        // Grouped by digits-only phone, so "0740 111 222" and "0740111222" are one
+        // person. Display phone + name come from the MOST RECENT booking (not an
+        // arbitrary max), so a renamed guest shows their latest name.
+        phone: sql<string | null>`(array_agg(${reservations.guestPhone} order by ${reservations.date} desc, ${reservations.createdAt} desc))[1]`,
+        name: sql<string | null>`(array_agg(${reservations.guestName} order by ${reservations.date} desc, ${reservations.createdAt} desc))[1]`,
+        visits: sql<number>`count(*)::int`,
+        lastVisit: sql<string>`max(${reservations.date})`,
+        note: restaurantClientNotes.note,
+      })
+      .from(reservations)
+      .leftJoin(
+        restaurantClientNotes,
+        and(eq(restaurantClientNotes.restaurantId, restaurantId), eq(restaurantClientNotes.guestPhone, phoneDigits(reservations.guestPhone))),
+      )
+      .where(and(eq(reservations.restaurantId, restaurantId), isNull(reservations.userId), isNotNull(reservations.guestPhone)))
+      .groupBy(phoneDigits(reservations.guestPhone), restaurantClientNotes.note),
+  ]);
+
+  const accountPhones = new Set(accountRows.map((r) => normPhone(r.phone)).filter(Boolean));
+  let merged: RestaurantClient[] = [
+    ...accountRows.map((r) => ({
+      isGuest: false, userId: r.userId, phone: r.phone, name: r.name, visits: r.visits, lastVisit: r.lastVisit, note: r.note ?? "",
+    })),
+    ...guestRows
+      .filter((r) => r.phone && !accountPhones.has(normPhone(r.phone)))
+      .map((r) => ({
+        isGuest: true, userId: null, phone: r.phone, name: r.name, visits: r.visits, lastVisit: r.lastVisit, note: r.note ?? "",
+      })),
+  ].sort((a, b) => (a.lastVisit < b.lastVisit ? 1 : a.lastVisit > b.lastVisit ? -1 : 0));
+
+  const q = query.trim().toLowerCase();
+  if (q) merged = merged.filter((r) => (r.name ?? "").toLowerCase().includes(q) || (r.phone ?? "").toLowerCase().includes(q));
+
+  const total = merged.length;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const clients = merged.slice((page - 1) * perPage, page * perPage);
+  return { clients, total, totalPages };
+}
+
+/**
+ * Upsert a restaurant's private note about a client — keyed by account (userId) or,
+ * for an accountless diner, by phone. Exactly one identity. The note persists across
+ * that identity's repeat bookings. Callers must authorise (owner/admin) first.
+ */
+export async function upsertRestaurantClientNote(
+  restaurantId: string,
+  identity: { userId: string } | { phone: string },
+  note: string,
+): Promise<void> {
+  const trimmed = note.trim();
+  const userId = "userId" in identity ? identity.userId : null;
+  // Store the note under the digits-only phone so it matches every formatting of it.
+  const guestPhone = "phone" in identity ? normPhone(identity.phone) : null;
+  const match = userId
+    ? eq(restaurantClientNotes.userId, userId)
+    : eq(restaurantClientNotes.guestPhone, guestPhone!);
+
+  const [existing] = await db
+    .select({ id: restaurantClientNotes.id })
+    .from(restaurantClientNotes)
+    .where(and(eq(restaurantClientNotes.restaurantId, restaurantId), match))
+    .limit(1);
+
+  if (existing) {
+    await db.update(restaurantClientNotes).set({ note: trimmed, updatedAt: new Date() }).where(eq(restaurantClientNotes.id, existing.id));
+  } else {
+    await db.insert(restaurantClientNotes).values({ restaurantId, userId, guestPhone, note: trimmed });
+  }
 }
 
 /**
