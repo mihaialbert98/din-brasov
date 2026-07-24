@@ -11,7 +11,7 @@ import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { users, accounts, sessions, verificationTokens } from "@/lib/db/schema";
 import { grantFoundingIfEligible } from "@/lib/permissions";
-import { sendFoundingWelcomeEmail } from "@/lib/email";
+import { sendFoundingWelcomeEmail, sendWelcomeEmail } from "@/lib/email";
 
 // DrizzleAdapter needs a real client instance (not a Proxy) to detect the DB type
 function makeAuthDb() {
@@ -126,8 +126,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (!user.id) return;
       try {
         const granted = await grantFoundingIfEligible(user.id);
-        if (granted && user.email) {
-          await sendFoundingWelcomeEmail(user.email, user.name ?? "").catch(() => {});
+        // Google signups get no confirmation email (pre-verified) — so acknowledge
+        // them: founding members get the VIP welcome, everyone else a plain welcome.
+        if (user.email) {
+          if (granted) await sendFoundingWelcomeEmail(user.email, user.name ?? "").catch(() => {});
+          else await sendWelcomeEmail(user.email, user.name ?? "").catch(() => {});
         }
         // Link anything created anonymously with this Google email — reservations
         // + a newsletter subscription made via the banner.
