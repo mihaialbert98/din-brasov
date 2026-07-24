@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { restaurants, reservationHours, reservations, reservationTables, reservationTableGroups, reservationTableGroupMembers, restaurantClientNotes, adminAuditLog, places, users } from "@/lib/db/schema";
 import { eq, and, gte, ne, asc, inArray, isNull, isNotNull, sql, type AnyColumn } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { sendReservationConfirmedEmail, sendReservationDeclinedEmail } from "@/lib/email";
+import { sendReservationConfirmedEmail, sendReservationDeclinedEmail, sendReservationCancelledEmail, sendReservationUpdatedEmail } from "@/lib/email";
 import { isPlatformStaff } from "@/lib/restaurant-permissions";
 import type { Session } from "next-auth";
 
@@ -320,6 +320,9 @@ export async function availableSlotsForDay(
   dateStr: string,
   partySize: number,
   area?: Area,
+  // When re-checking availability for an EDIT, exclude that reservation so it
+  // doesn't count its own (old) slot against itself.
+  excludeReservationId?: string,
 ): Promise<string[]> {
   const day = new Date(`${dateStr}T00:00:00`).getDay();
   const hours = (await getReservationHours(restaurantId)).filter((h) => h.dayOfWeek === day);
@@ -328,7 +331,7 @@ export async function availableSlotsForDay(
   // Tables mode uses the table-inventory algorithm instead of the seat pool.
   const { mode, maxJoin, turn: turnCfg } = await getReservationConfig(restaurantId);
   if (mode === "tables") {
-    return dropPastSlotsForToday(dateStr, await availableSlotsForDayTables(restaurantId, dateStr, partySize, hours, maxJoin, turnCfg, area));
+    return dropPastSlotsForToday(dateStr, await availableSlotsForDayTables(restaurantId, dateStr, partySize, hours, maxJoin, turnCfg, area, excludeReservationId));
   }
 
   const caps = slotsWithCapacity(hours, area); // candidate start times → window capacity
@@ -342,6 +345,7 @@ export async function availableSlotsForDay(
         eq(reservations.restaurantId, restaurantId),
         eq(reservations.date, dateStr),
         inArray(reservations.status, ["pending", "confirmed"]),
+        excludeReservationId ? ne(reservations.id, excludeReservationId) : undefined,
       )
     );
 
@@ -410,6 +414,7 @@ async function availableSlotsForDayTables(
   maxJoin: number,
   turn: number,
   area?: Area,
+  excludeReservationId?: string,
 ): Promise<string[]> {
   const tables = await getReservationTables(restaurantId, area);
   if (tables.length === 0) return [];
@@ -423,6 +428,7 @@ async function availableSlotsForDayTables(
         eq(reservations.restaurantId, restaurantId),
         eq(reservations.date, dateStr),
         inArray(reservations.status, ["pending", "confirmed"]),
+        excludeReservationId ? ne(reservations.id, excludeReservationId) : undefined,
       ),
     );
   const windows = booked.map((b) => ({ start: toMinutes(b.time), end: toMinutes(b.time) + turn, tableIds: parseTableIds(b.assignedTableIds) }));
@@ -454,6 +460,7 @@ export async function assignTablesFor(
   time: string,
   partySize: number,
   area?: Area,
+  excludeReservationId?: string,
 ): Promise<string[] | null> {
   const day = new Date(`${dateStr}T00:00:00`).getDay();
   const hours = (await getReservationHours(restaurantId)).filter((h) => h.dayOfWeek === day);
@@ -473,6 +480,7 @@ export async function assignTablesFor(
         eq(reservations.restaurantId, restaurantId),
         eq(reservations.date, dateStr),
         inArray(reservations.status, ["pending", "confirmed"]),
+        excludeReservationId ? ne(reservations.id, excludeReservationId) : undefined,
       ),
     );
 
@@ -515,6 +523,7 @@ export async function validateBooking(
   time: string,
   partySize: number,
   area?: Area,
+  excludeReservationId?: string,
 ): Promise<{ ok: boolean; reason?: string; assignedTableIds?: string[] }> {
   const cap = await getMaxPartySize(restaurantId);
   if (partySize < 1 || partySize > cap) {
@@ -531,14 +540,14 @@ export async function validateBooking(
   // time, and return the assignment so the caller can persist it on the booking.
   const { mode } = await getReservationConfig(restaurantId);
   if (mode === "tables") {
-    const assigned = await assignTablesFor(restaurantId, dateStr, time, partySize, area);
+    const assigned = await assignTablesFor(restaurantId, dateStr, time, partySize, area, excludeReservationId);
     if (!assigned) {
       return { ok: false, reason: "Nu mai avem o masă liberă pentru acest număr de persoane la ora aleasă. Alege altă oră." };
     }
     return { ok: true, assignedTableIds: assigned };
   }
 
-  const available = await availableSlotsForDay(restaurantId, dateStr, partySize, area);
+  const available = await availableSlotsForDay(restaurantId, dateStr, partySize, area, excludeReservationId);
   if (!available.includes(time)) {
     return { ok: false, reason: "Ora selectată nu mai este disponibilă. Alege altă oră." };
   }
@@ -608,6 +617,89 @@ export async function createManualReservation(
   return { ok: true };
 }
 
+/**
+ * Restaurant edits a reservation's date / time / party size (not name/phone). Keeps
+ * the existing area. Re-validates capacity EXCLUDING this reservation (so nudging it
+ * within its own window doesn't self-conflict); `force` overrides a full slot like a
+ * manual booking. In tables mode the assignment is recomputed. Fires the "reservation
+ * updated" email (best-effort) and reports whether the guest is reachable by email
+ * (the board phones them otherwise). Only pending/confirmed rows are editable.
+ */
+export async function updateReservation(
+  restaurantId: string,
+  reservationId: string,
+  input: { date: string; time: string; partySize: number },
+  force: boolean,
+): Promise<{ ok: true; notifiableByEmail: boolean } | { ok: false; reason: string; overridable?: boolean }> {
+  const [res] = await db
+    .select({
+      status: reservations.status,
+      area: reservations.area,
+      guestName: reservations.guestName,
+      guestEmail: reservations.guestEmail,
+      userId: reservations.userId,
+      restaurantName: restaurants.name,
+    })
+    .from(reservations)
+    .innerJoin(restaurants, eq(reservations.restaurantId, restaurants.id))
+    .where(and(eq(reservations.id, reservationId), eq(reservations.restaurantId, restaurantId)))
+    .limit(1);
+  if (!res) return { ok: false, reason: "Rezervare negăsită." };
+  if (res.status !== "pending" && res.status !== "confirmed") {
+    return { ok: false, reason: "Rezervarea nu mai poate fi modificată." };
+  }
+
+  if (input.partySize < 1) return { ok: false, reason: "Număr de persoane invalid." };
+  const cap = await getMaxPartySize(restaurantId);
+  if (input.partySize > cap) return { ok: false, reason: `Numărul de persoane trebuie să fie între 1 și ${cap}.` };
+
+  // No moving into the past (Bucharest-local day).
+  if (input.date < nowInReservationTZ().date) return { ok: false, reason: "Data trebuie să fie în viitor." };
+
+  const area = (res.area as Area | null) ?? undefined;
+
+  // The new time must fall within the day's program.
+  const day = new Date(`${input.date}T00:00:00`).getDay();
+  const hours = (await getReservationHours(restaurantId)).filter((h) => h.dayOfWeek === day);
+  if (!slotsWithCapacity(hours, area).has(input.time)) {
+    return { ok: false, reason: "Ora nu este într-un interval de program." };
+  }
+
+  // Capacity check EXCLUDING this reservation — unless forced. Tables mode re-picks table(s).
+  const { mode } = await getReservationConfig(restaurantId);
+  let assignedTableIds: string[] | null = null;
+  if (!force) {
+    if (mode === "tables") {
+      const assigned = await assignTablesFor(restaurantId, input.date, input.time, input.partySize, area, reservationId);
+      if (!assigned) {
+        return { ok: false, reason: "Nu mai avem o masă liberă pentru acest număr de persoane la ora aleasă.", overridable: true };
+      }
+      assignedTableIds = assigned;
+    } else {
+      const available = await availableSlotsForDay(restaurantId, input.date, input.partySize, area, reservationId);
+      if (!available.includes(input.time)) {
+        return { ok: false, reason: "Slotul este plin pentru acest număr de persoane.", overridable: true };
+      }
+    }
+  } else if (mode === "tables") {
+    assignedTableIds = await assignTablesFor(restaurantId, input.date, input.time, input.partySize, area, reservationId);
+  }
+
+  await db
+    .update(reservations)
+    .set({
+      date: input.date,
+      time: input.time,
+      partySize: input.partySize,
+      assignedTableIds: mode === "tables" ? (assignedTableIds ? JSON.stringify(assignedTableIds) : null) : null,
+      updatedAt: new Date(),
+    })
+    .where(eq(reservations.id, reservationId));
+
+  void notifyReservationUpdated(res, input);
+  return { ok: true, notifiableByEmail: !!res.guestEmail || !!res.userId };
+}
+
 /** Upcoming reservations for the board (today onward, excluding declined). */
 export async function listUpcomingReservations(restaurantId: string) {
   const today = new Date().toISOString().slice(0, 10);
@@ -630,6 +722,9 @@ export async function listUpcomingReservations(restaurantId: string) {
       assignedTableIds: reservations.assignedTableIds,
       note: reservations.note,
       clientNote: sql<string | null>`coalesce(${cnUser.note}, ${cnPhone.note})`,
+      // False only when there's no way to email the guest (no booking email AND no
+      // linked account) — the board then prompts staff to phone them on confirm.
+      notifiableByEmail: sql<boolean>`(${reservations.guestEmail} is not null or ${reservations.userId} is not null)`,
       createdAt: reservations.createdAt,
     })
     .from(reservations)
@@ -807,27 +902,31 @@ export async function setReservationStatus(
     .set({ status, updatedAt: new Date() })
     .where(eq(reservations.id, reservationId));
 
-  // Notify the guest by email on confirm/decline — if we have one (booking email,
-  // else the linked account's email). Fire-and-forget; email failure never blocks.
-  if (status === "confirmed" || status === "declined") {
-    void notifyReservationStatus(res, status);
-  }
+  // Notify the guest by email on every status change — confirm, decline or cancel —
+  // if we have one (booking email, else the linked account's email). Fire-and-forget;
+  // email failure never blocks. Guests with no email are phoned by staff (board modal).
+  void notifyReservationStatus(res, status);
   return true;
 }
 
-/** Resolve the guest's email (booking email or linked account) and send the email. */
+/** Resolve a reservation's contact email — the booking email, else the linked account's. */
+async function resolveGuestEmail(res: { guestEmail: string | null; userId: string | null }): Promise<string | null> {
+  if (res.guestEmail) return res.guestEmail;
+  if (res.userId) {
+    const [u] = await db.select({ email: users.email }).from(users).where(eq(users.id, res.userId)).limit(1);
+    return u?.email ?? null;
+  }
+  return null;
+}
+
+/** Email the guest about a status change (confirm/decline/cancel). Best-effort. */
 async function notifyReservationStatus(
   res: { guestName: string; guestEmail: string | null; userId: string | null; date: string; time: string; partySize: number; restaurantName: string },
-  status: "confirmed" | "declined",
+  status: "confirmed" | "declined" | "cancelled",
 ): Promise<void> {
   try {
-    let email = res.guestEmail;
-    if (!email && res.userId) {
-      const [u] = await db.select({ email: users.email }).from(users).where(eq(users.id, res.userId)).limit(1);
-      email = u?.email ?? null;
-    }
+    const email = await resolveGuestEmail(res);
     if (!email) return;
-
     const data = {
       restaurantName: res.restaurantName,
       date: res.date,
@@ -836,9 +935,30 @@ async function notifyReservationStatus(
       guestName: res.guestName,
     };
     if (status === "confirmed") await sendReservationConfirmedEmail(email, data);
-    else await sendReservationDeclinedEmail(email, data);
+    else if (status === "declined") await sendReservationDeclinedEmail(email, data);
+    else await sendReservationCancelledEmail(email, data);
   } catch {
     /* email is best-effort — never block the status change */
+  }
+}
+
+/** Email the guest that their reservation's date/time/party changed. Best-effort. */
+async function notifyReservationUpdated(
+  res: { guestName: string; guestEmail: string | null; userId: string | null; restaurantName: string },
+  next: { date: string; time: string; partySize: number },
+): Promise<void> {
+  try {
+    const email = await resolveGuestEmail(res);
+    if (!email) return;
+    await sendReservationUpdatedEmail(email, {
+      restaurantName: res.restaurantName,
+      date: next.date,
+      time: next.time,
+      partySize: next.partySize,
+      guestName: res.guestName,
+    });
+  } catch {
+    /* best-effort */
   }
 }
 

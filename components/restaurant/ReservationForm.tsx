@@ -144,6 +144,13 @@ export default function ReservationForm({
   }
 
   if (done) {
+    // For logged-in members, point them to their account — appended to the main
+    // confirmation line so it shows even if the account card below is missed.
+    const profileHint = isMember
+      ? done === "confirmed"
+        ? " Îți poți vedea rezervarea oricând dacă apeși pe numele tău din colțul din dreapta sus și mergi la Rezervări."
+        : " Poți urmări starea rezervării apăsând pe numele tău din colțul din dreapta sus și mergând la Rezervări, de unde o poți și gestiona."
+      : "";
     return (
       <div className="space-y-4">
         <div className="bg-green-50 border border-green-200 rounded-2xl p-6 text-center">
@@ -154,11 +161,13 @@ export default function ReservationForm({
             {done === "confirmed" ? "Rezervare confirmată!" : "Cerere de rezervare trimisă!"}
           </h2>
           <p className="text-sm text-muted">
-            {done === "confirmed"
-              ? `Te așteptăm la ${restaurantName}.`
+            {(done === "confirmed"
+              ? willEmail
+                ? "Rezervarea ta este confirmată — poți sta liniștit, totul e în regulă. Vei primi în câteva minute un email de confirmare (verifică și folderul Spam/Promoții dacă nu îl găsești)."
+                : `Rezervarea ta este confirmată — poți sta liniștit, totul e în regulă. Te așteptăm la ${restaurantName}.`
               : willEmail
-              ? `${restaurantName} îți va confirma rezervarea în curând. Vei primi un email cu confirmarea.`
-              : `${restaurantName} îți va confirma rezervarea în curând, telefonic.`}
+              ? `Cererea ta de rezervare a fost trimisă. Vei primi un email de confirmare imediat ce ${restaurantName} acceptă rezervarea (verifică și folderul Spam/Promoții).`
+              : `Cererea ta de rezervare a fost trimisă. ${restaurantName} te va contacta telefonic pentru a-ți confirma rezervarea.`) + profileHint}
           </p>
         </div>
 
@@ -179,8 +188,9 @@ export default function ReservationForm({
               <div className="flex-1 min-w-0">
                 <h3 className="font-serif text-lg font-semibold text-ink leading-snug">Rezervarea e în contul tău</h3>
                 <p className="text-sm text-muted mt-0.5 mb-3">
-                  O găsești oricând apăsând pe numele tău din colțul de sus → Rezervări, de unde o poți
-                  vedea sau anula.
+                  {done === "confirmed"
+                    ? "O găsești oricând apăsând pe numele tău din colțul de sus → Rezervări, de unde o poți vedea sau anula."
+                    : "Poți urmări starea rezervării apăsând pe numele tău din colțul de sus → Rezervări, de unde o poți și gestiona."}
                 </p>
                 <Link
                   href="/profil/rezervari"
@@ -405,15 +415,22 @@ export default function ReservationForm({
           </div>
           <div className="flex flex-col gap-1">
             <label htmlFor="guestEmail" className="font-medium text-ink text-sm">
-              Email {isMember ? "" : "(opțional)"}
+              Email {isMember ? "(contul tău)" : "(opțional)"}
             </label>
             <input
               id="guestEmail" name="guestEmail" type="email"
               value={email} onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email" className={inputClass}
+              readOnly={isMember}
+              aria-readonly={isMember}
+              autoComplete="email"
+              className={isMember ? `${inputClass} bg-black/[0.04] text-faint cursor-not-allowed` : inputClass}
             />
-            {/* Manual mode + no way to email → warn they'll only learn by phone. */}
-            {confirmMode === "manual" && !willEmail ? (
+            {/* Members: the account email is fixed here (read-only). Guests can type one. */}
+            {isMember ? (
+              <span className="text-xs text-faint">
+                Confirmarea rezervării ajunge pe adresa contului tău.
+              </span>
+            ) : confirmMode === "manual" && !willEmail ? (
               <span className="text-xs text-amber-700">
                 Fără email, nu vei ști imediat dacă restaurantul acceptă rezervarea — vei fi contactat
                 telefonic de un membru al echipei. Completează emailul ca să primești confirmarea automat.

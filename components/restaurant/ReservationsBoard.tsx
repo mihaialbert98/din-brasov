@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Phone, Mail, Users, Clock, Check, X, CalendarClock, Plus, StickyNote } from "lucide-react";
+import { Phone, Mail, Users, Clock, Check, X, CalendarClock, Plus, StickyNote, Pencil } from "lucide-react";
 import { notify } from "@/lib/chime";
 import { useVisiblePoll } from "@/lib/useVisiblePoll";
 import NotifyPermission from "@/components/restaurant/NotifyPermission";
@@ -20,6 +20,8 @@ interface Reservation {
   note: string | null;
   /** The client's saved CRM note (read-only here; edited on the Clienți page). */
   clientNote: string | null;
+  /** False when the guest has no email and no account → only reachable by phone. */
+  notifiableByEmail: boolean;
 }
 
 const STATUS_LABEL: Record<Reservation["status"], string> = {
@@ -67,6 +69,9 @@ export default function ReservationsBoard({
   const [busy, setBusy] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("azi");
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<Reservation | null>(null);
+  // After a status change / edit on a reservation that has no email, prompt staff to phone the guest.
+  const [callPrompt, setCallPrompt] = useState<{ name: string; phone: string; action: "confirmed" | "declined" | "cancelled" | "updated" } | null>(null);
   // Chime + tab badge when a NEW pending reservation arrives (board must be open).
   const prevPending = useRef<number | null>(null);
 
@@ -105,12 +110,21 @@ export default function ReservationsBoard({
     // Confirm destructive actions — a decline/cancel can't be undone.
     if (status === "declined" && !confirm("Refuzi această rezervare? Clientul nu va mai avea masa rezervată.")) return;
     if (status === "cancelled" && !confirm("Anulezi această rezervare? Locurile vor redeveni disponibile.")) return;
+    // Capture the row before the refetch so we can prompt a phone call on confirm.
+    const target = rows.find((r) => r.id === id);
     setBusy(id);
     try {
       const res = await fetch(`${basePath}/reservations/${id}/status`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }),
       });
-      if (res.ok) await fetchRows();
+      if (res.ok) {
+        await fetchRows();
+        // Status changed on a reservation with no email → the guest can only be
+        // reached by phone (confirm, decline or cancel — they need to be told).
+        if (target && !target.notifiableByEmail) {
+          setCallPrompt({ name: target.guestName, phone: target.guestPhone, action: status });
+        }
+      }
     } finally { setBusy(null); }
   }
 
@@ -200,6 +214,29 @@ export default function ReservationsBoard({
         />
       )}
 
+      {editing && (
+        <EditReservationModal
+          basePath={basePath}
+          reservation={editing}
+          onClose={() => setEditing(null)}
+          onSaved={(r) => {
+            setEditing(null);
+            fetchRows();
+            // No email → the guest can only be told about the change by phone.
+            if (!r.notifiableByEmail) setCallPrompt({ name: r.guestName, phone: r.guestPhone, action: "updated" });
+          }}
+        />
+      )}
+
+      {callPrompt && (
+        <CallGuestModal
+          name={callPrompt.name}
+          phone={callPrompt.phone}
+          action={callPrompt.action}
+          onClose={() => setCallPrompt(null)}
+        />
+      )}
+
       {sorted.length === 0 ? (
         <div className="text-center py-12 text-gray-400">
           <CalendarClock className="w-8 h-8 mx-auto mb-2 opacity-50" aria-hidden />
@@ -272,11 +309,19 @@ export default function ReservationsBoard({
                           </button>
                         </div>
                       )}
-                      {r.status === "confirmed" && (
-                        <button onClick={() => setStatus(r.id, "cancelled")} disabled={busy === r.id}
-                          className="mt-3 inline-flex items-center gap-1 text-sm border border-red-300 text-red-600 px-3 py-2 rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors">
-                          <X className="w-4 h-4" aria-hidden /> Anulează rezervarea
-                        </button>
+                      {(pending || r.status === "confirmed") && (
+                        <div className="flex items-center gap-3 mt-3">
+                          <button onClick={() => setEditing(r)} disabled={busy === r.id}
+                            className="inline-flex items-center gap-1 text-sm text-gray-600 border border-gray-300 px-3 py-2 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors">
+                            <Pencil className="w-4 h-4" aria-hidden /> Editează
+                          </button>
+                          {r.status === "confirmed" && (
+                            <button onClick={() => setStatus(r.id, "cancelled")} disabled={busy === r.id}
+                              className="inline-flex items-center gap-1 text-sm border border-red-300 text-red-600 px-3 py-2 rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors">
+                              <X className="w-4 h-4" aria-hidden /> Anulează rezervarea
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   );
@@ -384,6 +429,136 @@ function ManualReservationModal({
 
         <button onClick={() => submit(false)} disabled={saving} className="w-full bg-[#c84b1e] text-white font-semibold py-2.5 rounded-lg hover:bg-[#d9603a] transition-colors disabled:opacity-60">
           {saving ? "Se adaugă…" : "Adaugă rezervarea"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Shown after a staff member changes the status of a reservation that has NO email
+ * (guest left it blank and isn't a registered user). The guest can't be notified
+ * automatically, so we nudge staff to phone them — whether it was confirmed,
+ * declined or cancelled.
+ */
+function CallGuestModal({
+  name, phone, action, onClose,
+}: {
+  name: string; phone: string; action: "confirmed" | "declined" | "cancelled" | "updated"; onClose: () => void;
+}) {
+  const message = {
+    confirmed: "Rezervarea a fost confirmată, dar clientul nu are email — sună-l ca să-i confirmi, altfel nu are cum să afle că a fost acceptată.",
+    declined: "Rezervarea a fost refuzată, dar clientul nu are email — sună-l ca să-l anunți, altfel nu are cum să afle.",
+    cancelled: "Rezervarea a fost anulată, dar clientul nu are email — sună-l ca să-l anunți, altfel nu are cum să afle.",
+    updated: "Rezervarea a fost modificată, dar clientul nu are email — sună-l ca să-i spui noile detalii, altfel nu are cum să afle.",
+  }[action];
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl text-center" onClick={(e) => e.stopPropagation()}>
+        <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-3">
+          <Phone className="w-6 h-6 text-amber-600" aria-hidden />
+        </div>
+        <h3 className="font-semibold text-gray-900 text-lg">Sună clientul</h3>
+        <p className="text-sm text-gray-600 mt-1.5">{message}</p>
+        <div className="mt-4 bg-gray-50 border border-gray-200 rounded-xl p-3">
+          <p className="font-medium text-gray-900">{name}</p>
+          <a href={`tel:${phone}`} className="inline-flex items-center gap-1.5 text-[#c84b1e] font-semibold mt-0.5">
+            <Phone className="w-4 h-4" aria-hidden /> {phone}
+          </a>
+        </div>
+        <div className="flex gap-2 mt-5">
+          <a
+            href={`tel:${phone}`}
+            className="flex-1 inline-flex items-center justify-center gap-1.5 bg-[#c84b1e] text-white font-semibold py-2.5 rounded-lg hover:bg-[#d9603a] transition-colors"
+          >
+            <Phone className="w-4 h-4" aria-hidden /> Sună acum
+          </a>
+          <button onClick={onClose} className="px-4 py-2.5 rounded-lg border border-gray-300 text-gray-600 font-medium hover:bg-gray-50">
+            Am înțeles
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Edit an existing reservation's date / time / party size (not name/phone). Mirrors
+ * the manual-add modal, incl. the "force a full slot" override. */
+function EditReservationModal({
+  basePath,
+  reservation,
+  onClose,
+  onSaved,
+}: {
+  basePath: string;
+  reservation: Reservation;
+  onClose: () => void;
+  onSaved: (r: Reservation) => void;
+}) {
+  const [date, setDate] = useState(reservation.date);
+  const [time, setTime] = useState(reservation.time);
+  const [partySize, setPartySize] = useState<number | "">(reservation.partySize);
+  const [error, setError] = useState<string | null>(null);
+  const [overridable, setOverridable] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  async function submit(force: boolean) {
+    const nParty = partySize === "" ? 0 : partySize;
+    if (nParty < 1) { setError("Numărul de persoane trebuie să fie cel puțin 1."); return; }
+    setSaving(true);
+    setError(null);
+    const res = await fetch(`${basePath}/reservations/${reservation.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date, time, partySize: nParty, force }),
+    });
+    setSaving(false);
+    if (res.ok) { onSaved(reservation); return; }
+    const d = await res.json().catch(() => ({}));
+    setError(d.error ?? "Eroare.");
+    setOverridable(!!d.overridable);
+  }
+
+  const field = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#c84b1e]";
+  const maxDate = localISODate(new Date(Date.now() + 60 * 86400000));
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="font-semibold text-gray-900">Editează rezervarea</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700" aria-label="Închide"><X className="w-5 h-5" aria-hidden /></button>
+        </div>
+        <p className="text-xs text-gray-500 mb-4">{reservation.guestName} · {reservation.guestPhone}</p>
+
+        {error && (
+          <div className="bg-red-50 text-red-700 text-sm rounded-lg px-3 py-2 mb-3">
+            {error}
+            {overridable && (
+              <button onClick={() => submit(true)} disabled={saving} className="block mt-2 font-semibold underline hover:no-underline">
+                Salvează oricum
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <label className="text-xs font-medium text-gray-500">Data
+            <input type="date" value={date} min={todayStr()} max={maxDate} onChange={(e) => setDate(e.target.value)} className={`mt-1 ${field}`} />
+          </label>
+          <label className="text-xs font-medium text-gray-500">Ora
+            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={`mt-1 ${field}`} />
+          </label>
+        </div>
+        <label className="block text-xs font-medium text-gray-500 mb-4">Persoane
+          <input type="number" min={1} max={50} value={partySize}
+            onChange={(e) => setPartySize(e.target.value === "" ? "" : Number(e.target.value))}
+            onBlur={() => { if (partySize === "" || partySize < 1) setPartySize(1); }}
+            className={`mt-1 ${field}`} />
+        </label>
+
+        <button onClick={() => submit(false)} disabled={saving} className="w-full bg-[#c84b1e] text-white font-semibold py-2.5 rounded-lg hover:bg-[#d9603a] transition-colors disabled:opacity-60">
+          {saving ? "Se salvează…" : "Salvează modificările"}
         </button>
       </div>
     </div>

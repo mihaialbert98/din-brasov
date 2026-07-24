@@ -186,6 +186,15 @@ async function main() {
   const mergedBoard = board8.filter((x) => digitsEq(x.guestPhone, "0742500600"));
   ok(mergedBoard.length === 2 && mergedBoard.every((x) => (x as any).clientNote === "Vine cu bicicleta"), "both formattings show the note on the board");
 
+  // ── 9. notifiableByEmail → drives the "call the client" prompt on confirm ────
+  sec("9. notifiableByEmail (call-to-confirm trigger)");
+  const board9a = await listUpcomingReservations(r1);
+  ok((board9a.find((x) => x.guestName === "Ana") as any)?.notifiableByEmail === true, "account booking → notifiable (account email exists)");
+  ok((board9a.find((x) => x.guestPhone === "0740111222") as any)?.notifiableByEmail === false, "guest with no email + no account → NOT notifiable (staff must phone)");
+  await db.insert(reservations).values({ ...b, date: future(2), time: "12:00", guestName: "CuEmail", guestPhone: "0749000111", guestEmail: `${P}withemail@test.local`, userId: null });
+  const board9b = await listUpcomingReservations(r1);
+  ok((board9b.find((x) => x.guestName === "CuEmail") as any)?.notifiableByEmail === true, "guest who left an email → notifiable (no call prompt)");
+
   await cleanup();
   console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
   process.exit(fail === 0 ? 0 : 1);

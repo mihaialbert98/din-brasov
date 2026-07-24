@@ -114,12 +114,12 @@ export async function sendWeeklyDigest({
     await Promise.all(
       batch.map(async (t) => {
         try {
-          await sendNewsletterDigest(
+          if (!(await sendNewsletterDigest(
             t.sub.email,
             t.sub.verificationToken ?? "",
             digest,
             t.sections
-          );
+          )).ok) throw new Error("email send failed");
           await db
             .update(newsletterSubscribers)
             .set({ lastSentAt: new Date() })
@@ -176,7 +176,7 @@ export async function sendCampaign({
     await Promise.all(
       batch.map(async (s) => {
         try {
-          await sendCustomCampaign(s.email, s.verificationToken ?? "", content);
+          if (!(await sendCustomCampaign(s.email, s.verificationToken ?? "", content)).ok) throw new Error("email send failed");
           result.sent++;
           result.recipients.push(s.email);
         } catch {
@@ -217,7 +217,7 @@ export async function sendToRecipients(
     await Promise.all(
       batch.map(async (r) => {
         try {
-          await sendCustomCampaign(r.email, r.token, content);
+          if (!(await sendCustomCampaign(r.email, r.token, content)).ok) throw new Error("email send failed");
           result.sent++;
           result.recipients.push(r.email);
         } catch {

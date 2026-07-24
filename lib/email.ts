@@ -11,6 +11,45 @@ function getResend() {
   return new Resend(process.env.RESEND_API_KEY);
 }
 
+type EmailMessage = { from?: string; to: string; subject: string; html: string };
+
+/**
+ * The single send path for every email. The Resend SDK returns `{ error }` on API
+ * failures (bad address, rate limit, domain issue) instead of throwing — that was
+ * previously ignored, so failed sends were invisible. This logs every failure
+ * (returned or thrown) with context, retries ONCE on a network-level throw, and
+ * never throws itself — email is best-effort, a failure must never break the
+ * request. Returns whether it was accepted so batch callers can count accurately.
+ */
+async function sendEmail(msg: EmailMessage): Promise<{ ok: boolean; id?: string }> {
+  const resend = getResend();
+  if (!resend) {
+    if (process.env.NODE_ENV === "production") {
+      console.warn(`[email] RESEND_API_KEY missing — skipped "${msg.subject}" to ${msg.to}`);
+    }
+    return { ok: false };
+  }
+  const payload = { from: FROM, ...msg };
+  let networkErr: unknown;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const { data, error } = await resend.emails.send(payload);
+      if (error) {
+        // Deterministic API rejection (invalid address, domain, etc.) — retrying won't help.
+        console.error(`[email] rejected "${msg.subject}" to ${msg.to}:`, error);
+        return { ok: false };
+      }
+      return { ok: true, id: data?.id };
+    } catch (e) {
+      // Network/transient failure — worth exactly one retry after a short backoff.
+      networkErr = e;
+      if (attempt === 1) await new Promise((r) => setTimeout(r, 400));
+    }
+  }
+  console.error(`[email] send failed (network) "${msg.subject}" to ${msg.to}:`, networkErr);
+  return { ok: false };
+}
+
 /**
  * Wraps email body content in a branded, responsive HTML layout.
  * Inline styles only (email clients strip <style>/external CSS).
@@ -166,7 +205,7 @@ export async function sendNewsletterDigest(
 
   const html = emailLayout({ heading: "Din Brașov săptămâna asta", body });
 
-  return getResend()?.emails.send({
+  return sendEmail({
     from: FROM,
     to,
     subject: "Din Brașov săptămâna asta",
@@ -193,7 +232,7 @@ export async function sendCustomCampaign(to: string, token: string, c: CampaignC
 
   const html = emailLayout({ heading: c.heading, body });
 
-  return getResend()?.emails.send({
+  return sendEmail({
     from: FROM,
     to,
     subject: c.subject,
@@ -236,7 +275,7 @@ export async function sendAccountConfirmationEmail(
       </p>`,
   });
 
-  return getResend()?.emails.send({
+  return sendEmail({
     from: FROM,
     to,
     subject: "Confirmă-ți contul pe Din Brașov",
@@ -244,12 +283,26 @@ export async function sendAccountConfirmationEmail(
   });
 }
 
+/**
+ * Plain welcome for a new account that needs no confirmation email — i.e. Google
+ * signups who aren't founding members (founding ones get the VIP welcome instead).
+ * Keeps every new user acknowledged, matching the credentials flow's confirm email.
+ */
 export async function sendWelcomeEmail(to: string, name: string) {
-  return getResend()?.emails.send({
+  const html = emailLayout({
+    heading: `Bun venit${name ? `, ${esc(name)}` : ""}!`,
+    body: `
+      <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#374151;">
+        Contul tău a fost creat cu succes. Bine ai venit în comunitatea Din Brașov — locul unde afli ce se
+        întâmplă în oraș: știri, evenimente, localuri noi și anunțuri de la brașoveni.
+      </p>
+      ${ctaButton(`${APP_URL}`, "Descoperă Din Brașov")}`,
+  });
+  return sendEmail({
     from: FROM,
     to,
     subject: "Bun venit pe Din Brașov!",
-    html: `<p>Salut ${name},</p><p>Contul tău a fost creat cu succes. Bine ai venit în comunitatea Din Brașov!</p>`,
+    html,
   });
 }
 
@@ -277,7 +330,7 @@ export async function sendFoundingWelcomeEmail(to: string, name: string) {
       </table>
       ${ctaButton(`${APP_URL}/anunturi/nou`, "Publică primul anunț")}`,
   });
-  return getResend()?.emails.send({
+  return sendEmail({
     from: FROM,
     to,
     subject: "Bun venit pe Din Brașov — ești membru fondator!",
@@ -286,7 +339,7 @@ export async function sendFoundingWelcomeEmail(to: string, name: string) {
 }
 
 export async function sendListingApprovedEmail(to: string, listingTitle: string) {
-  return getResend()?.emails.send({
+  return sendEmail({
     from: FROM,
     to,
     subject: "Anunțul tău a fost aprobat",
@@ -295,7 +348,7 @@ export async function sendListingApprovedEmail(to: string, listingTitle: string)
 }
 
 export async function sendListingRejectedEmail(to: string, listingTitle: string, reason?: string) {
-  return getResend()?.emails.send({
+  return sendEmail({
     from: FROM,
     to,
     subject: "Anunțul tău nu a putut fi publicat",
@@ -305,7 +358,7 @@ export async function sendListingRejectedEmail(to: string, listingTitle: string,
 
 export async function sendNewsletterVerificationEmail(to: string, token: string) {
   const verifyUrl = `${APP_URL}/api/newsletter/verify?token=${token}`;
-  return getResend()?.emails.send({
+  return sendEmail({
     from: FROM,
     to,
     subject: "Confirmă abonarea la newsletter-ul Din Brașov",
@@ -318,7 +371,7 @@ export async function sendNewsletterVerificationEmail(to: string, token: string)
 
 export async function sendNewsletterWelcomeEmail(to: string, token: string) {
   const unsubscribeUrl = `${APP_URL}/api/newsletter/unsubscribe?token=${token}`;
-  return getResend()?.emails.send({
+  return sendEmail({
     from: FROM,
     to,
     subject: "Bun venit în newsletter-ul Din Brașov!",
@@ -361,7 +414,7 @@ export async function sendReservationConfirmedEmail(to: string, r: ReservationEm
         Dacă nu mai poți ajunge, te rugăm să anunți restaurantul.
       </p>`,
   });
-  return getResend()?.emails.send({
+  return sendEmail({
     from: FROM,
     to,
     subject: `Rezervare confirmată — ${r.restaurantName}`,
@@ -384,10 +437,66 @@ export async function sendReservationDeclinedEmail(to: string, r: ReservationEma
         Te rugăm să încerci o altă dată sau oră, ori să contactezi direct restaurantul.
       </p>`,
   });
-  return getResend()?.emails.send({
+  return sendEmail({
     from: FROM,
     to,
     subject: `Rezervare — ${r.restaurantName}`,
+    html,
+  });
+}
+
+/** Notice that a previously CONFIRMED reservation was cancelled by the restaurant. */
+export async function sendReservationCancelledEmail(to: string, r: ReservationEmailData) {
+  const when = `${r.date} · ora ${r.time}`;
+  const html = emailLayout({
+    heading: `Rezervarea ta la ${esc(r.restaurantName)} a fost anulată`,
+    body: `
+      <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#374151;">
+        Salut${r.guestName ? `, ${esc(r.guestName)}` : ""}! Din păcate, rezervarea ta pentru
+        <strong>${esc(when)}</strong> (${r.partySize} ${r.partySize === 1 ? "persoană" : "persoane"})
+        la <strong>${esc(r.restaurantName)}</strong> a fost anulată de restaurant.
+      </p>
+      <p style="margin:0;font-size:13px;line-height:1.6;color:#6b7280;">
+        Ne pare rău pentru neplăcere. Poți face o nouă rezervare pe Din Brașov sau poți contacta direct restaurantul.
+      </p>`,
+  });
+  return sendEmail({
+    from: FROM,
+    to,
+    subject: `Rezervare anulată — ${r.restaurantName}`,
+    html,
+  });
+}
+
+/** Notice that a reservation's details (date/time/party) were changed by the restaurant. */
+export async function sendReservationUpdatedEmail(to: string, r: ReservationEmailData) {
+  const when = `${r.date} · ora ${r.time}`;
+  const html = emailLayout({
+    heading: `Rezervarea ta la ${esc(r.restaurantName)} a fost modificată`,
+    body: `
+      <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#374151;">
+        Salut${r.guestName ? `, ${esc(r.guestName)}` : ""}! Rezervarea ta a fost actualizată de restaurant. Iată noile detalii:
+      </p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+        <tr><td style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px 18px;">
+          <p style="margin:0;font-size:14px;line-height:1.8;color:#166534;">
+            <strong>${esc(r.restaurantName)}</strong><br>
+            📅 ${esc(when)}<br>
+            👥 ${r.partySize} ${r.partySize === 1 ? "persoană" : "persoane"}
+          </p>
+        </td></tr>
+      </table>
+      <p style="margin:0 0 10px;font-size:13px;line-height:1.6;color:#b45309;">
+        ⏱️ Te rugăm să ajungi la timp — dacă întârzii mai mult de 15 minute față de ora rezervării, aceasta poate fi anulată.
+      </p>
+      <p style="margin:0;font-size:13px;line-height:1.6;color:#9ca3af;">
+        Dacă noile detalii nu ți se potrivesc, contactează direct restaurantul.
+      </p>`,
+  });
+  return sendEmail({
+    from: FROM,
+    to,
+    subject: `Rezervare modificată — ${r.restaurantName}`,
     html,
   });
 }
@@ -416,7 +525,7 @@ export async function sendAdminReservationSettingsChangedEmail(
         verifică jurnalul de audit.
       </p>`,
   });
-  return getResend()?.emails.send({
+  return sendEmail({
     from: FROM,
     to,
     subject: `Setări rezervări modificate — ${opts.restaurantName}`,
@@ -425,7 +534,7 @@ export async function sendAdminReservationSettingsChangedEmail(
 }
 
 export async function sendAccountDeletionConfirmationEmail(to: string) {
-  return getResend()?.emails.send({
+  return sendEmail({
     from: FROM,
     to,
     subject: "Cerere de ștergere cont înregistrată",
@@ -438,7 +547,7 @@ export async function sendAccountDeletionConfirmationEmail(to: string) {
  * wants to unlock menu editing on the shared service screen.
  */
 export async function sendMenuEditCodeEmail(to: string, restaurantName: string, code: string) {
-  return getResend()?.emails.send({
+  return sendEmail({
     from: FROM,
     to,
     subject: `Cod de modificare meniu — ${restaurantName}`,
