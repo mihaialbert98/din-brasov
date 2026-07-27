@@ -75,7 +75,9 @@ export default function ReservationForm({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const bookableDays = useMemo(() => new Set(hours.map((h) => h.dayOfWeek)), [hours]);
+  // Only days with an ACTIVE (non-paused) interval are offered. A weekday whose
+  // intervals are all paused drops off the form (it would yield no times anyway).
+  const bookableDays = useMemo(() => new Set(hours.filter((h) => h.enabled).map((h) => h.dayOfWeek)), [hours]);
 
   // Next 14 days that the restaurant is open, as chips.
   const dayChips = useMemo(() => {

@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2, Plus, Power, CheckCircle2, Clock, Users, Home, Trees, LayoutGrid } from "lucide-react";
+import { Trash2, Plus, Power, CheckCircle2, Clock, Users, Home, Trees, LayoutGrid, Pause, Play, Pencil } from "lucide-react";
 import type { ReservationHour } from "@/lib/reservations";
 import ReservationTablesManager, { type ResTableRow } from "@/components/restaurant/ReservationTablesManager";
 import ReservationTableGroupsManager, { type GroupRow } from "@/components/restaurant/ReservationTableGroupsManager";
+import EditHoursModal from "@/components/restaurant/EditHoursModal";
 
 const DAYS = ["Duminică", "Luni", "Marți", "Miercuri", "Joi", "Vineri", "Sâmbătă"];
 const DAYS_SHORT = ["Dum", "Lun", "Mar", "Mie", "Joi", "Vin", "Sâm"];
@@ -49,6 +50,7 @@ export default function ReservationSettings({
   const [advanceDays, setAdvanceDays] = useState<number | "">(initialAdvanceDays);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editingHour, setEditingHour] = useState<ReservationHour | null>(null);
 
   // New-window draft. Seat counts are `number | ""` so the field can be cleared
   // while typing (an empty string) instead of snapping to 0; coerced on save.
@@ -115,6 +117,20 @@ export default function ReservationSettings({
     setBusy(false);
     if (res.ok) router.refresh();
     else { const d = await res.json().catch(() => ({})); setError(d.error ?? "Eroare la ștergere."); }
+  }
+
+  // Pause/resume an interval — kept but excluded from new bookings until re-enabled.
+  async function toggleHour(h: ReservationHour) {
+    setBusy(true);
+    setError(null);
+    const res = await fetch(`/api/restaurants/${restaurantId}/reservation-hours`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hourId: h.id, enabled: !h.enabled }),
+    });
+    setBusy(false);
+    if (res.ok) router.refresh();
+    else { const d = await res.json().catch(() => ({})); setError(d.error ?? "Eroare."); }
   }
 
   // Group windows by day for a friendly weekly view.
@@ -395,8 +411,8 @@ export default function ReservationSettings({
                     <span className="w-9 text-sm font-semibold text-gray-700 flex-shrink-0">{DAYS_SHORT[d]}</span>
                     <div className="flex-1 flex flex-wrap gap-2">
                       {byDay[d].map((h) => (
-                        <span key={h.id} className="inline-flex items-center gap-2.5 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
-                          <span className="text-gray-800 font-medium tabular-nums">{h.startTime}–{h.endTime}</span>
+                        <span key={h.id} className={`inline-flex items-center gap-2.5 border rounded-lg px-3 py-1.5 text-sm ${h.enabled ? "bg-gray-50 border-gray-200" : "bg-amber-50/70 border-amber-200"}`}>
+                          <span className={`font-medium tabular-nums ${h.enabled ? "text-gray-800" : "text-gray-400 line-through"}`}>{h.startTime}–{h.endTime}</span>
                           <span className="text-gray-400">{h.slotMinutes}min</span>
                           {capacityMode === "tables" ? null : areas && (h.seatsInside != null || h.seatsOutside != null) ? (
                             <>
@@ -406,9 +422,18 @@ export default function ReservationSettings({
                           ) : (
                             <span className="inline-flex items-center gap-1 text-gray-500"><Users className="w-3.5 h-3.5" aria-hidden />{h.seatsPerSlot}</span>
                           )}
-                          <button onClick={() => removeHours(h.id)} disabled={busy} className="text-gray-300 hover:text-red-600 transition-colors disabled:opacity-50" aria-label="Șterge intervalul">
-                            <Trash2 className="w-4 h-4" aria-hidden />
-                          </button>
+                          {!h.enabled && <span className="text-[11px] font-semibold text-amber-700 uppercase tracking-wide">pauzat</span>}
+                          <span className="inline-flex items-center gap-1.5 pl-1.5 border-l border-gray-200">
+                            <button onClick={() => toggleHour(h)} disabled={busy} className="text-gray-400 hover:text-gray-800 transition-colors disabled:opacity-50" aria-label={h.enabled ? "Dezactivează intervalul" : "Reactivează intervalul"} title={h.enabled ? "Dezactivează" : "Reactivează"}>
+                              {h.enabled ? <Pause className="w-4 h-4" aria-hidden /> : <Play className="w-4 h-4" aria-hidden />}
+                            </button>
+                            <button onClick={() => setEditingHour(h)} disabled={busy} className="text-gray-400 hover:text-gray-800 transition-colors disabled:opacity-50" aria-label="Editează intervalul" title="Editează">
+                              <Pencil className="w-4 h-4" aria-hidden />
+                            </button>
+                            <button onClick={() => removeHours(h.id)} disabled={busy} className="text-gray-300 hover:text-red-600 transition-colors disabled:opacity-50" aria-label="Șterge intervalul" title="Șterge">
+                              <Trash2 className="w-4 h-4" aria-hidden />
+                            </button>
+                          </span>
                         </span>
                       ))}
                     </div>
@@ -459,6 +484,17 @@ export default function ReservationSettings({
             </div>
           </div>
         </>
+      )}
+
+      {editingHour && (
+        <EditHoursModal
+          restaurantId={restaurantId}
+          hour={editingHour}
+          areas={areas}
+          capacityMode={capacityMode}
+          onClose={() => setEditingHour(null)}
+          onSaved={() => { setEditingHour(null); router.refresh(); }}
+        />
       )}
     </div>
   );

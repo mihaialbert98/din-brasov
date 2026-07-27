@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
-import Image from "next/image";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { events } from "@/lib/db/schema";
 import { CalendarDays, MapPin, Ticket, CheckCircle2, Hourglass, ArrowUpRight } from "lucide-react";
-import { formatDate, isOptimizableImage } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
+import HeroImage from "@/components/ui/HeroImage";
 import { mapsUrl } from "@/lib/maps";
 import type { Metadata } from "next";
 import Badge from "@/components/ui/Badge";
@@ -66,11 +66,7 @@ export default async function EvenimentPage({ params }: Props) {
           ]),
         ]}
       />
-      {ev.imageUrl && (
-        <div className="relative w-full aspect-[16/9] rounded-2xl mb-6 overflow-hidden bg-cream/40">
-          <Image src={ev.imageUrl} alt={ev.title} fill priority sizes="(max-width: 768px) 100vw, 672px" className="object-cover" unoptimized={!isOptimizableImage(ev.imageUrl)} />
-        </div>
-      )}
+      {ev.imageUrl && <HeroImage src={ev.imageUrl} alt={ev.title} className="mb-6" />}
       {isEnded && (
         <div className="flex items-center gap-2 bg-cream/50 border border-hairline text-muted rounded-xl px-4 py-3 mb-4 text-sm font-medium">
           <Hourglass className="w-4 h-4 flex-shrink-0" aria-hidden />

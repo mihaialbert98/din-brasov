@@ -17,6 +17,7 @@ export type ReservationHour = {
   seatsPerSlot: number;
   seatsInside: number | null;
   seatsOutside: number | null;
+  enabled: boolean;
 };
 
 /** Whether a restaurant splits reservations into interior/terasă areas. */
@@ -65,6 +66,7 @@ export async function getReservationHours(restaurantId: string): Promise<Reserva
       seatsPerSlot: reservationHours.seatsPerSlot,
       seatsInside: reservationHours.seatsInside,
       seatsOutside: reservationHours.seatsOutside,
+      enabled: reservationHours.enabled,
     })
     .from(reservationHours)
     .where(eq(reservationHours.restaurantId, restaurantId));
@@ -325,7 +327,7 @@ export async function availableSlotsForDay(
   excludeReservationId?: string,
 ): Promise<string[]> {
   const day = new Date(`${dateStr}T00:00:00`).getDay();
-  const hours = (await getReservationHours(restaurantId)).filter((h) => h.dayOfWeek === day);
+  const hours = (await getReservationHours(restaurantId)).filter((h) => h.dayOfWeek === day && h.enabled);
   if (hours.length === 0) return [];
 
   // Tables mode uses the table-inventory algorithm instead of the seat pool.
@@ -463,7 +465,7 @@ export async function assignTablesFor(
   excludeReservationId?: string,
 ): Promise<string[] | null> {
   const day = new Date(`${dateStr}T00:00:00`).getDay();
-  const hours = (await getReservationHours(restaurantId)).filter((h) => h.dayOfWeek === day);
+  const hours = (await getReservationHours(restaurantId)).filter((h) => h.dayOfWeek === day && h.enabled);
   if (hours.length === 0) return null;
   if (!slotsWithCapacity(hours, area).has(time)) return null;
 
@@ -510,6 +512,65 @@ export async function slotAreaAvailability(
     availableSlotsForDay(restaurantId, dateStr, partySize, "outside"),
   ]);
   return { inside: inside.includes(time), outside: outside.includes(time) };
+}
+
+/**
+ * SEATS MODE: by how many seats a party would exceed the slot's capacity at the
+ * tightest overlapping moment (0 = fits). Powers the staff override warning
+ * ("depășește cu N locuri"). Excludes the reservation being edited.
+ */
+async function seatOverflowForSlot(
+  restaurantId: string,
+  dateStr: string,
+  time: string,
+  partySize: number,
+  area?: Area,
+  excludeReservationId?: string,
+): Promise<number> {
+  const day = new Date(`${dateStr}T00:00:00`).getDay();
+  const hours = (await getReservationHours(restaurantId)).filter((h) => h.dayOfWeek === day && h.enabled);
+  if (hours.length === 0) return 0;
+  const turn = await getTurnMinutes(restaurantId);
+
+  const booked = await db
+    .select({ time: reservations.time, partySize: reservations.partySize, area: reservations.area })
+    .from(reservations)
+    .where(
+      and(
+        eq(reservations.restaurantId, restaurantId),
+        eq(reservations.date, dateStr),
+        inArray(reservations.status, ["pending", "confirmed"]),
+        excludeReservationId ? ne(reservations.id, excludeReservationId) : undefined,
+      ),
+    );
+  const windows = booked
+    .filter((b) => !area || b.area === area)
+    .map((b) => ({ start: toMinutes(b.time), end: toMinutes(b.time) + turn, size: b.partySize }));
+  const takenAt = (tick: number) => windows.reduce((sum, w) => (tick >= w.start && tick < w.end ? sum + w.size : sum), 0);
+  const capacityAt = (tick: number) => {
+    let cap = 0;
+    for (const h of hours) {
+      const s = toMinutes(h.startTime), e = toMinutes(h.endTime);
+      if (tick >= s && tick <= e) cap = Math.max(cap, windowCapacity(h, area));
+    }
+    return cap;
+  };
+
+  const startMin = toMinutes(time);
+  let worst = 0;
+  for (let t = startMin; t < startMin + turn; t += CAPACITY_TICK) {
+    const cap = capacityAt(t);
+    if (cap > 0) worst = Math.max(worst, takenAt(t) + partySize - cap);
+  }
+  return Math.max(0, worst);
+}
+
+/** "…cu N locuri" phrasing for an overflow warning (the modal's override button
+ * supplies the "save anyway" affordance, so the reason just states the fact). */
+function overflowReason(over: number): string {
+  return over > 0
+    ? `Depășește capacitatea slotului cu ${over} ${over === 1 ? "loc" : "locuri"}.`
+    : "Slotul este plin pentru acest număr de persoane.";
 }
 
 /**
@@ -574,7 +635,7 @@ export async function createManualReservation(
 
   // Slot must exist in the day's hours (even a forced booking needs a real time).
   const day = new Date(`${input.date}T00:00:00`).getDay();
-  const hours = (await getReservationHours(restaurantId)).filter((h) => h.dayOfWeek === day);
+  const hours = (await getReservationHours(restaurantId)).filter((h) => h.dayOfWeek === day && h.enabled);
   const caps = slotsWithCapacity(hours, area);
   if (!caps.has(input.time)) {
     return { ok: false, reason: "Ora nu este într-un interval de program." };
@@ -593,7 +654,8 @@ export async function createManualReservation(
     } else {
       const available = await availableSlotsForDay(restaurantId, input.date, input.partySize, area);
       if (!available.includes(input.time)) {
-        return { ok: false, reason: "Slotul este plin pentru acest număr de persoane.", overridable: true };
+        const over = await seatOverflowForSlot(restaurantId, input.date, input.time, input.partySize, area);
+        return { ok: false, reason: overflowReason(over), overridable: true };
       }
     }
   } else if (mode === "tables") {
@@ -649,9 +711,9 @@ export async function updateReservation(
     return { ok: false, reason: "Rezervarea nu mai poate fi modificată." };
   }
 
+  // Staff may exceed the website's max party size — only sanity-bound (≥1). The slot
+  // capacity is still checked below, but as an overridable warning, not a hard block.
   if (input.partySize < 1) return { ok: false, reason: "Număr de persoane invalid." };
-  const cap = await getMaxPartySize(restaurantId);
-  if (input.partySize > cap) return { ok: false, reason: `Numărul de persoane trebuie să fie între 1 și ${cap}.` };
 
   // No moving into the past (Bucharest-local day).
   if (input.date < nowInReservationTZ().date) return { ok: false, reason: "Data trebuie să fie în viitor." };
@@ -660,7 +722,7 @@ export async function updateReservation(
 
   // The new time must fall within the day's program.
   const day = new Date(`${input.date}T00:00:00`).getDay();
-  const hours = (await getReservationHours(restaurantId)).filter((h) => h.dayOfWeek === day);
+  const hours = (await getReservationHours(restaurantId)).filter((h) => h.dayOfWeek === day && h.enabled);
   if (!slotsWithCapacity(hours, area).has(input.time)) {
     return { ok: false, reason: "Ora nu este într-un interval de program." };
   }
@@ -678,7 +740,8 @@ export async function updateReservation(
     } else {
       const available = await availableSlotsForDay(restaurantId, input.date, input.partySize, area, reservationId);
       if (!available.includes(input.time)) {
-        return { ok: false, reason: "Slotul este plin pentru acest număr de persoane.", overridable: true };
+        const over = await seatOverflowForSlot(restaurantId, input.date, input.time, input.partySize, area, reservationId);
+        return { ok: false, reason: overflowReason(over), overridable: true };
       }
     }
   } else if (mode === "tables") {
