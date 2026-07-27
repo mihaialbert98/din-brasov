@@ -1,9 +1,8 @@
 import Link from "next/link";
-import Image from "next/image";
 import { MapPin, CalendarDays } from "lucide-react";
-import { isOptimizableImage } from "@/lib/utils";
-import { cardShell, cardImageFrame, cardImageZoom } from "@/lib/ui";
+import { cardShell, cardImageFrame } from "@/lib/ui";
 import Badge from "@/components/ui/Badge";
+import FramedImage from "@/components/ui/FramedImage";
 
 type Props = {
   event: {
@@ -66,16 +65,7 @@ export default function EventCard({ event, compact = false }: Props) {
       {/* Cover with the date badge overlaid; a calm fallback keeps cards uniform. */}
       <div className="relative">
         {event.imageUrl ? (
-          <div className={cardImageFrame}>
-            <Image
-              src={event.imageUrl}
-              alt={event.title}
-              fill
-              sizes="(max-width: 640px) 100vw, 50vw"
-              className={cardImageZoom}
-              unoptimized={!isOptimizableImage(event.imageUrl)}
-            />
-          </div>
+          <FramedImage src={event.imageUrl} alt={event.title} sizes="(max-width: 640px) 100vw, 50vw" frameClassName={cardImageFrame} zoom />
         ) : (
           <div className="w-full aspect-[3/2] bg-gradient-to-br from-cream/70 to-accent-soft flex items-center justify-center">
             <CalendarDays className="w-12 h-12 text-accent/40" aria-hidden />

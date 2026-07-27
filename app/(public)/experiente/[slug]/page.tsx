@@ -1,11 +1,10 @@
 import { notFound } from "next/navigation";
-import Image from "next/image";
 import { ArrowUpRight } from "lucide-react";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { experiences } from "@/lib/db/schema";
-import { isOptimizableImage } from "@/lib/utils";
 import Badge from "@/components/ui/Badge";
+import HeroImage from "@/components/ui/HeroImage";
 import type { Metadata } from "next";
 
 type Props = { params: Promise<{ slug: string }> };
@@ -30,19 +29,7 @@ export default async function ExperientaPage({ params }: Props) {
 
   return (
     <article className="max-w-2xl mx-auto px-4 py-10">
-      {exp.imageUrl && (
-        <div className="relative w-full aspect-[16/9] rounded-2xl mb-6 overflow-hidden bg-cream/40">
-          <Image
-            src={exp.imageUrl}
-            alt={exp.title}
-            fill
-            priority
-            sizes="(max-width: 768px) 100vw, 672px"
-            className="object-cover"
-            unoptimized={!isOptimizableImage(exp.imageUrl)}
-          />
-        </div>
-      )}
+      {exp.imageUrl && <HeroImage src={exp.imageUrl} alt={exp.title} className="mb-6" />}
 
       {exp.category && (
         <Badge variant="category" category={exp.category}>

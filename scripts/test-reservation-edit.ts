@@ -48,7 +48,7 @@ async function main() {
   const [r] = await db.insert(restaurants).values({
     name: "ResEdit", slug: `${P}r`, placeId: pl.id, status: "active",
     reservationsEnabledByAdmin: true, reservationsEnabledByOwner: true,
-    reservationCapacityMode: "seats", reservationTurnMinutes: 90, reservationMaxPartySize: 20,
+    reservationCapacityMode: "seats", reservationTurnMinutes: 90, reservationMaxPartySize: 4,
   }).returning({ id: restaurants.id });
   await db.insert(reservationHours).values({ restaurantId: r.id, dayOfWeek: dow, startTime: "17:00", endTime: "22:00", slotMinutes: 30, seatsPerSlot: 6 });
 
@@ -59,9 +59,10 @@ async function main() {
   sec("1. Seats mode — exclude-self (own seats don't block, others do)");
   let res = await updateReservation(r.id, a.id, { date, time: "19:00", partySize: 3 }, false);
   ok(res.ok, "shrink A 4→3 at the SAME full slot succeeds (its own 4 seats are excluded)");
-  // A=3, B=2 → 5/6. Grow A to 5 → B's 2 + 5 = 7 > 6 → blocked (B still counts).
+  // A=3, B=2 → 5/6. Grow A to 5 → B's 2 + 5 = 7 > 6 → blocked by 1, with the amount.
   res = await updateReservation(r.id, a.id, { date, time: "19:00", partySize: 5 }, false);
-  ok(!res.ok && (res as any).overridable, "grow A to 5 fails — other bookings still count (overridable)");
+  ok(!res.ok && (res as any).overridable && /cu 1 loc/.test((res as any).reason ?? ""),
+    `grow A to 5 warns "exceeds by 1 loc" (overridable) — got "${!res.ok ? (res as any).reason : "ok"}"`);
   res = await updateReservation(r.id, a.id, { date, time: "19:00", partySize: 5 }, true);
   ok(res.ok, "force overrides the full slot");
   await updateReservation(r.id, a.id, { date, time: "19:00", partySize: 2 }, true); // reset
@@ -83,6 +84,17 @@ async function main() {
   ok(!(await updateReservation(r.id, d.id, { date, time: "18:30", partySize: 2 }, false)).ok, "a cancelled reservation cannot be edited");
   ok(!(await updateReservation(r.id, a.id, { date: "2020-01-01", time: "19:00", partySize: 2 }, false)).ok, "cannot move to a past date");
   ok(!(await updateReservation(r.id, "nope-id", { date, time: "19:00", partySize: 2 }, false)).ok, "unknown reservation id → not found");
+
+  sec("4b. Staff may exceed the website max party (4) + overflow amount");
+  // A sits alone at 21:00 (free slot, cap 6). Party 5 > website max 4 but fits capacity → allowed.
+  let big = await updateReservation(r.id, a.id, { date, time: "21:00", partySize: 5 }, false);
+  ok(big.ok, "party 5 (> website max 4) is allowed for staff when capacity permits");
+  // Party 8 exceeds the 6-seat slot by 2 → overridable warning naming the amount.
+  big = await updateReservation(r.id, a.id, { date, time: "21:00", partySize: 8 }, false);
+  ok(!big.ok && (big as any).overridable && /cu 2 loc/.test((big as any).reason ?? ""),
+    `party 8 warns "exceeds by 2 locuri" — got "${!big.ok ? (big as any).reason : "ok"}"`);
+  ok((await updateReservation(r.id, a.id, { date, time: "21:00", partySize: 8 }, true)).ok, "force saves the over-capacity party");
+  await updateReservation(r.id, a.id, { date, time: "21:00", partySize: 2 }, true); // reset
 
   // ── Tables mode: M1(2), M2(2) joinable, maxJoin 2, turn 90 ──────────────────
   sec("5. Tables mode — exclude-self + re-assignment");

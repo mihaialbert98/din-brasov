@@ -54,6 +54,66 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   return NextResponse.json({ ok: true });
 }
 
+const patchSchema = z.object({
+  hourId: z.string().min(1),
+  // Edit the window/capacity (all optional) …
+  startTime: z.string().regex(HHMM).optional(),
+  endTime: z.string().regex(HHMM).optional(),
+  slotMinutes: z.number().int().min(10).max(240).optional(),
+  seatsPerSlot: z.number().int().min(1).max(200).optional(),
+  seatsInside: z.number().int().min(0).max(200).nullable().optional(),
+  seatsOutside: z.number().int().min(0).max(200).nullable().optional(),
+  // … and/or pause/resume it.
+  enabled: z.boolean().optional(),
+});
+
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const session = await auth();
+  const role = (session?.user as any)?.role as string | undefined;
+  const gate = await authorizeReservationSettings(session, role, id);
+  if ("error" in gate) return NextResponse.json({ error: gate.error }, { status: gate.status });
+
+  const parsed = patchSchema.safeParse(await req.json().catch(() => ({})));
+  if (!parsed.success) return NextResponse.json({ error: "Date invalide." }, { status: 400 });
+  const { hourId, ...changes } = parsed.data;
+  if (Object.keys(changes).length === 0) {
+    return NextResponse.json({ error: "Nicio modificare." }, { status: 400 });
+  }
+
+  // The interval must belong to this restaurant.
+  const [row] = await db
+    .select({ dayOfWeek: reservationHours.dayOfWeek, startTime: reservationHours.startTime, endTime: reservationHours.endTime })
+    .from(reservationHours)
+    .where(and(eq(reservationHours.id, hourId), eq(reservationHours.restaurantId, id)))
+    .limit(1);
+  if (!row) return NextResponse.json({ error: "Interval negăsit." }, { status: 404 });
+
+  // Resolve the effective window after the edit (fall back to the stored values).
+  const startTime = changes.startTime ?? row.startTime;
+  const endTime = changes.endTime ?? row.endTime;
+  if (startTime >= endTime) {
+    return NextResponse.json({ error: "Ora de început trebuie să fie înainte de ora de sfârșit." }, { status: 400 });
+  }
+
+  // Overlap check against OTHER windows on the same day (exclude this one).
+  const sameDay = await db
+    .select({ id: reservationHours.id, startTime: reservationHours.startTime, endTime: reservationHours.endTime })
+    .from(reservationHours)
+    .where(and(eq(reservationHours.restaurantId, id), eq(reservationHours.dayOfWeek, row.dayOfWeek)));
+  const overlaps = sameDay.some((w) => w.id !== hourId && startTime < w.endTime && endTime > w.startTime);
+  if (overlaps) {
+    return NextResponse.json({ error: "Acest interval se suprapune cu unul existent în aceeași zi." }, { status: 409 });
+  }
+
+  await db.update(reservationHours).set(changes).where(and(eq(reservationHours.id, hourId), eq(reservationHours.restaurantId, id)));
+  const label = changes.enabled === false ? "a dezactivat un interval de program"
+    : changes.enabled === true ? "a reactivat un interval de program"
+    : "a modificat un interval de program";
+  await auditAdminReservationChange(session, role, id, label);
+  return NextResponse.json({ ok: true });
+}
+
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await auth();

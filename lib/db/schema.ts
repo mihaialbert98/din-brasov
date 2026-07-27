@@ -772,6 +772,10 @@ export const reservationHours = pgTable(
     // Per-area seat capacities, used only when the restaurant enabled areas.
     seatsInside: integer("seats_inside"),
     seatsOutside: integer("seats_outside"),
+    // When false, the interval is kept but paused — it stops offering new bookings
+    // (excluded from availability) without being deleted; existing reservations are
+    // untouched. Re-enabling restores it exactly.
+    enabled: boolean("enabled").notNull().default(true),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => [index("reservation_hours_restaurant_idx").on(t.restaurantId)]

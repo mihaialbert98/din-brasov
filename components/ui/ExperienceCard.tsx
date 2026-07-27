@@ -1,9 +1,8 @@
 import Link from "next/link";
-import Image from "next/image";
 import { Compass, ArrowRight } from "lucide-react";
-import { isOptimizableImage } from "@/lib/utils";
-import { cardShell, cardImageFrame, cardImageZoom } from "@/lib/ui";
+import { cardShell, cardImageFrame } from "@/lib/ui";
 import Badge from "@/components/ui/Badge";
+import FramedImage from "@/components/ui/FramedImage";
 
 type Props = {
   experience: {
@@ -20,16 +19,7 @@ export default function ExperienceCard({ experience: exp }: Props) {
   return (
     <Link href={`/experiente/${exp.slug}`} className={cardShell("flex flex-col")}>
       {exp.imageUrl ? (
-        <div className={cardImageFrame}>
-          <Image
-            src={exp.imageUrl}
-            alt={exp.title}
-            fill
-            sizes="(max-width: 640px) 100vw, 33vw"
-            className={cardImageZoom}
-            unoptimized={!isOptimizableImage(exp.imageUrl)}
-          />
-        </div>
+        <FramedImage src={exp.imageUrl} alt={exp.title} sizes="(max-width: 640px) 100vw, 33vw" frameClassName={cardImageFrame} zoom />
       ) : (
         <div className="w-full aspect-[3/2] bg-gradient-to-br from-cream/70 to-accent-soft flex items-center justify-center">
           <Compass className="w-11 h-11 text-accent/40" aria-hidden />
