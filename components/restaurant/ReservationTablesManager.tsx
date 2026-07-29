@@ -31,6 +31,11 @@ export default function ReservationTablesManager({
   const base = `/api/restaurants/${restaurantId}/reservation-tables`;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  // Delete confirmation for a table that future guests are seated at.
+  const [confirmDelete, setConfirmDelete] = useState<
+    { table: ResTableRow; affected: number; bookings: { date: string; time: string; partySize: number; guestName: string }[]; isLastTable: boolean } | null
+  >(null);
 
   // New-table draft.
   const [label, setLabel] = useState("");
@@ -43,9 +48,10 @@ export default function ReservationTablesManager({
     setError(null);
     try {
       const res = await fetch(url, { method, headers: body ? { "Content-Type": "application/json" } : undefined, body: body ? JSON.stringify(body) : undefined });
-      if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error ?? "Eroare."); return false; }
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(d.error ?? "Eroare."); return null; }
       router.refresh();
-      return true;
+      return d ?? {};
     } finally { setBusy(false); }
   }
 
@@ -53,8 +59,62 @@ export default function ReservationTablesManager({
     const nSeats = seats === "" ? 0 : seats;
     if (!label.trim()) { setError("Dă un nume mesei (ex: Masa 1)."); return; }
     if (nSeats < 1) { setError("O masă are cel puțin 1 loc."); return; }
-    const ok = await call(base, "POST", { label: label.trim(), seats: nSeats, joinable, area: areasEnabled ? area : null });
-    if (ok) { setLabel(""); setSeats(2); setJoinable(false); }
+    const d = await call(base, "POST", { label: label.trim(), seats: nSeats, joinable, area: areasEnabled ? area : null });
+    if (d) {
+      setLabel(""); setSeats(2); setJoinable(false);
+      // The new table may have seated bookings that were waiting without one.
+      setNotice(d.assignedNow > 0 ? `Masă adăugată. Am atribuit mese pentru ${d.assignedNow} ${d.assignedNow === 1 ? "rezervare existentă" : "rezervări existente"}.` : null);
+    }
+  }
+
+  /** Step 1: try to delete. If future guests sit there, the API refuses (409) and we
+   *  ask the owner, offering the safe "Dezactivează" first. */
+  async function deleteTable(t: ResTableRow) {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch(`${base}?tableId=${t.id}`, { method: "DELETE" });
+      const d = await res.json().catch(() => ({}));
+      if (res.status === 409 && d.needsConfirm) {
+        setConfirmDelete({ table: t, affected: d.affected, bookings: d.bookings ?? [], isLastTable: !!d.isLastTable });
+        return;
+      }
+      if (!res.ok) { setError(d.error ?? "Eroare."); return; }
+      router.refresh();
+      if (d.isLastTable) setNotice("Masă ștearsă. Nu mai ai nicio masă — rezervările online sunt oprite până adaugi una.");
+    } finally { setBusy(false); }
+  }
+
+  /** Step 2: the owner confirmed — delete, then re-seat the affected bookings. */
+  async function forceDelete() {
+    if (!confirmDelete) return;
+    const t = confirmDelete.table;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`${base}?tableId=${t.id}&force=true`, { method: "DELETE" });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(d.error ?? "Eroare."); return; }
+      setConfirmDelete(null);
+      router.refresh();
+      const moved = d.reassigned > 0 ? `Am mutat ${d.reassigned} ${d.reassigned === 1 ? "rezervare" : "rezervări"} pe alte mese.` : "";
+      const stuck = (d.unassigned ?? []).length
+        ? ` ${d.unassigned.length} ${d.unassigned.length === 1 ? "rezervare nu a încăput nicăieri" : "rezervări nu au încăput nicăieri"} — sună clienții: ` +
+          d.unassigned.map((u: any) => `${u.date} ${u.time} ${u.guestName} (${u.partySize}p)`).join("; ")
+        : "";
+      setNotice(`Masa „${t.label}" a fost ștearsă. ${moved}${stuck}`.trim());
+      if (stuck) setError(`Atenție:${stuck}`);
+    } finally { setBusy(false); }
+  }
+
+  /** The safe alternative offered in the dialog. */
+  async function deactivateInstead() {
+    if (!confirmDelete) return;
+    const t = confirmDelete.table;
+    setConfirmDelete(null);
+    const d = await call(`${base}?tableId=${t.id}`, "PATCH", { isActive: false });
+    if (d) setNotice(`Masa „${t.label}" a fost dezactivată. Rezervările existente rămân pe ea; nimeni altcineva nu o poate rezerva.`);
   }
 
   const totalSeats = initialTables.filter((t) => t.isActive).reduce((s, t) => s + t.seats, 0);
@@ -72,10 +132,20 @@ export default function ReservationTablesManager({
       </p>
 
       {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-3">{error}</p>}
+      {notice && <p className="text-sm text-green-800 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mb-3">{notice}</p>}
+      {initialTables.length === 0 && (
+        <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+          Nu ai nicio masă — rezervările online sunt oprite. Adaugă cel puțin o masă sau treci pe „Capacitate totală”.
+        </p>
+      )}
 
       {initialTables.length > 0 && (
         <ul className="divide-y divide-gray-100 mb-4">
-          {initialTables.map((t) => (
+          {initialTables.map((t) => {
+            // Terrace tables are parked while zones are off — the "Interior & terasă"
+            // toggle is what closes/reopens the terrace, so it governs them, not this row.
+            const parkedTerrace = !areasEnabled && t.area === "outside";
+            return (
             <li key={t.id} className={`py-2.5 flex items-center gap-3 ${t.isActive ? "" : "opacity-50"}`}>
               <span className="font-medium text-gray-900 flex-1 truncate">{t.label}</span>
               <span className="inline-flex items-center gap-1 text-sm text-gray-600"><Users className="w-3.5 h-3.5" aria-hidden /> {t.seats}</span>
@@ -85,16 +155,27 @@ export default function ReservationTablesManager({
                 </span>
               )}
               {t.joinable && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">se poate uni</span>}
-              <button onClick={() => call(`${base}?tableId=${t.id}`, "PATCH", { isActive: !t.isActive })} disabled={busy}
-                className="text-xs border border-gray-300 text-gray-600 px-2 py-1 rounded hover:bg-gray-50 disabled:opacity-50">
-                {t.isActive ? "Dezactivează" : "Activează"}
-              </button>
-              <button onClick={() => { if (confirm(`Ștergi „${t.label}"?`)) call(`${base}?tableId=${t.id}`, "DELETE"); }} disabled={busy}
+              {parkedTerrace ? (
+                <span
+                  className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded"
+                  title="Activează „Interior & terasă” din setări ca să folosești din nou mesele de pe terasă."
+                >
+                  <Trees className="w-3 h-3 flex-shrink-0" aria-hidden />
+                  Masă setată pentru terasă — activează „Interior &amp; terasă”
+                </span>
+              ) : (
+                <button onClick={() => call(`${base}?tableId=${t.id}`, "PATCH", { isActive: !t.isActive })} disabled={busy}
+                  className="text-xs border border-gray-300 text-gray-600 px-2 py-1 rounded hover:bg-gray-50 disabled:opacity-50">
+                  {t.isActive ? "Dezactivează" : "Activează"}
+                </button>
+              )}
+              <button onClick={() => deleteTable(t)} disabled={busy}
                 className="text-gray-300 hover:text-red-600 disabled:opacity-50" aria-label="Șterge masa">
                 <Trash2 className="w-4 h-4" aria-hidden />
               </button>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
 
@@ -122,6 +203,51 @@ export default function ReservationTablesManager({
           <Plus className="w-4 h-4" aria-hidden /> Adaugă masă
         </button>
       </div>
+
+      {/* Deleting a table future guests are seated at — offer the safe option first. */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40" onClick={() => setConfirmDelete(null)}>
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-semibold text-gray-900 text-lg">Ștergi masa „{confirmDelete.table.label}”?</h3>
+            <p className="text-sm text-gray-600 mt-2">
+              {confirmDelete.affected === 1 ? "O rezervare viitoare este" : `${confirmDelete.affected} rezervări viitoare sunt`} la această masă.
+              Dacă o ștergi, încercăm să {confirmDelete.affected === 1 ? "o mutăm" : "le mutăm"} pe alte mese libere — iar
+              cele care nu încap îți vor fi afișate ca să suni clienții.
+            </p>
+            {confirmDelete.isLastTable && (
+              <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
+                Aceasta e ultima masă. Fără mese, nu se mai pot face rezervări online în modul „Mese individuale”.
+              </p>
+            )}
+            {confirmDelete.bookings.length > 0 && (
+              <ul className="mt-3 text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 max-h-32 overflow-y-auto">
+                {confirmDelete.bookings.map((b, i) => (
+                  <li key={i}>{b.date} · {b.time} — {b.guestName} ({b.partySize} pers.)</li>
+                ))}
+              </ul>
+            )}
+            <p className="text-sm text-gray-600 mt-3">
+              Dacă masa e scoasă din uz doar temporar, <strong>dezactiveaz-o</strong> — rezervările rămân pe ea și nimeni altcineva nu o poate rezerva.
+            </p>
+            <div className="flex flex-col gap-2 mt-5">
+              <button onClick={deactivateInstead} disabled={busy}
+                className="w-full bg-[#1a1a1a] text-white font-semibold py-2.5 rounded-lg hover:bg-gray-700 disabled:opacity-60">
+                Dezactivează masa (recomandat)
+              </button>
+              <div className="flex gap-2">
+                <button onClick={forceDelete} disabled={busy}
+                  className="flex-1 border border-red-300 text-red-600 font-medium py-2.5 rounded-lg hover:bg-red-50 disabled:opacity-60">
+                  Șterge oricum
+                </button>
+                <button onClick={() => setConfirmDelete(null)}
+                  className="px-4 py-2.5 rounded-lg border border-gray-300 text-gray-600 font-medium hover:bg-gray-50">
+                  Anulează
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

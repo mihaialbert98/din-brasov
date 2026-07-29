@@ -41,6 +41,24 @@ export default function ReservationTableGroupsManager({
   // Master switch: only tables marked "se poate uni" can be grouped.
   const joinableTables = tables.filter((t) => t.isActive && t.joinable);
   const labelOf = (id: string) => tables.find((t) => t.id === id)?.label ?? "?";
+  const areaOf = (id: string) => tables.find((t) => t.id === id)?.area ?? null;
+
+  // A group can't mix interior + terasă (they can't be pushed together). Enforce +
+  // hint only when the restaurant actually uses areas (some table has one).
+  const areasInPlay = joinableTables.some((t) => t.area);
+  const areaLabel = (a: string | null) => (a === "inside" ? "interior" : a === "outside" ? "terasă" : "");
+  // The area a selection is locked to (undefined = nothing selected yet).
+  const lockedArea = (sel: Set<string>): string | null | undefined => {
+    const first = [...sel][0];
+    return first === undefined ? undefined : areaOf(first);
+  };
+  // Disable a table only when it's a different area than what's already picked — but
+  // never disable an already-selected one, so a legacy mixed group can still be fixed.
+  const chipDisabled = (sel: Set<string>, t: ResTableRow): boolean => {
+    if (sel.has(t.id)) return false;
+    const locked = lockedArea(sel);
+    return locked !== undefined && (t.area ?? null) !== locked;
+  };
 
   async function call(url: string, method: string, body?: unknown) {
     setBusy(true);
@@ -78,8 +96,12 @@ export default function ReservationTableGroupsManager({
   }
 
   const fieldClass = "border border-gray-300 rounded-lg px-3 h-[38px] text-sm focus:outline-none focus:border-[#c84b1e]";
-  const chip = (checked: boolean) =>
-    `inline-flex items-center gap-1.5 text-sm px-2.5 py-1 rounded-lg border cursor-pointer transition-colors ${checked ? "border-[#c84b1e] bg-[#c84b1e]/5 text-[#c84b1e]" : "border-gray-300 text-gray-600 hover:bg-gray-50"}`;
+  const chip = (checked: boolean, disabled = false) =>
+    `inline-flex items-center gap-1.5 text-sm px-2.5 py-1 rounded-lg border transition-colors ${
+      disabled
+        ? "opacity-40 cursor-not-allowed border-gray-200 text-gray-400"
+        : `cursor-pointer ${checked ? "border-[#c84b1e] bg-[#c84b1e]/5 text-[#c84b1e]" : "border-gray-300 text-gray-600 hover:bg-gray-50"}`
+    }`;
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-5">
@@ -93,6 +115,11 @@ export default function ReservationTableGroupsManager({
         care nu sunt în niciun grup se combină între ele până la limita „Mese maxime unite". Fără grupuri, se aplică
         doar acea limită globală.
       </p>
+      {areasInPlay && (
+        <p className="text-xs text-gray-500 -mt-2 mb-4">
+          Un grup poate conține mese dintr-o singură zonă — interiorul și terasa nu se pot alătura.
+        </p>
+      )}
 
       {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-3">{error}</p>}
 
@@ -108,12 +135,16 @@ export default function ReservationTableGroupsManager({
                     <div className="space-y-2">
                       <input value={editLabel} onChange={(e) => setEditLabel(e.target.value)} maxLength={60} className={`${fieldClass} w-full`} />
                       <div className="flex flex-wrap gap-2">
-                        {joinableTables.map((t) => (
-                          <label key={t.id} className={chip(editSel.has(t.id))}>
-                            <input type="checkbox" checked={editSel.has(t.id)} onChange={() => toggle(editSel, setEditSel, t.id)} className="accent-[#c84b1e]" />
-                            {t.label} <span className="text-xs opacity-60">({t.seats})</span>
-                          </label>
-                        ))}
+                        {joinableTables.map((t) => {
+                          const disabled = chipDisabled(editSel, t);
+                          return (
+                            <label key={t.id} className={chip(editSel.has(t.id), disabled)}>
+                              <input type="checkbox" checked={editSel.has(t.id)} disabled={disabled} onChange={() => toggle(editSel, setEditSel, t.id)} className="accent-[#c84b1e]" />
+                              {t.label} <span className="text-xs opacity-60">({t.seats})</span>
+                              {areasInPlay && t.area && <span className="text-[10px] uppercase tracking-wide opacity-60">· {areaLabel(t.area)}</span>}
+                            </label>
+                          );
+                        })}
                       </div>
                       <div className="flex gap-2">
                         <button onClick={saveEdit} disabled={busy} className="inline-flex items-center gap-1 bg-[#c84b1e] text-white text-sm h-8 px-3 rounded-lg hover:bg-[#d9603a] disabled:opacity-50"><Check className="w-4 h-4" aria-hidden /> Salvează</button>
@@ -143,12 +174,16 @@ export default function ReservationTableGroupsManager({
           <div className="border-t border-gray-100 pt-4 space-y-2">
             <input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} maxLength={60} placeholder="Nume grup (ex: Masa 1–2)" className={`${fieldClass} w-full`} />
             <div className="flex flex-wrap gap-2">
-              {joinableTables.map((t) => (
-                <label key={t.id} className={chip(newSel.has(t.id))}>
-                  <input type="checkbox" checked={newSel.has(t.id)} onChange={() => toggle(newSel, setNewSel, t.id)} className="accent-[#c84b1e]" />
-                  {t.label} <span className="text-xs opacity-60">({t.seats})</span>
-                </label>
-              ))}
+              {joinableTables.map((t) => {
+                const disabled = chipDisabled(newSel, t);
+                return (
+                  <label key={t.id} className={chip(newSel.has(t.id), disabled)}>
+                    <input type="checkbox" checked={newSel.has(t.id)} disabled={disabled} onChange={() => toggle(newSel, setNewSel, t.id)} className="accent-[#c84b1e]" />
+                    {t.label} <span className="text-xs opacity-60">({t.seats})</span>
+                    {areasInPlay && t.area && <span className="text-[10px] uppercase tracking-wide opacity-60">· {areaLabel(t.area)}</span>}
+                  </label>
+                );
+              })}
             </div>
             <button onClick={createGroup} disabled={busy} className="inline-flex items-center gap-1 bg-[#1a1a1a] text-white text-sm h-[38px] px-3 rounded-lg hover:bg-gray-700 disabled:opacity-50">
               <Plus className="w-4 h-4" aria-hidden /> Adaugă grup

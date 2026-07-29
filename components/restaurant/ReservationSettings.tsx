@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2, Plus, Power, CheckCircle2, Clock, Users, Home, Trees, LayoutGrid, Pause, Play, Pencil } from "lucide-react";
+import { Trash2, Plus, Power, CheckCircle2, Clock, Users, Home, Trees, LayoutGrid, Pause, Play, Pencil, X } from "lucide-react";
 import type { ReservationHour } from "@/lib/reservations";
 import ReservationTablesManager, { type ResTableRow } from "@/components/restaurant/ReservationTablesManager";
 import ReservationTableGroupsManager, { type GroupRow } from "@/components/restaurant/ReservationTableGroupsManager";
@@ -51,6 +51,13 @@ export default function ReservationSettings({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [editingHour, setEditingHour] = useState<ReservationHour | null>(null);
+  const [confirmTables, setConfirmTables] = useState(false);
+  const [confirmDisableAreas, setConfirmDisableAreas] = useState(false);
+  // Separate error for the "Adaugă interval" form so it shows next to that button,
+  // not only in the banner at the top of the settings (which is off-screen there).
+  const [hoursError, setHoursError] = useState<string | null>(null);
+  // Result of auto-assigning tables to existing bookings when switching to tables mode.
+  const [switchReport, setSwitchReport] = useState<{ assigned: number; unassigned: { date: string; time: string; partySize: number; guestName: string }[] } | null>(null);
 
   // New-window draft. Seat counts are `number | ""` so the field can be cleared
   // while typing (an empty string) instead of snapping to 0; coerced on save.
@@ -77,21 +84,21 @@ export default function ReservationSettings({
       body: JSON.stringify(next),
     });
     setBusy(false);
-    if (res.ok) { router.refresh(); return true; }
     const d = await res.json().catch(() => ({}));
+    if (res.ok) { router.refresh(); return d ?? {}; }
     setError(d.error ?? "Eroare.");
-    return false;
+    return null;
   }
 
   async function addHours() {
-    if (start >= end) { setError("Ora de început trebuie să fie înainte de cea de sfârșit."); return; }
+    if (start >= end) { setHoursError("Ora de început trebuie să fie înainte de cea de sfârșit."); return; }
     // Coerce empty inputs to sensible minimums at save time.
     const nSeats = seats === "" ? 1 : seats;
     const nIn = seatsIn === "" ? 0 : seatsIn;
     const nOut = seatsOut === "" ? 0 : seatsOut;
-    if (areas && nIn + nOut < 1) { setError("Adaugă cel puțin un loc la interior sau terasă."); return; }
+    if (areas && nIn + nOut < 1) { setHoursError("Adaugă cel puțin un loc la interior sau terasă."); return; }
     setBusy(true);
-    setError(null);
+    setHoursError(null);
     const body: Record<string, unknown> = { dayOfWeek: day, startTime: start, endTime: end, slotMinutes: slot };
     if (areas) { body.seatsInside = nIn; body.seatsOutside = nOut; body.seatsPerSlot = Math.max(1, nIn + nOut); }
     else { body.seatsPerSlot = nSeats; }
@@ -102,12 +109,19 @@ export default function ReservationSettings({
     });
     setBusy(false);
     if (res.ok) router.refresh();
-    else { const d = await res.json().catch(() => ({})); setError(d.error ?? "Eroare."); }
+    else { const d = await res.json().catch(() => ({})); setHoursError(d.error ?? "Eroare."); }
   }
 
   async function toggleAreas() {
-    const next = !areas;
-    if (await patchSettings({ areasEnabled: next })) setAreas(next);
+    // Enabling is harmless (splits capacity/tables per area). Disabling merges them
+    // back into one — reversible, but confirm so the owner knows what happens.
+    if (areas) { setConfirmDisableAreas(true); return; }
+    if (await patchSettings({ areasEnabled: true })) setAreas(true);
+  }
+
+  async function doDisableAreas() {
+    if (await patchSettings({ areasEnabled: false })) setAreas(false);
+    setConfirmDisableAreas(false);
   }
 
   async function removeHours(hourId: string) {
@@ -345,7 +359,12 @@ export default function ReservationSettings({
               ] as const).map((o) => (
                 <button
                   key={o.v}
-                  onClick={async () => { if (o.v === capacityMode) return; setCapacityMode(o.v); await patchSettings({ capacityMode: o.v }); }}
+                  onClick={async () => {
+                    if (o.v === capacityMode) return;
+                    // Switching to "Mese individuale" is a bigger change → confirm first.
+                    if (o.v === "tables") { setConfirmTables(true); return; }
+                    if (await patchSettings({ capacityMode: o.v })) setCapacityMode(o.v);
+                  }}
                   disabled={busy}
                   className={`text-left px-4 py-3 rounded-lg border-2 transition-colors disabled:opacity-60 ${capacityMode === o.v ? "border-[#c84b1e] bg-[#c84b1e]/5" : "border-gray-200 hover:border-gray-300"}`}
                 >
@@ -354,11 +373,34 @@ export default function ReservationSettings({
                 </button>
               ))}
             </div>
-            {capacityMode === "tables" && (
-              <p className="text-xs text-amber-700 mt-3">
-                Schimbă modul când ai puține rezervări viitoare — rezervările făcute în modul „capacitate
-                totală” nu au o masă atribuită.
-              </p>
+            {/* Result of the automatic table assignment done at the moment of the switch. */}
+            {switchReport && (
+              <div className={`mt-3 rounded-lg px-3 py-2 text-sm border ${switchReport.unassigned.length ? "bg-amber-50 border-amber-200 text-amber-800" : "bg-green-50 border-green-200 text-green-800"}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium">
+                      {switchReport.assigned > 0
+                        ? `Am atribuit mese pentru ${switchReport.assigned} ${switchReport.assigned === 1 ? "rezervare existentă" : "rezervări existente"}.`
+                        : "Nicio rezervare viitoare nu avea nevoie de masă."}
+                    </p>
+                    {switchReport.unassigned.length > 0 && (
+                      <>
+                        <p className="mt-1">
+                          {switchReport.unassigned.length === 1 ? "O rezervare nu a încăput" : `${switchReport.unassigned.length} rezervări nu au încăput`} la nicio masă — contactează clienții sau ajustează mesele:
+                        </p>
+                        <ul className="mt-1 list-disc list-inside">
+                          {switchReport.unassigned.map((u, i) => (
+                            <li key={i}>{u.date} · {u.time} — {u.guestName} ({u.partySize} pers.)</li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                  </div>
+                  <button onClick={() => setSwitchReport(null)} className="text-current opacity-50 hover:opacity-100 flex-shrink-0" aria-label="Închide">
+                    <X className="w-4 h-4" aria-hidden />
+                  </button>
+                </div>
+              </div>
             )}
           </div>
 
@@ -481,6 +523,7 @@ export default function ReservationSettings({
                   <Plus className="w-4 h-4" aria-hidden /> Adaugă
                 </button>
               </div>
+              {hoursError && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2 mt-3">{hoursError}</p>}
             </div>
           </div>
         </>
@@ -495,6 +538,70 @@ export default function ReservationSettings({
           onClose={() => setEditingHour(null)}
           onSaved={() => { setEditingHour(null); router.refresh(); }}
         />
+      )}
+
+      {confirmTables && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40" onClick={() => setConfirmTables(false)}>
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-semibold text-gray-900 text-lg">Treci la „Mese individuale”?</h3>
+            <p className="text-sm text-gray-600 mt-2">
+              Disponibilitatea va fi calculată după mese. Rezervărilor viitoare făcute în modul „Capacitate
+              totală” le atribuim automat mese, ca să nu se suprarezerve — data, ora și numărul de persoane
+              rămân neschimbate. Îți spunem dacă vreuna nu a încăput.
+            </p>
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={async () => {
+                  const d = await patchSettings({ capacityMode: "tables" });
+                  if (d) {
+                    setCapacityMode("tables");
+                    // Report what happened to bookings made in "capacitate totală".
+                    if (d.tableBackfill) setSwitchReport(d.tableBackfill);
+                  }
+                  setConfirmTables(false);
+                }}
+                disabled={busy}
+                className="flex-1 bg-[#c84b1e] text-white font-semibold py-2.5 rounded-lg hover:bg-[#d9603a] transition-colors disabled:opacity-60"
+              >
+                Confirmă schimbarea
+              </button>
+              <button
+                onClick={() => setConfirmTables(false)}
+                className="px-4 py-2.5 rounded-lg border border-gray-300 text-gray-600 font-medium hover:bg-gray-50"
+              >
+                Anulează
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmDisableAreas && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40" onClick={() => setConfirmDisableAreas(false)}>
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-semibold text-gray-900 text-lg">Dezactivezi zonele (interior & terasă)?</h3>
+            <p className="text-sm text-gray-600 mt-2">
+              {capacityMode === "tables"
+                ? "Mesele de pe terasă devin indisponibile pentru clienți (ca și cum terasa s-ar închide); mesele de la interior rămân. Rezervările existente rămân neschimbate. Reactivezi zonele oricând și mesele de pe terasă revin."
+                : "Capacitatea de la interior și terasă se combină într-un total unic. Rezervările existente rămân neschimbate. Poți reactiva zonele oricând — configurările pe zone revin (le poți ajusta după)."}
+            </p>
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={doDisableAreas}
+                disabled={busy}
+                className="flex-1 bg-[#c84b1e] text-white font-semibold py-2.5 rounded-lg hover:bg-[#d9603a] transition-colors disabled:opacity-60"
+              >
+                Dezactivează zonele
+              </button>
+              <button
+                onClick={() => setConfirmDisableAreas(false)}
+                className="px-4 py-2.5 rounded-lg border border-gray-300 text-gray-600 font-medium hover:bg-gray-50"
+              >
+                Anulează
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
