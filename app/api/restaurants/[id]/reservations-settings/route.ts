@@ -9,9 +9,9 @@ import { eq, and, isNull } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { restaurants, reservationHours } from "@/lib/db/schema";
+import { restaurants, reservationHours, reservationTables } from "@/lib/db/schema";
 import { authorizeReservationSettings } from "@/lib/restaurant-permissions";
-import { auditAdminReservationChange } from "@/lib/reservations";
+import { auditAdminReservationChange, backfillTableAssignments, type TableBackfillReport } from "@/lib/reservations";
 
 const schema = z.object({
   enabled: z.boolean().optional(),
@@ -38,7 +38,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!parsed.success) return NextResponse.json({ error: "Date invalide." }, { status: 400 });
 
   const [restaurant] = await db
-    .select({ adminGrant: restaurants.reservationsEnabledByAdmin })
+    .select({ adminGrant: restaurants.reservationsEnabledByAdmin, capacityMode: restaurants.reservationCapacityMode })
     .from(restaurants)
     .where(eq(restaurants.id, id))
     .limit(1);
@@ -77,8 +77,30 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       .where(and(eq(reservationHours.restaurantId, id), isNull(reservationHours.seatsInside), isNull(reservationHours.seatsOutside)));
   }
 
+  // TABLES mode: the areas toggle doubles as "terrace section on/off". Disabling areas
+  // deactivates the terrace (outside) tables so clients can't book them; re-enabling
+  // brings them back. Interior tables are untouched; seats mode ignores tables entirely.
+  if (parsed.data.areasEnabled !== undefined) {
+    const mode = parsed.data.capacityMode ?? restaurant.capacityMode;
+    if (mode === "tables") {
+      await db
+        .update(reservationTables)
+        .set({ isActive: parsed.data.areasEnabled })
+        .where(and(eq(reservationTables.restaurantId, id), eq(reservationTables.area, "outside")));
+    }
+  }
+
+  // Switching to tables mode: bookings made in seats mode hold no table, so they'd
+  // occupy nothing and the slot could be oversold. Give them real tables now (existing
+  // bookings keep their date/time/party/status — only a table is attached) and report
+  // any that couldn't be seated so the owner can handle them.
+  let tableBackfill: TableBackfillReport | undefined;
+  if (parsed.data.capacityMode === "tables" && restaurant.capacityMode !== "tables") {
+    tableBackfill = await backfillTableAssignments(id);
+  }
+
   // Audit: when a platform admin changes settings, email the acting admin.
   await auditAdminReservationChange(session, role, id, "setări (activare / mod / grup maxim)");
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, tableBackfill });
 }

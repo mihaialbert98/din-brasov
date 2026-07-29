@@ -206,20 +206,37 @@ export function canSeat(partySize: number, free: ResTable[], maxJoin: number, gr
     return null;
   };
 
+  // Physical correctness: a join may only combine tables from the SAME area — interior
+  // and terasă can't be pushed together. When areas are ON the pool is already single-
+  // area (a no-op); when areas are OFF but tables are area-tagged this still blocks a
+  // cross-area join; with no areas at all (every area null) it's one partition = as before.
+  const combineSameArea = (pool: ResTable[], cap: number): ResTable[][] => {
+    const byArea = new Map<string, ResTable[]>();
+    for (const t of pool) {
+      const key = t.area ?? "__none__";
+      const arr = byArea.get(key);
+      if (arr) arr.push(t); else byArea.set(key, [t]);
+    }
+    const out: ResTable[][] = [];
+    for (const arr of byArea.values()) {
+      const combo = combine(arr, cap);
+      if (combo) out.push(combo);
+    }
+    return out;
+  };
+
   // 2. Within each group: free JOINABLE members, up to ALL of them (group size is the
   //    cap). "se poate uni" is the master switch — a non-joinable table is never
   //    combined, even if it's still listed in a group.
   for (const g of groups) {
     const members = g.tableIds.map((id) => freeById.get(id)).filter((t): t is ResTable => !!t && t.joinable);
-    const combo = combine(members, members.length);
-    if (combo) candidates.push(combo);
+    candidates.push(...combineSameArea(members, members.length));
   }
 
   // 3. Loose pool: free joinable tables in NO group, up to the global maxJoin.
   const grouped = new Set(groups.flatMap((g) => g.tableIds));
   const loose = free.filter((t) => t.joinable && !grouped.has(t.id));
-  const looseCombo = combine(loose, maxJoin);
-  if (looseCombo) candidates.push(looseCombo);
+  candidates.push(...combineSameArea(loose, maxJoin));
 
   if (candidates.length === 0) return null;
 
@@ -495,6 +512,90 @@ export async function assignTablesFor(
   }
   const free = tables.filter((t) => !busy.has(t.id));
   return canSeat(partySize, free, maxJoin, groups);
+}
+
+/**
+ * Future live (pending/confirmed) bookings that are seated at a given table. Used
+ * before deleting a table: removing it would leave those guests with no table while
+ * silently freeing the slot for someone else (double-booking on arrival).
+ */
+export async function bookingsSeatedAtTable(restaurantId: string, tableId: string) {
+  const today = nowInReservationTZ().date;
+  const rows = await db
+    .select({
+      id: reservations.id,
+      date: reservations.date,
+      time: reservations.time,
+      partySize: reservations.partySize,
+      guestName: reservations.guestName,
+      assignedTableIds: reservations.assignedTableIds,
+    })
+    .from(reservations)
+    .where(
+      and(
+        eq(reservations.restaurantId, restaurantId),
+        gte(reservations.date, today),
+        inArray(reservations.status, ["pending", "confirmed"]),
+        isNotNull(reservations.assignedTableIds),
+      ),
+    )
+    .orderBy(asc(reservations.date), asc(reservations.time));
+  return rows
+    .filter((b) => parseTableIds(b.assignedTableIds).includes(tableId))
+    .map(({ assignedTableIds: _drop, ...b }) => b);
+}
+
+export type TableBackfillReport = {
+  assigned: number;
+  unassigned: { id: string; date: string; time: string; partySize: number; guestName: string }[];
+};
+
+/**
+ * Attach real tables to FUTURE bookings that have none. Used when a restaurant switches
+ * from "capacitate totală" to "mese individuale": those bookings were made without a
+ * table, so they would occupy nothing and the slot could be oversold (e.g. 15 people
+ * already booked, yet every table still looks free). Processes bookings chronologically
+ * so the earliest gets first pick, persisting each assignment so the next one sees it.
+ * NEVER changes a booking's date / time / party / status — it only attaches tables.
+ * Bookings that can't be seated are returned so the owner can handle them manually.
+ */
+export async function backfillTableAssignments(restaurantId: string): Promise<TableBackfillReport> {
+  const today = nowInReservationTZ().date;
+  const rows = await db
+    .select({
+      id: reservations.id,
+      date: reservations.date,
+      time: reservations.time,
+      partySize: reservations.partySize,
+      area: reservations.area,
+      guestName: reservations.guestName,
+    })
+    .from(reservations)
+    .where(
+      and(
+        eq(reservations.restaurantId, restaurantId),
+        gte(reservations.date, today),
+        inArray(reservations.status, ["pending", "confirmed"]),
+        isNull(reservations.assignedTableIds),
+      ),
+    )
+    .orderBy(asc(reservations.date), asc(reservations.time), asc(reservations.createdAt));
+
+  const report: TableBackfillReport = { assigned: 0, unassigned: [] };
+  for (const b of rows) {
+    const area = (b.area as Area | null) ?? undefined;
+    const ids = await assignTablesFor(restaurantId, b.date, b.time, b.partySize, area, b.id);
+    if (ids) {
+      await db
+        .update(reservations)
+        .set({ assignedTableIds: JSON.stringify(ids), updatedAt: new Date() })
+        .where(eq(reservations.id, b.id));
+      report.assigned++;
+    } else {
+      report.unassigned.push({ id: b.id, date: b.date, time: b.time, partySize: b.partySize, guestName: b.guestName });
+    }
+  }
+  return report;
 }
 
 /**

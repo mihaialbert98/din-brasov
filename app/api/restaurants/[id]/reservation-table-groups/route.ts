@@ -25,15 +25,22 @@ async function gate(id: string) {
   return { session, role, g };
 }
 
-/** Keep only ids that are JOINABLE reservation tables of THIS restaurant. Master
- *  switch: only "se poate uni" tables can be grouped. */
-async function validTableIds(restaurantId: string, ids: string[]): Promise<string[]> {
+/** Resolve the JOINABLE reservation tables of THIS restaurant among `ids` (master
+ *  switch: only "se poate uni" tables can be grouped), each with its area. */
+async function validTables(restaurantId: string, ids: string[]): Promise<{ id: string; area: string | null }[]> {
   if (ids.length === 0) return [];
-  const rows = await db
-    .select({ id: reservationTables.id })
+  return db
+    .select({ id: reservationTables.id, area: reservationTables.area })
     .from(reservationTables)
     .where(and(eq(reservationTables.restaurantId, restaurantId), eq(reservationTables.joinable, true), inArray(reservationTables.id, ids)));
-  return rows.map((r) => r.id);
+}
+
+/** A group may only contain tables from ONE area — interior and terasă tables can't
+ *  physically be pushed together. Returns an error message when the set mixes areas. */
+function areaMismatch(tables: { area: string | null }[]): string | null {
+  return new Set(tables.map((t) => t.area ?? null)).size > 1
+    ? "Un grup poate conține mese dintr-o singură zonă (interior sau terasă)."
+    : null;
 }
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -69,8 +76,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Date invalide." }, { status: 400 });
   }
-  const validIds = await validTableIds(id, [...new Set(parsed.data.tableIds)]);
-  if (validIds.length < 2) return NextResponse.json({ error: "Selectează cel puțin 2 mese care se pot uni." }, { status: 400 });
+  const valid = await validTables(id, [...new Set(parsed.data.tableIds)]);
+  if (valid.length < 2) return NextResponse.json({ error: "Selectează cel puțin 2 mese care se pot uni." }, { status: 400 });
+  const mism = areaMismatch(valid);
+  if (mism) return NextResponse.json({ error: mism }, { status: 400 });
+  const validIds = valid.map((t) => t.id);
 
   const [grp] = await db
     .insert(reservationTableGroups)
@@ -103,8 +113,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     await db.update(reservationTableGroups).set({ label: parsed.data.label.trim() }).where(eq(reservationTableGroups.id, groupId));
   }
   if (parsed.data.tableIds !== undefined) {
-    const validIds = await validTableIds(id, [...new Set(parsed.data.tableIds)]);
-    if (validIds.length < 2) return NextResponse.json({ error: "Un grup are cel puțin 2 mese care se pot uni." }, { status: 400 });
+    const valid = await validTables(id, [...new Set(parsed.data.tableIds)]);
+    if (valid.length < 2) return NextResponse.json({ error: "Un grup are cel puțin 2 mese care se pot uni." }, { status: 400 });
+    const mism = areaMismatch(valid);
+    if (mism) return NextResponse.json({ error: mism }, { status: 400 });
+    const validIds = valid.map((t) => t.id);
     // Replace membership.
     await db.delete(reservationTableGroupMembers).where(eq(reservationTableGroupMembers.groupId, groupId));
     await db.insert(reservationTableGroupMembers).values(validIds.map((tableId) => ({ groupId, tableId })));
