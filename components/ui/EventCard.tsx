@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { MapPin, CalendarDays } from "lucide-react";
+import { MapPin, CalendarDays, Clock } from "lucide-react";
 import { cardShell, cardImageFrame } from "@/lib/ui";
+import { formatTime } from "@/lib/utils";
 import Badge from "@/components/ui/Badge";
 import FramedImage from "@/components/ui/FramedImage";
 
@@ -11,6 +12,7 @@ type Props = {
     title: string;
     locationName: string | null;
     startsAt: Date | null;
+    startsAtHasTime: boolean;
     isFree: boolean | null;
     price: string | null;
     currency: string | null;
@@ -49,12 +51,20 @@ export default function EventCard({ event, compact = false }: Props) {
           <h3 className="font-serif font-semibold text-ink line-clamp-2 leading-snug">
             {event.title}
           </h3>
-          {event.locationName && (
-            <p className="mt-1 flex items-center gap-1 text-sm text-muted">
-              <MapPin className="w-3.5 h-3.5 flex-shrink-0 text-faint" aria-hidden />
-              <span className="truncate">{event.locationName}</span>
-            </p>
-          )}
+          <p className="mt-1 flex items-center gap-2 text-sm text-muted flex-wrap">
+            {event.startsAt && event.startsAtHasTime && (
+              <span className="inline-flex items-center gap-1 tabular-nums">
+                <Clock className="w-3.5 h-3.5 flex-shrink-0 text-faint" aria-hidden />
+                {formatTime(event.startsAt)}
+              </span>
+            )}
+            {event.locationName && (
+              <span className="inline-flex items-center gap-1 min-w-0">
+                <MapPin className="w-3.5 h-3.5 flex-shrink-0 text-faint" aria-hidden />
+                <span className="truncate">{event.locationName}</span>
+              </span>
+            )}
+          </p>
         </div>
       </Link>
     );
@@ -85,12 +95,20 @@ export default function EventCard({ event, compact = false }: Props) {
         <h2 className="font-serif font-semibold text-lg text-ink line-clamp-2 leading-snug">
           {event.title}
         </h2>
-        {event.locationName && (
-          <p className="flex items-center gap-1 text-sm text-muted">
-            <MapPin className="w-3.5 h-3.5 flex-shrink-0 text-faint" aria-hidden />
-            <span className="truncate">{event.locationName}</span>
-          </p>
-        )}
+        <p className="flex items-center gap-2 text-sm text-muted flex-wrap">
+          {event.startsAt && event.startsAtHasTime && (
+            <span className="inline-flex items-center gap-1 tabular-nums">
+              <Clock className="w-3.5 h-3.5 flex-shrink-0 text-faint" aria-hidden />
+              {formatTime(event.startsAt)}
+            </span>
+          )}
+          {event.locationName && (
+            <span className="inline-flex items-center gap-1 min-w-0">
+              <MapPin className="w-3.5 h-3.5 flex-shrink-0 text-faint" aria-hidden />
+              <span className="truncate">{event.locationName}</span>
+            </span>
+          )}
+        </p>
         {priceLabel(event) && (
           <p className="mt-1 text-sm font-semibold text-accent tabular-nums">{priceLabel(event)}</p>
         )}

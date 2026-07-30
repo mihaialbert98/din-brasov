@@ -111,7 +111,11 @@ export const events = pgTable(
     description: text("description").notNull(),
     slug: text("slug").notNull().unique(),
     startsAt: timestamp("starts_at", { mode: "date" }).notNull(),
+    // The hour is optional: when false, only the DATE is shown (the time part of
+    // startsAt is then just 00:00 padding and must never be displayed).
+    startsAtHasTime: boolean("starts_at_has_time").notNull().default(true),
     endsAt: timestamp("ends_at", { mode: "date" }),
+    endsAtHasTime: boolean("ends_at_has_time").notNull().default(true),
     locationName: text("location_name"),
     address: text("address"),
     latitude: text("latitude"),
@@ -701,7 +705,12 @@ export const menuItems = pgTable(
     allergens: text("allergens"),
     allergensEn: text("allergens_en"), // optional English allergens text
     calories: integer("calories"), // optional kcal per serving; shown when set
-    isVegan: boolean("is_vegan").notNull().default(false), // shows a "Vegan" badge
+    // Dietary flags — each shows a badge on the public menu. Independent of each
+    // other: "de post" (Orthodox fasting) usually overlaps with vegan but not always
+    // (e.g. fish on days with "dezlegare la pește").
+    isVegan: boolean("is_vegan").notNull().default(false),
+    isVegetarian: boolean("is_vegetarian").notNull().default(false),
+    isFasting: boolean("is_fasting").notNull().default(false), // „de post”
     isAvailable: boolean("is_available").notNull().default(true),
     position: integer("position").notNull().default(0),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),

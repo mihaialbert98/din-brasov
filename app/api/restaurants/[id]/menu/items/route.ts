@@ -16,10 +16,12 @@ const createSchema = z.object({
   price: z.string().max(40, "Prețul este prea lung.").optional(),
   imageUrl: z.string().url("Imaginea nu s-a încărcat corect. Încearcă din nou.").optional().or(z.literal("")),
   // Free text, e.g. "gluten, ouă, lapte" (legacy rows may hold a JSON array).
-  allergens: z.string().max(300, "Lista de alergeni este prea lungă (max. 300 de caractere).").optional(),
-  allergensEn: z.string().max(300, "Lista de alergeni în engleză este prea lungă (max. 300 de caractere).").optional(),
+  allergens: z.string().max(500, "Lista de alergeni este prea lungă (max. 500 de caractere).").optional(),
+  allergensEn: z.string().max(500, "Lista de alergeni în engleză este prea lungă (max. 500 de caractere).").optional(),
   calories: z.number().int().min(0).max(10000, "Caloriile trebuie să fie între 0 și 10000.").nullable().optional(),
   isVegan: z.boolean().optional(),
+  isVegetarian: z.boolean().optional(),
+  isFasting: z.boolean().optional(),
   isAvailable: z.boolean().optional(),
 });
 
@@ -68,10 +70,44 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       allergensEn: d.allergensEn?.trim() || null,
       calories: d.calories ?? null,
       isVegan: d.isVegan ?? false,
+      isVegetarian: d.isVegetarian ?? false,
+      isFasting: d.isFasting ?? false,
       isAvailable: d.isAvailable ?? true,
       position: Number(maxPos) + 1,
     })
     .returning({ id: menuItems.id });
 
   return NextResponse.json({ ok: true, id: created!.id }, { status: 201 });
+}
+
+/** Reorder the items INSIDE one category (ids in their new top-to-bottom order). */
+const reorderSchema = z.object({
+  categoryId: z.string().min(1),
+  order: z.array(z.string()).min(1).max(500),
+});
+
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const a = await authorize(id);
+  if ("error" in a) return NextResponse.json({ error: a.error }, { status: a.status });
+
+  const parsed = reorderSchema.safeParse(await req.json().catch(() => ({})));
+  if (!parsed.success) return NextResponse.json({ error: "Date invalide." }, { status: 400 });
+  const { categoryId, order } = parsed.data;
+
+  // Only reposition items that really belong to this restaurant AND this category.
+  const owned = await db
+    .select({ id: menuItems.id })
+    .from(menuItems)
+    .where(and(eq(menuItems.restaurantId, id), eq(menuItems.categoryId, categoryId)));
+  const ownedIds = new Set(owned.map((i) => i.id));
+  const ids = order.filter((iid) => ownedIds.has(iid));
+
+  await Promise.all(
+    ids.map((iid, index) =>
+      db.update(menuItems).set({ position: index, updatedAt: new Date() })
+        .where(and(eq(menuItems.id, iid), eq(menuItems.restaurantId, id))),
+    ),
+  );
+  return NextResponse.json({ ok: true });
 }

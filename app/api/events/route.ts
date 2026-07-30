@@ -8,8 +8,11 @@ import { slugifyWithDate } from "@/lib/slugify";
 const schema = z.object({
   title: z.string().min(3, "Titlul trebuie să aibă cel puțin 3 caractere.").max(200),
   description: z.string().min(10, "Descrierea trebuie să aibă cel puțin 10 caractere."),
-  startsAt: z.string().datetime({ local: true }),
-  endsAt: z.string().datetime({ local: true }).optional(),
+  // Either "YYYY-MM-DD" (no hour) or "YYYY-MM-DDTHH:mm" (with hour).
+  startsAt: z.string().regex(/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?)?$/, "Data de început este invalidă."),
+  startsAtHasTime: z.boolean().default(true),
+  endsAt: z.string().regex(/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?)?$/, "Data de sfârșit este invalidă.").optional(),
+  endsAtHasTime: z.boolean().default(true),
   locationName: z.string().max(200).optional(),
   address: z.string().max(300).optional(),
   category: z.string().optional(),
@@ -46,8 +49,11 @@ export async function POST(req: Request) {
       title: parsed.data.title,
       description: parsed.data.description,
       slug,
-      startsAt: new Date(parsed.data.startsAt),
-      endsAt: parsed.data.endsAt ? new Date(parsed.data.endsAt) : null,
+      // A date-only value parses as local midnight; the flag says not to show it.
+      startsAt: new Date(parsed.data.startsAt.length === 10 ? `${parsed.data.startsAt}T00:00` : parsed.data.startsAt),
+      startsAtHasTime: parsed.data.startsAtHasTime,
+      endsAt: parsed.data.endsAt ? new Date(parsed.data.endsAt.length === 10 ? `${parsed.data.endsAt}T00:00` : parsed.data.endsAt) : null,
+      endsAtHasTime: parsed.data.endsAtHasTime,
       locationName: parsed.data.locationName ?? null,
       address: parsed.data.address ?? null,
       category: parsed.data.category ?? null,

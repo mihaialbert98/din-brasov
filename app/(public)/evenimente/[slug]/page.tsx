@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { events } from "@/lib/db/schema";
 import { CalendarDays, MapPin, Ticket, CheckCircle2, Hourglass, ArrowUpRight } from "lucide-react";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatTime } from "@/lib/utils";
 import HeroImage from "@/components/ui/HeroImage";
 import { mapsUrl } from "@/lib/maps";
 import type { Metadata } from "next";
@@ -51,6 +51,7 @@ export default async function EvenimentPage({ params }: Props) {
             description: ev.description,
             path: `/evenimente/${ev.slug}`,
             startsAt: ev.startsAt,
+            startsAtHasTime: ev.startsAtHasTime,
             endsAt: ev.endsAt,
             locationName: ev.locationName,
             address: ev.address,
@@ -81,7 +82,12 @@ export default async function EvenimentPage({ params }: Props) {
       <div className="bg-surface rounded-2xl border border-hairline p-5 mb-6 space-y-2.5 text-ink/80">
         <p className="flex items-center gap-2">
           <CalendarDays className="w-4 h-4 flex-shrink-0 text-accent" aria-hidden />
-          <span>{formatDate(ev.startsAt)}{ev.endsAt ? ` — ${formatDate(ev.endsAt)}` : ""}</span>
+          {/* The hour is optional — shown only when the organiser set one. */}
+          <span>
+            {formatDate(ev.startsAt)}
+            {ev.startsAtHasTime && `, ora ${formatTime(ev.startsAt)}`}
+            {ev.endsAt && ` — ${formatDate(ev.endsAt)}${ev.endsAtHasTime ? `, ora ${formatTime(ev.endsAt)}` : ""}`}
+          </span>
         </p>
         {ev.locationName && (() => {
           const href = mapsUrl({ address: ev.address, name: ev.locationName, latitude: ev.latitude, longitude: ev.longitude });

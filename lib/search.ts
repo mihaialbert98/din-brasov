@@ -71,6 +71,7 @@ export async function searchEvents(
         title: events.title,
         slug: events.slug,
         startsAt: events.startsAt,
+        startsAtHasTime: events.startsAtHasTime,
         endsAt: events.endsAt,
         locationName: events.locationName,
         category: events.category,

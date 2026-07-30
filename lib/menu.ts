@@ -44,6 +44,8 @@ export async function getRestaurantMenu(restaurantId: string): Promise<MenuViewC
           allergensEn: it.allergensEn ?? "",
           calories: it.calories,
           isVegan: it.isVegan,
+          isVegetarian: it.isVegetarian,
+          isFasting: it.isFasting,
         })),
     }))
     .filter((c) => c.items.length > 0); // hide empty categories

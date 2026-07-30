@@ -22,7 +22,9 @@ const editSchema = z.object({
   title: z.string().min(3, "Titlul trebuie să aibă cel puțin 3 caractere.").max(200).optional(),
   description: z.string().min(10, "Descrierea trebuie să aibă cel puțin 10 caractere.").optional(),
   startsAt: z.string().optional(),
+  startsAtHasTime: z.boolean().optional(),
   endsAt: z.string().optional().nullable(),
+  endsAtHasTime: z.boolean().optional(),
   locationName: z.string().max(200).optional().nullable(),
   address: z.string().max(300).optional().nullable(),
   category: z.string().optional().nullable(),
@@ -53,8 +55,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const d = parsed.data;
   if (d.title !== undefined) update.title = d.title;
   if (d.description !== undefined) update.description = d.description;
-  if (d.startsAt !== undefined) update.startsAt = new Date(d.startsAt);
-  if (d.endsAt !== undefined) update.endsAt = d.endsAt ? new Date(d.endsAt) : null;
+  if (d.startsAt !== undefined) update.startsAt = new Date(d.startsAt.length === 10 ? `${d.startsAt}T00:00` : d.startsAt);
+  if (d.startsAtHasTime !== undefined) update.startsAtHasTime = d.startsAtHasTime;
+  if (d.endsAt !== undefined) update.endsAt = d.endsAt ? new Date(d.endsAt.length === 10 ? `${d.endsAt}T00:00` : d.endsAt) : null;
+  if (d.endsAtHasTime !== undefined) update.endsAtHasTime = d.endsAtHasTime;
   if (d.locationName !== undefined) update.locationName = d.locationName;
   if (d.address !== undefined) update.address = d.address;
   if (d.category !== undefined) update.category = d.category;

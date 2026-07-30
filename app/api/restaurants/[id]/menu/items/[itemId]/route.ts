@@ -16,10 +16,12 @@ const patchSchema = z.object({
   price: z.string().max(40, "Prețul este prea lung.").optional(),
   imageUrl: z.string().url("Imaginea nu s-a încărcat corect. Încearcă din nou.").optional().or(z.literal("")),
   // Free text (legacy rows may hold a JSON array — normalized on read).
-  allergens: z.string().max(300, "Lista de alergeni este prea lungă (max. 300 de caractere).").optional(),
-  allergensEn: z.string().max(300, "Lista de alergeni în engleză este prea lungă (max. 300 de caractere).").optional(),
+  allergens: z.string().max(500, "Lista de alergeni este prea lungă (max. 500 de caractere).").optional(),
+  allergensEn: z.string().max(500, "Lista de alergeni în engleză este prea lungă (max. 500 de caractere).").optional(),
   calories: z.number().int().min(0).max(10000, "Caloriile trebuie să fie între 0 și 10000.").nullable().optional(),
   isVegan: z.boolean().optional(),
+  isVegetarian: z.boolean().optional(),
+  isFasting: z.boolean().optional(),
   isAvailable: z.boolean().optional(),
 });
 
@@ -65,6 +67,8 @@ export async function PATCH(
   if (d.allergensEn !== undefined) patch.allergensEn = d.allergensEn.trim() || null;
   if (d.calories !== undefined) patch.calories = d.calories;
   if (d.isVegan !== undefined) patch.isVegan = d.isVegan;
+  if (d.isVegetarian !== undefined) patch.isVegetarian = d.isVegetarian;
+  if (d.isFasting !== undefined) patch.isFasting = d.isFasting;
   if (d.isAvailable !== undefined) patch.isAvailable = d.isAvailable;
 
   await db

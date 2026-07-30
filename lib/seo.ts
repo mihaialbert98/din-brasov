@@ -155,6 +155,7 @@ export function eventJsonLd(e: {
   description: string;
   path: string;
   startsAt: Date;
+  startsAtHasTime?: boolean;
   endsAt?: Date | null;
   locationName?: string | null;
   address?: string | null;
@@ -175,7 +176,12 @@ export function eventJsonLd(e: {
     "@type": "Event",
     name: e.title,
     description: metaDescription(e.description),
-    startDate: new Date(e.startsAt).toISOString(),
+    // Schema.org accepts a date-only startDate — use it when no hour was set,
+    // so search engines don't advertise a phantom 00:00 start.
+    startDate:
+      e.startsAtHasTime === false
+        ? `${new Date(e.startsAt).getFullYear()}-${String(new Date(e.startsAt).getMonth() + 1).padStart(2, "0")}-${String(new Date(e.startsAt).getDate()).padStart(2, "0")}`
+        : new Date(e.startsAt).toISOString(),
     ...(e.endsAt ? { endDate: new Date(e.endsAt).toISOString() } : {}),
     eventStatus: "https://schema.org/EventScheduled",
     eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
