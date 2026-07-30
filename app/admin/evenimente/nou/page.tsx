@@ -42,6 +42,12 @@ export default function NouEvenimentPage() {
     setFields((f) => ({ ...f, [key]: value }));
   }
 
+  // `startsAt` is stored as "YYYY-MM-DD" (no hour) or "YYYY-MM-DDTHH:mm" (with hour),
+  // so the date and the optional time are edited as two inputs but kept in one field.
+  const [startDate = "", startTime = ""] = fields.startsAt.split("T");
+  const [endDate = "", endTime = ""] = fields.endsAt.split("T");
+  const joinDateTime = (date: string, time: string) => (date && time ? `${date}T${time}` : date);
+
   async function handlePrefill() {
     const url = prefillUrl.trim();
     if (!url) return;
@@ -108,7 +114,9 @@ export default function NouEvenimentPage() {
         title: fields.title,
         description: fields.description,
         startsAt: fields.startsAt,
+        startsAtHasTime: fields.startsAt.includes("T"),
         endsAt: fields.endsAt || undefined,
+        endsAtHasTime: fields.endsAt.includes("T"),
         locationName: fields.locationName || undefined,
         address: fields.address || undefined,
         category: fields.category || undefined,
@@ -208,19 +216,35 @@ export default function NouEvenimentPage() {
         <div className="grid grid-cols-2 gap-4">
           <div className="flex flex-col gap-1">
             <label htmlFor="startsAt" className="font-medium text-gray-700">Data început *</label>
-            <input
-              id="startsAt" name="startsAt" type="datetime-local" required
-              value={fields.startsAt} onChange={(e) => setField("startsAt", e.target.value)}
-              className="border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:border-[#c84b1e]"
-            />
+            <div className="flex gap-2">
+              <input
+                id="startsAt" name="startsAt" type="date" required
+                value={startDate} onChange={(e) => setField("startsAt", joinDateTime(e.target.value, startTime))}
+                className="flex-1 min-w-0 border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:border-[#c84b1e]"
+              />
+              <input
+                aria-label="Ora început (opțional)" type="time"
+                value={startTime} onChange={(e) => setField("startsAt", joinDateTime(startDate, e.target.value))}
+                className="w-32 border border-gray-300 rounded-lg px-3 py-3 text-base focus:outline-none focus:border-[#c84b1e]"
+              />
+            </div>
+            <span className="text-xs text-gray-400">Ora e opțională — lasă gol dacă nu se știe încă.</span>
           </div>
           <div className="flex flex-col gap-1">
             <label htmlFor="endsAt" className="font-medium text-gray-700">Data sfârșit</label>
-            <input
-              id="endsAt" name="endsAt" type="datetime-local"
-              value={fields.endsAt} onChange={(e) => setField("endsAt", e.target.value)}
-              className="border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:border-[#c84b1e]"
-            />
+            <div className="flex gap-2">
+              <input
+                id="endsAt" name="endsAt" type="date"
+                value={endDate} onChange={(e) => setField("endsAt", joinDateTime(e.target.value, endTime))}
+                className="flex-1 min-w-0 border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:border-[#c84b1e]"
+              />
+              <input
+                aria-label="Ora sfârșit (opțional)" type="time"
+                value={endTime} onChange={(e) => setField("endsAt", joinDateTime(endDate, e.target.value))}
+                className="w-32 border border-gray-300 rounded-lg px-3 py-3 text-base focus:outline-none focus:border-[#c84b1e]"
+              />
+            </div>
+            <span className="text-xs text-gray-400">Opțional, la fel și ora.</span>
           </div>
         </div>
 

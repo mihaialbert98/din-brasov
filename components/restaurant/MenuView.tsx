@@ -18,6 +18,8 @@ export interface MenuViewItem {
   allergensEn: string;
   calories: number | null;
   isVegan: boolean;
+  isVegetarian: boolean;
+  isFasting: boolean;
 }
 export interface MenuViewCategory {
   id: string;
@@ -362,7 +364,7 @@ function ModernList({ items, lang, onOpen }: { items: MenuViewItem[]; lang: Menu
               <div className="flex items-start justify-between gap-3">
                 <h3 className="font-semibold text-[15px] leading-snug break-words" style={{ color: "var(--menu-heading)" }}>
                   {itemName(it, lang)}
-                  {it.isVegan && <span className="ml-2 align-middle"><VeganBadge compact /></span>}
+                  {<span className="ml-2 align-middle"><DietBadges item={it} lang={lang} compact /></span>}
                 </h3>
                 {it.price && (
                   <span className="font-bold text-[15px] whitespace-nowrap tabular-nums pl-1" style={{ color: "var(--brand)" }}>{it.price} lei</span>
@@ -397,7 +399,7 @@ function ElegantList({ items, lang, onOpen }: { items: MenuViewItem[]; lang: Men
             <div className="flex items-baseline gap-2">
               <h3 className="font-serif text-[17px] leading-snug break-words" style={{ color: "var(--menu-heading)", fontWeight: 500 }}>
                 {itemName(it, lang)}
-                {it.isVegan && <span className="ml-2 align-middle"><VeganBadge compact /></span>}
+                {<span className="ml-2 align-middle"><DietBadges item={it} lang={lang} compact /></span>}
               </h3>
               {it.price && (
                 <>
@@ -433,7 +435,7 @@ function CompactList({ items, lang, onOpen }: { items: MenuViewItem[]; lang: Men
           >
             <span className="min-w-0">
               <span className="font-semibold text-[14px]" style={{ color: "var(--menu-text)" }}>{itemName(it, lang)}</span>
-              {it.isVegan && <span className="ml-1.5 align-middle"><VeganBadge compact /></span>}
+              {<span className="ml-1.5 align-middle"><DietBadges item={it} lang={lang} compact /></span>}
               {itemDesc(it, lang) && (
                 <span className="text-[13px] ml-2" style={{ color: "var(--menu-faint)" }}>{itemDesc(it, lang)}</span>
               )}
@@ -506,7 +508,7 @@ function ItemSheet({ item, lang, onClose }: { item: MenuViewItem; lang: MenuLang
               <h3 className="font-serif text-[20px] leading-snug" style={{ color: "var(--menu-heading)", fontWeight: 500 }}>
                 {itemName(item, lang)}
               </h3>
-              {item.isVegan && <div className="mt-2"><VeganBadge /></div>}
+              {<div className="mt-2"><DietBadges item={item} lang={lang} /></div>}
             </div>
             {item.price && (
               <span className="text-[17px] font-bold whitespace-nowrap tabular-nums" style={{ color: "var(--brand)" }}>
@@ -549,22 +551,40 @@ function ItemSheet({ item, lang, onClose }: { item: MenuViewItem; lang: MenuLang
 
 // ── Shared bits ───────────────────────────────────────────────────────────────
 
-/** Small vegan indicator — a green leaf mark + label. "Vegan" reads the same in RO/EN. */
-function VeganBadge({ compact = false }: { compact?: boolean }) {
+/** One dietary pill (leaf mark + label). */
+function DietBadge({ label, bg, fg, compact }: { label: string; bg: string; fg: string; compact?: boolean }) {
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full font-semibold ${
         compact ? "text-[10px] px-1.5 py-0.5" : "text-[11px] px-2 py-0.5"
       }`}
-      style={{ background: "#e7f4ea", color: "#1f7a45" }}
-      title="Vegan"
+      style={{ background: bg, color: fg }}
+      title={label}
     >
       <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
         <path d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66.95-2.3c.48.17.98.3 1.34.3C19 20 22 3 22 3c-1 2-8 2.25-13 3.25S2 11.5 2 13.5s1.75 3.75 1.75 3.75C7 8 17 8 17 8z" />
       </svg>
-      Vegan
+      {label}
     </span>
   );
+}
+
+/**
+ * Dietary labels for a dish. Vegan implies vegetarian, so only the most specific of
+ * the two is shown; „de post” (Orthodox fasting) is independent and can accompany either.
+ */
+function DietBadges({ item, lang, compact = false }: { item: MenuViewItem; lang: MenuLang; compact?: boolean }) {
+  const badges: React.ReactNode[] = [];
+  if (item.isVegan) {
+    badges.push(<DietBadge key="v" label="Vegan" bg="#e7f4ea" fg="#1f7a45" compact={compact} />);
+  } else if (item.isVegetarian) {
+    badges.push(<DietBadge key="vg" label="Vegetarian" bg="#eef7e0" fg="#4d7c0f" compact={compact} />);
+  }
+  if (item.isFasting) {
+    badges.push(<DietBadge key="f" label={lang === "en" ? "Fasting" : "De post"} bg="#e5f2fb" fg="#0369a1" compact={compact} />);
+  }
+  if (badges.length === 0) return null;
+  return <span className="inline-flex flex-wrap items-center gap-1 align-middle">{badges}</span>;
 }
 
 function Ornament({ onBrand = false }: { onBrand?: boolean }) {

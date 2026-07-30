@@ -8,6 +8,19 @@ import AddressMapCheck from "@/components/admin/AddressMapCheck";
 
 const CATEGORIES = ["Cultură", "Sport", "Muzică", "Food", "Business", "Educație", "Altele"];
 
+/** Local (not UTC) "YYYY-MM-DD" / "YYYY-MM-DDTHH:mm" for date & datetime inputs. */
+const pad = (n: number) => String(n).padStart(2, "0");
+const localDate = (d: string | Date) => {
+  const x = new Date(d);
+  return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`;
+};
+const localDateTime = (d: string | Date) => {
+  const x = new Date(d);
+  return `${localDate(x)}T${pad(x.getHours())}:${pad(x.getMinutes())}`;
+};
+/** Keep the date and the OPTIONAL hour in one string. */
+const joinDateTime = (date: string, time: string) => (date && time ? `${date}T${time}` : date);
+
 export default function EditEvenimentPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -31,14 +44,18 @@ export default function EditEvenimentPage() {
   const [isFree, setIsFree] = useState(true);
   const [price, setPrice] = useState("");
 
+  const [sDate = "", sTime = ""] = startsAt.split("T");
+  const [eDate = "", eTime = ""] = endsAt.split("T");
+
   useEffect(() => {
     fetch(`/api/events/${params.id}`)
       .then((r) => r.json())
       .then((data) => {
         setTitle(data.title ?? "");
         setDescription(data.description ?? "");
-        setStartsAt(data.startsAt ? new Date(data.startsAt).toISOString().slice(0, 16) : "");
-        setEndsAt(data.endsAt ? new Date(data.endsAt).toISOString().slice(0, 16) : "");
+        // Local parts — toISOString() would convert to UTC and shift the hour.
+        setStartsAt(data.startsAt ? (data.startsAtHasTime === false ? localDate(data.startsAt) : localDateTime(data.startsAt)) : "");
+        setEndsAt(data.endsAt ? (data.endsAtHasTime === false ? localDate(data.endsAt) : localDateTime(data.endsAt)) : "");
         setLocationName(data.locationName ?? "");
         setAddress(data.address ?? "");
         setCategory(data.category ?? "");
@@ -63,7 +80,9 @@ export default function EditEvenimentPage() {
         title,
         description,
         startsAt: startsAt || undefined,
+        startsAtHasTime: startsAt ? startsAt.includes("T") : undefined,
         endsAt: endsAt || null,
+        endsAtHasTime: endsAt ? endsAt.includes("T") : undefined,
         locationName: locationName || null,
         address: address || null,
         category: category || null,
@@ -159,10 +178,19 @@ export default function EditEvenimentPage() {
         <div className="grid grid-cols-2 gap-4">
           <div className="flex flex-col gap-1">
             <label className="font-medium text-gray-700">Data început *</label>
-            <input
-              type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)}
-              className="border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:border-[#c84b1e]"
-            />
+            <div className="flex gap-2">
+              <input
+                type="date" required value={sDate}
+                onChange={(e) => setStartsAt(joinDateTime(e.target.value, sTime))}
+                className="flex-1 min-w-0 border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:border-[#c84b1e]"
+              />
+              <input
+                aria-label="Ora început (opțional)" type="time" value={sTime}
+                onChange={(e) => setStartsAt(joinDateTime(sDate, e.target.value))}
+                className="w-32 border border-gray-300 rounded-lg px-3 py-3 text-base focus:outline-none focus:border-[#c84b1e]"
+              />
+            </div>
+            <span className="text-xs text-gray-400">Ora e opțională — lasă gol dacă nu se știe încă.</span>
           </div>
           <div className="flex flex-col gap-1">
             <label className="font-medium text-gray-700">Data sfârșit</label>

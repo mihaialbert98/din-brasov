@@ -14,6 +14,11 @@ export function formatDate(date: Date | string, options?: Intl.DateTimeFormatOpt
   }).format(new Date(date));
 }
 
+/** Just the clock time, e.g. "19:30" (ro-RO, 24h). */
+export function formatTime(date: Date | string) {
+  return new Intl.DateTimeFormat("ro-RO", { hour: "2-digit", minute: "2-digit" }).format(new Date(date));
+}
+
 export function formatPrice(amount: string | number | null, currency = "RON") {
   if (!amount) return "Negociabil";
   return `${amount} ${currency}`;

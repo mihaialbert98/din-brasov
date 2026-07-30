@@ -4,6 +4,23 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import ImageField from "@/components/admin/ImageField";
 
+/** Allergen free-text cap (per language). Keep in sync with the API schemas in
+ *  app/api/restaurants/[id]/menu/items/*. Long enough for "conține urme de…"
+ *  phrasing, short enough to stay scannable on a phone menu. */
+const ALLERGENS_MAX = 500;
+
+/** Live "used/max" counter — turns amber near the cap so the input never just
+ *  stops accepting text without explanation. */
+function CharCount({ value, max }: { value: string; max: number }) {
+  const used = value.length;
+  const near = used >= max * 0.9;
+  return (
+    <span className={`text-xs tabular-nums ${used >= max ? "text-red-600 font-medium" : near ? "text-amber-600" : "text-gray-400"}`}>
+      {used}/{max}
+    </span>
+  );
+}
+
 export interface MenuItemData {
   id: string;
   name: string;
@@ -16,6 +33,8 @@ export interface MenuItemData {
   allergensEn: string;
   calories: number | null;
   isVegan: boolean;
+  isVegetarian: boolean;
+  isFasting: boolean;
   isAvailable: boolean;
 }
 export interface MenuCategoryData {
@@ -43,6 +62,11 @@ export default function MenuManager({
   const [error, setError] = useState<string | null>(null);
   // Which category is showing its item form, and the item being edited (or null = new).
   const [itemForm, setItemForm] = useState<{ categoryId: string; item: MenuItemData | null } | null>(null);
+  // Collapsed categories (ids). Everything starts expanded; collapsing is local to the
+  // browser — it only tidies a long menu while editing.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const toggleCollapsed = (cid: string) =>
+    setCollapsed((prev) => { const n = new Set(prev); n.has(cid) ? n.delete(cid) : n.add(cid); return n; });
 
   // Edit lock (2FA). When requiresUnlock and not unlocked, mutations are blocked.
   const [unlocked, setUnlocked] = useState(!requiresUnlock || initiallyUnlocked);
@@ -142,6 +166,29 @@ export default function MenuManager({
     if (r) router.refresh();
   }
 
+  /** Move an element one step up/down in a list and return the new id order. */
+  function reordered<T extends { id: string }>(list: T[], index: number, dir: -1 | 1): string[] | null {
+    const to = index + dir;
+    if (to < 0 || to >= list.length) return null; // already at the edge
+    const ids = list.map((x) => x.id);
+    [ids[index], ids[to]] = [ids[to], ids[index]];
+    return ids;
+  }
+
+  async function moveCategory(index: number, dir: -1 | 1) {
+    const order = reordered(initialCategories, index, dir);
+    if (!order) return;
+    const r = await call(`${base}/categories`, "PATCH", { order });
+    if (r) router.refresh();
+  }
+
+  async function moveItem(cat: MenuCategoryData, index: number, dir: -1 | 1) {
+    const order = reordered(cat.items, index, dir);
+    if (!order) return;
+    const r = await call(`${base}/items`, "PATCH", { categoryId: cat.id, order });
+    if (r) router.refresh();
+  }
+
   async function toggleAvailable(item: MenuItemData) {
     const r = await call(`${base}/items/${item.id}`, "PATCH", { isAvailable: !item.isAvailable });
     if (r) router.refresh();
@@ -166,6 +213,8 @@ export default function MenuManager({
       allergensEn: form.allergensEn,
       calories: form.calories,
       isVegan: form.isVegan,
+      isVegetarian: form.isVegetarian,
+      isFasting: form.isFasting,
       isAvailable: form.isAvailable,
       // categoryId on PATCH moves the item to another section; on POST it's the target.
       categoryId: form.categoryId,
@@ -257,15 +306,37 @@ export default function MenuManager({
         <p className="text-gray-500 text-sm">Nicio categorie încă. Adaugă prima categorie mai sus.</p>
       )}
 
-      {initialCategories.map((cat) => (
+      {initialCategories.map((cat, catIndex) => {
+        const isCollapsed = collapsed.has(cat.id);
+        return (
         <div key={cat.id} className="bg-white rounded-xl shadow-sm p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-lg text-gray-900">
-              {cat.name}
-              {cat.nameEn && <span className="ml-2 text-sm font-normal text-gray-400">/ {cat.nameEn}</span>}
-            </h2>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <button
+              onClick={() => toggleCollapsed(cat.id)}
+              className="flex items-center gap-2 min-w-0 text-left group"
+              aria-expanded={!isCollapsed}
+              title={isCollapsed ? "Extinde categoria" : "Restrânge categoria"}
+            >
+              <span className={`text-gray-400 group-hover:text-gray-700 transition-transform ${isCollapsed ? "" : "rotate-90"}`} aria-hidden>▶</span>
+              <h2 className="font-semibold text-lg text-gray-900 truncate">
+                {cat.name}
+                {cat.nameEn && <span className="ml-2 text-sm font-normal text-gray-400">/ {cat.nameEn}</span>}
+              </h2>
+              <span className="text-xs text-gray-400 flex-shrink-0">
+                ({cat.items.length} {cat.items.length === 1 ? "produs" : "produse"})
+              </span>
+            </button>
             {!locked && (
-            <div className="flex gap-2 text-xs">
+            <div className="flex items-center gap-2 text-xs flex-shrink-0">
+              {/* Reorder the category itself */}
+              <span className="flex items-center gap-0.5">
+                <button onClick={() => moveCategory(catIndex, -1)} disabled={busy || catIndex === 0}
+                  className="w-6 h-6 rounded border border-gray-300 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                  aria-label="Mută categoria mai sus" title="Mută mai sus">↑</button>
+                <button onClick={() => moveCategory(catIndex, 1)} disabled={busy || catIndex === initialCategories.length - 1}
+                  className="w-6 h-6 rounded border border-gray-300 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                  aria-label="Mută categoria mai jos" title="Mută mai jos">↓</button>
+              </span>
               <button onClick={() => renameCategory(cat)} className="text-gray-500 hover:underline">
                 Redenumește
               </button>
@@ -276,12 +347,22 @@ export default function MenuManager({
             )}
           </div>
 
-          {cat.items.length === 0 ? (
+          {isCollapsed ? null : cat.items.length === 0 ? (
             <p className="text-sm text-gray-400 mb-3">Niciun produs în această categorie.</p>
           ) : (
             <ul className="divide-y mb-3">
-              {cat.items.map((item) => (
+              {cat.items.map((item, itemIndex) => (
                 <li key={item.id} className="py-3 flex items-start gap-3">
+                  {!locked && (
+                    <span className="flex flex-col gap-0.5 flex-shrink-0 pt-0.5">
+                      <button onClick={() => moveItem(cat, itemIndex, -1)} disabled={busy || itemIndex === 0}
+                        className="w-6 h-5 rounded border border-gray-300 text-gray-500 text-xs hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                        aria-label="Mută produsul mai sus" title="Mută mai sus">↑</button>
+                      <button onClick={() => moveItem(cat, itemIndex, 1)} disabled={busy || itemIndex === cat.items.length - 1}
+                        className="w-6 h-5 rounded border border-gray-300 text-gray-500 text-xs hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                        aria-label="Mută produsul mai jos" title="Mută mai jos">↓</button>
+                    </span>
+                  )}
                   {item.imageUrl && (
                     <img src={item.imageUrl} alt="" className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />
                   )}
@@ -291,6 +372,12 @@ export default function MenuManager({
                       {item.price && <span className="text-sm text-[#c84b1e] font-medium">{item.price} RON</span>}
                       {item.isVegan && (
                         <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">Vegan</span>
+                      )}
+                      {item.isVegetarian && !item.isVegan && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-lime-100 text-lime-700">Vegetarian</span>
+                      )}
+                      {item.isFasting && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-sky-100 text-sky-700">De post</span>
                       )}
                       {!item.isAvailable && (
                         <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Indisponibil</span>
@@ -323,7 +410,7 @@ export default function MenuManager({
             </ul>
           )}
 
-          {!locked && (
+          {!locked && !isCollapsed && (
             <button
               onClick={() => setItemForm({ categoryId: cat.id, item: null })}
               className="text-sm text-[#c84b1e] font-medium hover:underline"
@@ -332,7 +419,8 @@ export default function MenuManager({
             </button>
           )}
         </div>
-      ))}
+        );
+      })}
 
       {itemForm && (
         <ItemFormModal
@@ -359,6 +447,8 @@ interface ItemFormValues {
   allergensEn: string;
   calories: number | null;
   isVegan: boolean;
+  isVegetarian: boolean;
+  isFasting: boolean;
   isAvailable: boolean;
   categoryId: string; // chosen section — lets an existing item be MOVED here
 }
@@ -389,6 +479,8 @@ function ItemFormModal({
   const [allergensEn, setAllergensEn] = useState(initial?.allergensEn ?? "");
   const [calories, setCalories] = useState<string>(initial?.calories != null ? String(initial.calories) : "");
   const [isVegan, setIsVegan] = useState(initial?.isVegan ?? false);
+  const [isVegetarian, setIsVegetarian] = useState(initial?.isVegetarian ?? false);
+  const [isFasting, setIsFasting] = useState(initial?.isFasting ?? false);
   const [isAvailable, setIsAvailable] = useState(initial?.isAvailable ?? true);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -409,6 +501,8 @@ function ItemFormModal({
       allergensEn: allergensEn.trim(),
       calories: kcal,
       isVegan,
+      isVegetarian,
+      isFasting,
       isAvailable,
       categoryId,
     });
@@ -486,11 +580,27 @@ function ItemFormModal({
           </label>
         </div>
 
-        <label className="flex items-center gap-2 cursor-pointer select-none">
-          <input type="checkbox" checked={isVegan} onChange={(e) => setIsVegan(e.target.checked)} className="w-4 h-4 accent-green-600" />
-          <span className="text-sm text-gray-700">Vegan</span>
-          <span className="text-xs text-gray-400">— afișează o etichetă „Vegan" pe meniu</span>
-        </label>
+        <fieldset>
+          <legend className="text-sm font-medium text-gray-700 mb-1.5">Etichete alimentare</legend>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" checked={isVegan} onChange={(e) => setIsVegan(e.target.checked)} className="w-4 h-4 accent-green-600" />
+              <span className="text-sm text-gray-700">Vegan</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" checked={isVegetarian} onChange={(e) => setIsVegetarian(e.target.checked)} className="w-4 h-4 accent-lime-600" />
+              <span className="text-sm text-gray-700">Vegetarian</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" checked={isFasting} onChange={(e) => setIsFasting(e.target.checked)} className="w-4 h-4 accent-sky-600" />
+              <span className="text-sm text-gray-700">De post</span>
+            </label>
+          </div>
+          <p className="text-xs text-gray-400 mt-1.5">
+            Se afișează ca etichete pe meniul clientului. Dacă bifezi „Vegan”, eticheta „Vegetarian” nu se mai
+            afișează separat (vegan e deja vegetarian).
+          </p>
+        </fieldset>
 
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-gray-700">Descriere (română)</label>
@@ -504,22 +614,28 @@ function ItemFormModal({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">Alergeni</label>
+            <div className="flex items-baseline justify-between gap-2">
+              <label className="text-sm font-medium text-gray-700">Alergeni</label>
+              <CharCount value={allergens} max={ALLERGENS_MAX} />
+            </div>
             <input
               value={allergens}
               onChange={(e) => setAllergens(e.target.value)}
               className={field}
-              maxLength={300}
+              maxLength={ALLERGENS_MAX}
               placeholder="ex: gluten, ouă, lapte"
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">Allergens (English)</label>
+            <div className="flex items-baseline justify-between gap-2">
+              <label className="text-sm font-medium text-gray-700">Allergens (English)</label>
+              <CharCount value={allergensEn} max={ALLERGENS_MAX} />
+            </div>
             <input
               value={allergensEn}
               onChange={(e) => setAllergensEn(e.target.value)}
               className={field}
-              maxLength={300}
+              maxLength={ALLERGENS_MAX}
               placeholder="e.g. gluten, eggs, milk"
             />
           </div>
