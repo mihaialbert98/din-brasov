@@ -20,6 +20,14 @@ const schema = z.object({
   areasEnabled: z.boolean().optional(),
   // Turn time — how long a booking occupies its seats (minutes). 30 min – 6 h.
   turnMinutes: z.number().int().min(30).max(360).optional(),
+  // Longer turn for large parties, plus the shorter-stay fallback when the extra
+  // minutes are the only thing blocking a slot.
+  longTurnEnabled: z.boolean().optional(),
+  longTurnFromParty: z.number().int().min(2).max(50).optional(),
+  longTurnMinutes: z.number().int().min(30).max(360).optional(),
+  allowReducedTurn: z.boolean().optional(),
+  // Show the guest how long the table is held (booking form + success screen).
+  showDuration: z.boolean().optional(),
   // Capacity model + its knobs.
   capacityMode: z.enum(["seats", "tables"]).optional(),
   maxJoin: z.number().int().min(1).max(6).optional(),
@@ -38,7 +46,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!parsed.success) return NextResponse.json({ error: "Date invalide." }, { status: 400 });
 
   const [restaurant] = await db
-    .select({ adminGrant: restaurants.reservationsEnabledByAdmin, capacityMode: restaurants.reservationCapacityMode })
+    .select({
+      adminGrant: restaurants.reservationsEnabledByAdmin,
+      capacityMode: restaurants.reservationCapacityMode,
+      areasEnabled: restaurants.reservationAreasEnabled,
+    })
     .from(restaurants)
     .where(eq(restaurants.id, id))
     .limit(1);
@@ -58,6 +70,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (parsed.data.maxPartySize !== undefined) patch.reservationMaxPartySize = parsed.data.maxPartySize;
   if (parsed.data.areasEnabled !== undefined) patch.reservationAreasEnabled = parsed.data.areasEnabled;
   if (parsed.data.turnMinutes !== undefined) patch.reservationTurnMinutes = parsed.data.turnMinutes;
+  if (parsed.data.longTurnEnabled !== undefined) patch.reservationLongTurnEnabled = parsed.data.longTurnEnabled;
+  if (parsed.data.longTurnFromParty !== undefined) patch.reservationLongTurnFromParty = parsed.data.longTurnFromParty;
+  if (parsed.data.longTurnMinutes !== undefined) patch.reservationLongTurnMinutes = parsed.data.longTurnMinutes;
+  if (parsed.data.allowReducedTurn !== undefined) patch.reservationAllowReducedTurn = parsed.data.allowReducedTurn;
+  if (parsed.data.showDuration !== undefined) patch.reservationShowDuration = parsed.data.showDuration;
   if (parsed.data.capacityMode !== undefined) patch.reservationCapacityMode = parsed.data.capacityMode;
   if (parsed.data.maxJoin !== undefined) patch.reservationMaxJoin = parsed.data.maxJoin;
   if (parsed.data.advanceDays !== undefined) patch.reservationAdvanceDays = parsed.data.advanceDays;
@@ -87,7 +104,25 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         .update(reservationTables)
         .set({ isActive: parsed.data.areasEnabled })
         .where(and(eq(reservationTables.restaurantId, id), eq(reservationTables.area, "outside")));
+
     }
+  }
+
+  // Tables added BEFORE zones were switched on carry no area. With zones on,
+  // availability is filtered per area, so an area-less table matches NEITHER interior
+  // nor terasă — it silently disappears from booking and the room looks fully booked.
+  // Put them in the main room; the owner can move any of them to the terrace after.
+  //
+  // Keyed on the EFFECTIVE state, not on which switch was flipped: an owner can enable
+  // zones while still on "capacitate totală" (where tables are unused, so nothing looks
+  // wrong) and only later switch to "mese individuale". Checking only the areas toggle
+  // would skip that path entirely and the bug would surface on the mode switch.
+  const effectiveAreas = parsed.data.areasEnabled ?? restaurant.areasEnabled;
+  if (effectiveAreas && (parsed.data.areasEnabled !== undefined || parsed.data.capacityMode !== undefined)) {
+    await db
+      .update(reservationTables)
+      .set({ area: "inside" })
+      .where(and(eq(reservationTables.restaurantId, id), isNull(reservationTables.area)));
   }
 
   // Switching to tables mode: bookings made in seats mode hold no table, so they'd

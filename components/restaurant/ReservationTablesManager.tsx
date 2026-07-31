@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, Users, Home, Trees } from "lucide-react";
+import { Plus, Trash2, Users, Home, Trees, Phone } from "lucide-react";
 
 export interface ResTableRow {
   id: string;
@@ -11,6 +11,7 @@ export interface ResTableRow {
   joinable: boolean;
   area: string | null;
   isActive: boolean;
+  bookableOnline: boolean;
 }
 
 /**
@@ -117,25 +118,55 @@ export default function ReservationTablesManager({
     if (d) setNotice(`Masa „${t.label}" a fost dezactivată. Rezervările existente rămân pe ea; nimeni altcineva nu o poate rezerva.`);
   }
 
-  const totalSeats = initialTables.filter((t) => t.isActive).reduce((s, t) => s + t.seats, 0);
+  const active = initialTables.filter((t) => t.isActive);
+  const totalSeats = active.reduce((s, t) => s + t.seats, 0);
+  // Tables the public form can actually reach — the rest are held for walk-ins.
+  const onlineTables = active.filter((t) => t.bookableOnline);
+  // Zones on but no area set → matches neither zone, so clients can never book it.
+  const noZoneTables = areasEnabled ? active.filter((t) => !t.area) : [];
+  const onlineSeats = onlineTables.reduce((s, t) => s + t.seats, 0);
+  const heldSeats = totalSeats - onlineSeats;
   const fieldClass = "border border-gray-300 rounded-lg px-3 h-[38px] text-sm focus:outline-none focus:border-[#c84b1e]";
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-5">
       <div className="flex items-center justify-between gap-3 mb-1">
         <h3 className="font-semibold text-gray-900">Mese pentru rezervări</h3>
-        <span className="text-xs text-gray-400">{initialTables.filter((t) => t.isActive).length} mese · {totalSeats} locuri</span>
+        <span className="text-xs text-gray-400">
+          {active.length} mese · {heldSeats > 0 ? `${onlineSeats} locuri online · ${heldSeats} pentru walk-in` : `${totalSeats} locuri`}
+        </span>
       </div>
       <p className="text-sm text-gray-500 mb-4">
         Disponibilitatea se calculează după mese: un client vede o oră liberă doar dacă există o masă
-        (sau o combinație de mese unite) care încape grupul lui.
+        (sau o combinație de mese unite) care încape grupul lui. Vrei să păstrezi câteva locuri pentru
+        clienții care vin fără rezervare? Apasă „Ține pentru walk-in” — masa dispare din formularul
+        online, dar tu o poți rezerva în continuare.
       </p>
 
       {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-3">{error}</p>}
       {notice && <p className="text-sm text-green-800 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mb-3">{notice}</p>}
-      {initialTables.length === 0 && (
+      {/* Online booking is off whenever NO table is reachable by clients — not only
+          when the list is empty. Deactivating every table, or holding them all back
+          for walk-ins, produces the same silent dead end: the restaurant still shows
+          „Rezervă o masă” publicly but every hour comes back full. Each case names
+          the exact control that fixes it. */}
+      {/* Defensive: with zones on, an area-less table is invisible to clients in BOTH
+          zones. Enabling zones now assigns one automatically, so this should never
+          appear — but if it does, it names the exact tables to fix. */}
+      {areasEnabled && noZoneTables.length > 0 && (
         <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
-          Nu ai nicio masă — rezervările online sunt oprite. Adaugă cel puțin o masă sau treci pe „Capacitate totală”.
+          {noZoneTables.length === 1 ? "O masă nu are zonă" : `${noZoneTables.length} mese nu au zonă`} ({noZoneTables.map((t) => t.label).join(", ")}) —
+          clienții nu o pot rezerva nici la interior, nici pe terasă. Alege zona din lista de mai jos.
+        </p>
+      )}
+
+      {onlineTables.length === 0 && (
+        <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+          {initialTables.length === 0
+            ? "Nu ai nicio masă — rezervările online sunt oprite. Adaugă cel puțin o masă sau treci pe „Capacitate totală”."
+            : active.length === 0
+            ? "Toate mesele sunt dezactivate — clienții nu pot rezerva online. Apasă „Activează” la cel puțin o masă."
+            : "Toate mesele sunt ținute pentru walk-in — clienții nu pot rezerva online. Apasă „Redă online” la cel puțin o masă."}
         </p>
       )}
 
@@ -149,12 +180,45 @@ export default function ReservationTablesManager({
             <li key={t.id} className={`py-2.5 flex items-center gap-3 ${t.isActive ? "" : "opacity-50"}`}>
               <span className="font-medium text-gray-900 flex-1 truncate">{t.label}</span>
               <span className="inline-flex items-center gap-1 text-sm text-gray-600"><Users className="w-3.5 h-3.5" aria-hidden /> {t.seats}</span>
-              {areasEnabled && t.area && (
-                <span className="inline-flex items-center gap-1 text-xs text-blue-700">
-                  {t.area === "inside" ? <><Home className="w-3 h-3" aria-hidden /> Interior</> : <><Trees className="w-3 h-3" aria-hidden /> Terasă</>}
-                </span>
+              {/* Zones on → the table must belong to one, and the owner must be able
+                  to move it. A table with no zone matches neither and is unbookable,
+                  so it is flagged here instead of silently vanishing from the form. */}
+              {areasEnabled && (
+                <label className="inline-flex items-center gap-1 text-xs">
+                  {t.area === "outside" ? <Trees className="w-3 h-3 text-blue-700 flex-shrink-0" aria-hidden /> : <Home className="w-3 h-3 text-blue-700 flex-shrink-0" aria-hidden />}
+                  <span className="sr-only">Zona mesei {t.label}</span>
+                  <select
+                    value={t.area ?? ""}
+                    onChange={(e) => call(`${base}?tableId=${t.id}`, "PATCH", { area: e.target.value })}
+                    disabled={busy}
+                    className={`border rounded px-1.5 py-1 text-xs bg-white disabled:opacity-50 ${
+                      t.area ? "border-gray-300 text-blue-700" : "border-amber-400 text-amber-800"
+                    }`}
+                  >
+                    {!t.area && <option value="">Fără zonă</option>}
+                    <option value="inside">Interior</option>
+                    <option value="outside">Terasă</option>
+                  </select>
+                </label>
               )}
               {t.joinable && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">se poate uni</span>}
+              {!t.bookableOnline && t.isActive && (
+                <span className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full">
+                  <Phone className="w-3 h-3 flex-shrink-0" aria-hidden /> doar walk-in
+                </span>
+              )}
+              {t.isActive && !parkedTerrace && (
+                <button
+                  onClick={() => call(`${base}?tableId=${t.id}`, "PATCH", { bookableOnline: !t.bookableOnline })}
+                  disabled={busy}
+                  title={t.bookableOnline
+                    ? "Ascunde masa din formularul clienților — o poți rezerva în continuare tu, la telefon sau pentru walk-in."
+                    : "Fă masa disponibilă din nou pentru rezervările online."}
+                  className="text-xs border border-gray-300 text-gray-600 px-2 py-1 rounded hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {t.bookableOnline ? "Ține pentru walk-in" : "Redă online"}
+                </button>
+              )}
               {parkedTerrace ? (
                 <span
                   className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded"

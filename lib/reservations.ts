@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
-import { restaurants, reservationHours, reservations, reservationTables, reservationTableGroups, reservationTableGroupMembers, restaurantClientNotes, adminAuditLog, places, users } from "@/lib/db/schema";
-import { eq, and, gte, ne, asc, inArray, isNull, isNotNull, sql, type AnyColumn } from "drizzle-orm";
+import { restaurants, reservationHours, reservationClosures, reservations, reservationTables, reservationTableGroups, reservationTableGroupMembers, restaurantClientNotes, adminAuditLog, places, users } from "@/lib/db/schema";
+import { eq, and, gte, lte, ne, asc, inArray, isNull, isNotNull, sql, type AnyColumn } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { sendReservationConfirmedEmail, sendReservationDeclinedEmail, sendReservationCancelledEmail, sendReservationUpdatedEmail } from "@/lib/email";
 import { isPlatformStaff } from "@/lib/restaurant-permissions";
@@ -105,51 +105,149 @@ export async function getMaxPartySize(restaurantId: string): Promise<number> {
   return r?.cap ?? 12;
 }
 
-/**
- * Turn time (minutes) — how long a booking occupies its seats. Drives the
- * sliding-window availability check so overlapping starts can't reuse seats.
- */
-export async function getTurnMinutes(restaurantId: string): Promise<number> {
-  const [r] = await db
-    .select({ turn: restaurants.reservationTurnMinutes })
-    .from(restaurants)
-    .where(eq(restaurants.id, restaurantId))
-    .limit(1);
-  return r?.turn && r.turn > 0 ? r.turn : 90;
-}
-
 export type CapacityMode = "seats" | "tables";
 
+/**
+ * Who is booking. "online" = the public form: held-back tables are invisible and a
+ * closed date offers nothing. "staff" = owner/waiter: they see the whole floor and
+ * may override a closed date, because they know what's actually happening in the room.
+ */
+export type BookingChannel = "online" | "staff";
+
+export type ReservationConfig = {
+  mode: CapacityMode;
+  maxJoin: number;
+  advanceDays: number;
+  /** Standard turn (minutes) — how long an ordinary booking holds its seats. */
+  turn: number;
+  /** Optional longer turn for big parties. `minutes` is never below `turn`. */
+  longTurn: { enabled: boolean; fromParty: number; minutes: number };
+  allowReducedTurn: boolean;
+  showDuration: boolean;
+};
+
 /** Restaurant-level reservation config that drives which capacity model to use. */
-export async function getReservationConfig(
-  restaurantId: string,
-): Promise<{ mode: CapacityMode; maxJoin: number; advanceDays: number; turn: number }> {
+export async function getReservationConfig(restaurantId: string): Promise<ReservationConfig> {
   const [r] = await db
     .select({
       mode: restaurants.reservationCapacityMode,
       maxJoin: restaurants.reservationMaxJoin,
       advanceDays: restaurants.reservationAdvanceDays,
       turn: restaurants.reservationTurnMinutes,
+      longEnabled: restaurants.reservationLongTurnEnabled,
+      longFrom: restaurants.reservationLongTurnFromParty,
+      longMinutes: restaurants.reservationLongTurnMinutes,
+      allowReduced: restaurants.reservationAllowReducedTurn,
+      showDuration: restaurants.reservationShowDuration,
     })
     .from(restaurants)
     .where(eq(restaurants.id, restaurantId))
     .limit(1);
+  const turn = r?.turn && r.turn > 0 ? r.turn : 90;
   return {
     mode: r?.mode === "tables" ? "tables" : "seats",
     maxJoin: r?.maxJoin && r.maxJoin > 0 ? r.maxJoin : 2,
     advanceDays: r?.advanceDays && r.advanceDays > 0 ? r.advanceDays : 60,
-    turn: r?.turn && r.turn > 0 ? r.turn : 90,
+    turn,
+    longTurn: {
+      enabled: !!r?.longEnabled,
+      fromParty: r?.longFrom && r.longFrom > 1 ? r.longFrom : 6,
+      // Clamped so a misconfigured "long" turn shorter than the standard one can't
+      // invert the rule (the reduced-turn fallback below assumes long ≥ standard).
+      minutes: Math.max(turn, r?.longMinutes && r.longMinutes > 0 ? r.longMinutes : 120),
+    },
+    allowReducedTurn: r?.allowReduced ?? true,
+    showDuration: !!r?.showDuration,
   };
+}
+
+/** How long a booking of this size holds the table, per the restaurant's rules. Pure. */
+export function turnFor(partySize: number, cfg: ReservationConfig): number {
+  return cfg.longTurn.enabled && partySize >= cfg.longTurn.fromParty ? cfg.longTurn.minutes : cfg.turn;
+}
+
+export type Closure = { id: string; dateFrom: string; dateTo: string; reason: string | null };
+
+/** All closed-date ranges for a restaurant (owner settings + the public day picker). */
+export async function getClosures(restaurantId: string): Promise<Closure[]> {
+  return db
+    .select({
+      id: reservationClosures.id,
+      dateFrom: reservationClosures.dateFrom,
+      dateTo: reservationClosures.dateTo,
+      reason: reservationClosures.reason,
+    })
+    .from(reservationClosures)
+    .where(eq(reservationClosures.restaurantId, restaurantId))
+    .orderBy(asc(reservationClosures.dateFrom));
+}
+
+/** True when the date falls inside any closed range (inclusive). Pure — for the form. */
+export function isClosedOn(dateStr: string, closures: Closure[]): boolean {
+  return closures.some((c) => dateStr >= c.dateFrom && dateStr <= c.dateTo);
+}
+
+/**
+ * Add days to a "YYYY-MM-DD" date. Pure UTC arithmetic on the date parts, so a DST
+ * change can never shift the result by a day.
+ */
+export function addDaysISO(iso: string, days: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d));
+  t.setUTCDate(t.getUTCDate() + days);
+  return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, "0")}-${String(t.getUTCDate()).padStart(2, "0")}`;
+}
+
+/**
+ * Why a date is outside the PUBLIC booking window — in the past, or further ahead
+ * than "cu cât timp înainte" allows. Null when the date is inside the window.
+ * Staff bypass this entirely: they may log a booking for any date.
+ */
+function outsideBookingWindow(dateStr: string, advanceDays: number): "past" | "too-far" | null {
+  const today = nowInReservationTZ().date;
+  if (dateStr < today) return "past";
+  if (dateStr > addDaysISO(today, advanceDays)) return "too-far";
+  return null;
+}
+
+/** Single-date closure check against the DB (server-side gate). */
+async function isDateClosed(restaurantId: string, dateStr: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: reservationClosures.id })
+    .from(reservationClosures)
+    .where(
+      and(
+        eq(reservationClosures.restaurantId, restaurantId),
+        lte(reservationClosures.dateFrom, dateStr),
+        gte(reservationClosures.dateTo, dateStr),
+      ),
+    )
+    .limit(1);
+  return !!row;
 }
 
 export type ResTable = { id: string; label: string; seats: number; joinable: boolean; area: string | null };
 
-/** Active reservation tables for a restaurant, optionally filtered to an area. */
-export async function getReservationTables(restaurantId: string, area?: Area): Promise<ResTable[]> {
+/**
+ * Active reservation tables, optionally filtered to an area. Online bookings only
+ * ever see tables the owner left `bookableOnline` — the rest are held back for
+ * walk-ins and phone bookings, and are returned for the "staff" channel.
+ */
+export async function getReservationTables(
+  restaurantId: string,
+  area?: Area,
+  channel: BookingChannel = "online",
+): Promise<ResTable[]> {
   const rows = await db
     .select({ id: reservationTables.id, label: reservationTables.label, seats: reservationTables.seats, joinable: reservationTables.joinable, area: reservationTables.area })
     .from(reservationTables)
-    .where(and(eq(reservationTables.restaurantId, restaurantId), eq(reservationTables.isActive, true)));
+    .where(
+      and(
+        eq(reservationTables.restaurantId, restaurantId),
+        eq(reservationTables.isActive, true),
+        channel === "online" ? eq(reservationTables.bookableOnline, true) : undefined,
+      ),
+    );
   return area ? rows.filter((t) => t.area === area) : rows;
 }
 
@@ -326,15 +424,38 @@ function dropPastSlotsForToday(dateStr: string, slots: string[]): string[] {
   return slots.filter((s) => toMinutes(s) >= now.minutes);
 }
 
+export type DayAvailability = {
+  /** Start times bookable for this party's full duration. */
+  slots: string[];
+  /**
+   * Start times that only fit at the STANDARD turn — i.e. the long-turn rule is the
+   * sole reason they're not in `slots`. Offered with their real (shorter) end time.
+   */
+  reducedSlots: string[];
+  /** Minutes a booking from `slots` would hold the table. */
+  turnMinutes: number;
+  /** Minutes a booking from `reducedSlots` would hold it (the standard turn). */
+  reducedTurnMinutes: number;
+};
+
 /**
  * Live availability for a date + party size (+ optional area), using a SLIDING
- * WINDOW based on the restaurant's turn time. Each pending/confirmed booking holds
- * its seats across [start, start + turn). A candidate start T is bookable only if,
- * at every 15-min tick within [T, T + turn), the seats consumed by overlapping
- * bookings (in the requested area when given) plus this party fit the tick's
- * capacity. Returns the passing start times, sorted.
+ * WINDOW. Each pending/confirmed booking holds its seats across
+ * [start, start + ITS OWN turn) — read from `reservations.turnMinutes`, falling back
+ * to the restaurant's standard turn for rows booked before that column existed. The
+ * candidate party's window length comes from the restaurant's rules (`turnFor`), so
+ * a large party may need longer than an ordinary one.
+ *
+ * A candidate start T is bookable only if, at every 15-min tick within its window,
+ * the seats consumed by overlapping bookings (in the requested area when given) plus
+ * this party fit the tick's capacity.
+ *
+ * When the long-turn rule shortens a big party's options, a SECOND pass at the
+ * standard turn finds the slots that were excluded only by the extra minutes (e.g. a
+ * 90-minute gap between two bookings). Those come back as `reducedSlots` so the
+ * booking isn't simply lost. Both passes reuse the same fetched rows — no extra query.
  */
-export async function availableSlotsForDay(
+export async function availabilityForDay(
   restaurantId: string,
   dateStr: string,
   partySize: number,
@@ -342,22 +463,37 @@ export async function availableSlotsForDay(
   // When re-checking availability for an EDIT, exclude that reservation so it
   // doesn't count its own (old) slot against itself.
   excludeReservationId?: string,
-): Promise<string[]> {
+  channel: BookingChannel = "online",
+): Promise<DayAvailability> {
+  const cfg = await getReservationConfig(restaurantId);
+  const fullTurn = turnFor(partySize, cfg);
+  const empty: DayAvailability = { slots: [], reducedSlots: [], turnMinutes: fullTurn, reducedTurnMinutes: cfg.turn };
+
   const day = new Date(`${dateStr}T00:00:00`).getDay();
   const hours = (await getReservationHours(restaurantId)).filter((h) => h.dayOfWeek === day && h.enabled);
-  if (hours.length === 0) return [];
+  if (hours.length === 0) return empty;
 
-  // Tables mode uses the table-inventory algorithm instead of the seat pool.
-  const { mode, maxJoin, turn: turnCfg } = await getReservationConfig(restaurantId);
-  if (mode === "tables") {
-    return dropPastSlotsForToday(dateStr, await availableSlotsForDayTables(restaurantId, dateStr, partySize, hours, maxJoin, turnCfg, area, excludeReservationId));
+  // Public booking is limited to [today, today + advanceDays] and to dates the owner
+  // hasn't closed. Staff bypass both: they get an overridable warning at save time
+  // instead, so a private event or an out-of-window booking can still be logged.
+  if (channel === "online") {
+    if (outsideBookingWindow(dateStr, cfg.advanceDays)) return empty;
+    if (await isDateClosed(restaurantId, dateStr)) return empty;
   }
 
-  const caps = slotsWithCapacity(hours, area); // candidate start times → window capacity
-  const turn = await getTurnMinutes(restaurantId);
+  // The shorter fallback only makes sense when the long turn is what's constraining
+  // this party, and the owner left it enabled.
+  const wantsReduced = cfg.allowReducedTurn && fullTurn > cfg.turn;
 
+  // Existing bookings, each carrying the duration it was actually booked with.
   const booked = await db
-    .select({ time: reservations.time, partySize: reservations.partySize, area: reservations.area })
+    .select({
+      time: reservations.time,
+      partySize: reservations.partySize,
+      area: reservations.area,
+      turnMinutes: reservations.turnMinutes,
+      assignedTableIds: reservations.assignedTableIds,
+    })
     .from(reservations)
     .where(
       and(
@@ -367,11 +503,49 @@ export async function availableSlotsForDay(
         excludeReservationId ? ne(reservations.id, excludeReservationId) : undefined,
       )
     );
+  const endOf = (b: { time: string; turnMinutes: number | null }) => toMinutes(b.time) + (b.turnMinutes ?? cfg.turn);
 
-  // Existing occupancy as [startMin, endMin) windows (same-area only when given).
+  const finish = (slots: string[], reduced: string[]): DayAvailability => ({
+    slots: dropPastSlotsForToday(dateStr, slots),
+    reducedSlots: dropPastSlotsForToday(dateStr, reduced),
+    turnMinutes: fullTurn,
+    reducedTurnMinutes: cfg.turn,
+  });
+
+  // ── Tables mode: availability is decided by the table inventory, not a seat pool ──
+  if (cfg.mode === "tables") {
+    const tables = await getReservationTables(restaurantId, area, channel);
+    if (tables.length === 0) return empty;
+    const groups = await getReservationTableGroups(restaurantId);
+    const windows = booked.map((b) => ({ start: toMinutes(b.time), end: endOf(b), tableIds: parseTableIds(b.assignedTableIds) }));
+    const times = [...slotsWithCapacity(hours, area).keys()];
+
+    // Bookings with no assigned tables (made in seats mode, or a staff force-override)
+    // occupy nothing here — the mode-switch backfill is what attaches tables to those.
+    const pass = (candidateTurn: number): string[] => {
+      const out: string[] = [];
+      for (const time of times) {
+        const start = toMinutes(time);
+        const end = start + candidateTurn;
+        const busy = new Set<string>();
+        for (const w of windows) {
+          if (start < w.end && w.start < end) w.tableIds.forEach((id) => busy.add(id));
+        }
+        if (canSeat(partySize, tables.filter((t) => !busy.has(t.id)), cfg.maxJoin, groups)) out.push(time);
+      }
+      return out.sort();
+    };
+
+    const slots = pass(fullTurn);
+    const reduced = wantsReduced ? pass(cfg.turn).filter((s) => !slots.includes(s)) : [];
+    return finish(slots, reduced);
+  }
+
+  // ── Seats mode: a shared seat pool per window ──
+  const caps = slotsWithCapacity(hours, area); // candidate start times → window capacity
   const windows = booked
     .filter((b) => !area || b.area === area)
-    .map((b) => ({ start: toMinutes(b.time), end: toMinutes(b.time) + turn, size: b.partySize }));
+    .map((b) => ({ start: toMinutes(b.time), end: endOf(b), size: b.partySize }));
 
   // Seats already held at a given minute by overlapping bookings.
   const takenAt = (tick: number) =>
@@ -391,20 +565,37 @@ export async function availableSlotsForDay(
     return cap;
   };
 
-  const result: string[] = [];
-  for (const [time] of caps) {
-    const startMin = toMinutes(time);
-    const windowEnd = startMin + turn;
-    let fits = true;
-    for (let t = startMin; t < windowEnd; t += CAPACITY_TICK) {
-      const cap = capacityAt(t);
-      // Outside opening hours the seat pool is 0 → seating there still counts as the
-      // party occupying the room; only enforce capacity where a window defines one.
-      if (cap > 0 && takenAt(t) + partySize > cap) { fits = false; break; }
+  const pass = (candidateTurn: number): string[] => {
+    const out: string[] = [];
+    for (const [time] of caps) {
+      const startMin = toMinutes(time);
+      let fits = true;
+      for (let t = startMin; t < startMin + candidateTurn; t += CAPACITY_TICK) {
+        const cap = capacityAt(t);
+        // Outside opening hours the seat pool is 0 → seating there still counts as the
+        // party occupying the room; only enforce capacity where a window defines one.
+        if (cap > 0 && takenAt(t) + partySize > cap) { fits = false; break; }
+      }
+      if (fits) out.push(time);
     }
-    if (fits) result.push(time);
-  }
-  return dropPastSlotsForToday(dateStr, result.sort());
+    return out.sort();
+  };
+
+  const slots = pass(fullTurn);
+  const reduced = wantsReduced ? pass(cfg.turn).filter((s) => !slots.includes(s)) : [];
+  return finish(slots, reduced);
+}
+
+/** Just the full-duration start times — the long-standing shape used across the app. */
+export async function availableSlotsForDay(
+  restaurantId: string,
+  dateStr: string,
+  partySize: number,
+  area?: Area,
+  excludeReservationId?: string,
+  channel: BookingChannel = "online",
+): Promise<string[]> {
+  return (await availabilityForDay(restaurantId, dateStr, partySize, area, excludeReservationId, channel)).slots;
 }
 
 /** Parse a reservation's assignedTableIds JSON into a string[] (empty on null/bad). */
@@ -419,59 +610,14 @@ function parseTableIds(json: string | null): string[] {
 }
 
 /**
- * TABLES-MODE availability. Each pending/confirmed booking occupies its assigned
- * table(s) across [start, start+turn). A candidate start T is offered only if the
- * tables NOT busy during [T, T+turn) can seat the party (a single free table, or a
- * join of free joinable tables). Bookings with no assigned tables (e.g. made in
- * seats mode, or a staff force-override) occupy nothing here.
- */
-async function availableSlotsForDayTables(
-  restaurantId: string,
-  dateStr: string,
-  partySize: number,
-  hours: ReservationHour[],
-  maxJoin: number,
-  turn: number,
-  area?: Area,
-  excludeReservationId?: string,
-): Promise<string[]> {
-  const tables = await getReservationTables(restaurantId, area);
-  if (tables.length === 0) return [];
-  const groups = await getReservationTableGroups(restaurantId);
-
-  const booked = await db
-    .select({ time: reservations.time, assignedTableIds: reservations.assignedTableIds })
-    .from(reservations)
-    .where(
-      and(
-        eq(reservations.restaurantId, restaurantId),
-        eq(reservations.date, dateStr),
-        inArray(reservations.status, ["pending", "confirmed"]),
-        excludeReservationId ? ne(reservations.id, excludeReservationId) : undefined,
-      ),
-    );
-  const windows = booked.map((b) => ({ start: toMinutes(b.time), end: toMinutes(b.time) + turn, tableIds: parseTableIds(b.assignedTableIds) }));
-
-  const slots = [...slotsWithCapacity(hours, area).keys()];
-  const result: string[] = [];
-  for (const time of slots) {
-    const start = toMinutes(time);
-    const end = start + turn;
-    // Tables busy at any point overlapping [start, end).
-    const busy = new Set<string>();
-    for (const w of windows) {
-      if (start < w.end && w.start < end) w.tableIds.forEach((id) => busy.add(id));
-    }
-    const free = tables.filter((t) => !busy.has(t.id));
-    if (canSeat(partySize, free, maxJoin, groups)) result.push(time);
-  }
-  return result.sort();
-}
-
-/**
  * Pick the actual table(s) to seat a party at a specific date/time, or null when
- * none is available — the booking-time counterpart of availableSlotsForDayTables.
- * Verifies the time is a real slot, then computes free tables for its turn window.
+ * none is available — the booking-time counterpart of the tables-mode pass in
+ * `availabilityForDay`. Verifies the time is a real slot, then computes the tables
+ * free across this booking's own window. Existing bookings release their tables per
+ * THEIR stored duration, so a big party's longer stay is honoured.
+ *
+ * `opts.turnMinutes` pins the window length (used when the guest accepted a
+ * reduced-duration slot); otherwise it follows the restaurant's rules for this party.
  */
 export async function assignTablesFor(
   restaurantId: string,
@@ -480,19 +626,21 @@ export async function assignTablesFor(
   partySize: number,
   area?: Area,
   excludeReservationId?: string,
+  opts: { turnMinutes?: number; channel?: BookingChannel } = {},
 ): Promise<string[] | null> {
   const day = new Date(`${dateStr}T00:00:00`).getDay();
   const hours = (await getReservationHours(restaurantId)).filter((h) => h.dayOfWeek === day && h.enabled);
   if (hours.length === 0) return null;
   if (!slotsWithCapacity(hours, area).has(time)) return null;
 
-  const { maxJoin, turn } = await getReservationConfig(restaurantId);
-  const tables = await getReservationTables(restaurantId, area);
+  const cfg = await getReservationConfig(restaurantId);
+  const turn = opts.turnMinutes ?? turnFor(partySize, cfg);
+  const tables = await getReservationTables(restaurantId, area, opts.channel ?? "online");
   if (tables.length === 0) return null;
   const groups = await getReservationTableGroups(restaurantId);
 
   const booked = await db
-    .select({ time: reservations.time, assignedTableIds: reservations.assignedTableIds })
+    .select({ time: reservations.time, turnMinutes: reservations.turnMinutes, assignedTableIds: reservations.assignedTableIds })
     .from(reservations)
     .where(
       and(
@@ -508,10 +656,10 @@ export async function assignTablesFor(
   const busy = new Set<string>();
   for (const b of booked) {
     const bs = toMinutes(b.time);
-    if (start < bs + turn && bs < end) parseTableIds(b.assignedTableIds).forEach((id) => busy.add(id));
+    if (start < bs + (b.turnMinutes ?? cfg.turn) && bs < end) parseTableIds(b.assignedTableIds).forEach((id) => busy.add(id));
   }
   const free = tables.filter((t) => !busy.has(t.id));
-  return canSeat(partySize, free, maxJoin, groups);
+  return canSeat(partySize, free, cfg.maxJoin, groups);
 }
 
 /**
@@ -545,6 +693,50 @@ export async function bookingsSeatedAtTable(restaurantId: string, tableId: strin
     .map(({ assignedTableIds: _drop, ...b }) => b);
 }
 
+/**
+ * Future live bookings that fall inside a given hours interval. Used before DELETING
+ * an interval: the bookings survive (staff still see them on the board), but the
+ * owner should know they exist — „șterge” sits next to „pauză”, and only one of the
+ * two is reversible. Matches on the interval's weekday and its [start, end] window,
+ * so a split shift only reports the bookings in the shift being removed.
+ */
+export async function bookingsInHoursWindow(restaurantId: string, hourId: string) {
+  const [h] = await db
+    .select({ dayOfWeek: reservationHours.dayOfWeek, startTime: reservationHours.startTime, endTime: reservationHours.endTime })
+    .from(reservationHours)
+    .where(and(eq(reservationHours.id, hourId), eq(reservationHours.restaurantId, restaurantId)))
+    .limit(1);
+  if (!h) return null;
+
+  const today = nowInReservationTZ().date;
+  const rows = await db
+    .select({
+      id: reservations.id,
+      date: reservations.date,
+      time: reservations.time,
+      partySize: reservations.partySize,
+      guestName: reservations.guestName,
+      guestPhone: reservations.guestPhone,
+    })
+    .from(reservations)
+    .where(
+      and(
+        eq(reservations.restaurantId, restaurantId),
+        gte(reservations.date, today),
+        inArray(reservations.status, ["pending", "confirmed"]),
+      ),
+    )
+    .orderBy(asc(reservations.date), asc(reservations.time));
+
+  // The window end is the last SEATING time, so it's inclusive on both ends.
+  return rows.filter(
+    (b) =>
+      new Date(`${b.date}T00:00:00`).getDay() === h.dayOfWeek &&
+      b.time >= h.startTime &&
+      b.time <= h.endTime,
+  );
+}
+
 export type TableBackfillReport = {
   assigned: number;
   unassigned: { id: string; date: string; time: string; partySize: number; guestName: string }[];
@@ -556,11 +748,16 @@ export type TableBackfillReport = {
  * table, so they would occupy nothing and the slot could be oversold (e.g. 15 people
  * already booked, yet every table still looks free). Processes bookings chronologically
  * so the earliest gets first pick, persisting each assignment so the next one sees it.
- * NEVER changes a booking's date / time / party / status — it only attaches tables.
+ * NEVER changes a booking's date / time / party / status / duration — it only attaches
+ * tables. Each booking is re-seated for the duration IT WAS BOOKED WITH, not one
+ * recomputed from its party size: the restaurant's turn rules may have changed since,
+ * and using the current rule would either free the table too early (a real overlap on
+ * the floor) or reserve more than the booking actually holds.
  * Bookings that can't be seated are returned so the owner can handle them manually.
  */
 export async function backfillTableAssignments(restaurantId: string): Promise<TableBackfillReport> {
   const today = nowInReservationTZ().date;
+  const cfg = await getReservationConfig(restaurantId);
   const rows = await db
     .select({
       id: reservations.id,
@@ -569,6 +766,7 @@ export async function backfillTableAssignments(restaurantId: string): Promise<Ta
       partySize: reservations.partySize,
       area: reservations.area,
       guestName: reservations.guestName,
+      turnMinutes: reservations.turnMinutes,
     })
     .from(reservations)
     .where(
@@ -584,7 +782,13 @@ export async function backfillTableAssignments(restaurantId: string): Promise<Ta
   const report: TableBackfillReport = { assigned: 0, unassigned: [] };
   for (const b of rows) {
     const area = (b.area as Area | null) ?? undefined;
-    const ids = await assignTablesFor(restaurantId, b.date, b.time, b.partySize, area, b.id);
+    // Staff channel: an existing booking may be seated on a table held back from
+    // online booking — better that than leaving a real guest with no table.
+    // `turnMinutes` pins the window to what this booking actually holds.
+    const ids = await assignTablesFor(restaurantId, b.date, b.time, b.partySize, area, b.id, {
+      channel: "staff",
+      turnMinutes: b.turnMinutes ?? cfg.turn,
+    });
     if (ids) {
       await db
         .update(reservations)
@@ -627,14 +831,16 @@ async function seatOverflowForSlot(
   partySize: number,
   area?: Area,
   excludeReservationId?: string,
+  turnMinutes?: number,
 ): Promise<number> {
   const day = new Date(`${dateStr}T00:00:00`).getDay();
   const hours = (await getReservationHours(restaurantId)).filter((h) => h.dayOfWeek === day && h.enabled);
   if (hours.length === 0) return 0;
-  const turn = await getTurnMinutes(restaurantId);
+  const cfg = await getReservationConfig(restaurantId);
+  const turn = turnMinutes ?? turnFor(partySize, cfg);
 
   const booked = await db
-    .select({ time: reservations.time, partySize: reservations.partySize, area: reservations.area })
+    .select({ time: reservations.time, partySize: reservations.partySize, area: reservations.area, turnMinutes: reservations.turnMinutes })
     .from(reservations)
     .where(
       and(
@@ -646,7 +852,7 @@ async function seatOverflowForSlot(
     );
   const windows = booked
     .filter((b) => !area || b.area === area)
-    .map((b) => ({ start: toMinutes(b.time), end: toMinutes(b.time) + turn, size: b.partySize }));
+    .map((b) => ({ start: toMinutes(b.time), end: toMinutes(b.time) + (b.turnMinutes ?? cfg.turn), size: b.partySize }));
   const takenAt = (tick: number) => windows.reduce((sum, w) => (tick >= w.start && tick < w.end ? sum + w.size : sum), 0);
   const capacityAt = (tick: number) => {
     let cap = 0;
@@ -674,6 +880,137 @@ function overflowReason(over: number): string {
     : "Slotul este plin pentru acest număr de persoane.";
 }
 
+export type SlotSnapshot = {
+  mode: CapacityMode;
+  /** The date is marked closed for online bookings (staff may still book it). */
+  closed: boolean;
+  /** The time falls inside one of the day's active intervals. */
+  inProgram: boolean;
+  /** Seats defining the room at the tightest moment of this booking's window. */
+  capacity: number;
+  /** Seats held there by overlapping bookings. */
+  occupied: number;
+  remaining: number;
+  /** By how many seats this party would exceed capacity (0 = it fits). */
+  overflow: number;
+  /** Whether the party can actually be seated — in tables mode a real table or join. */
+  fits: boolean;
+  /** How long this booking would hold the table, per the restaurant's rules. */
+  turnMinutes: number;
+  /** Tables mode only: free tables, and which ones this party would take. */
+  freeTables?: number;
+  wouldAssign?: string[];
+};
+
+/**
+ * What the room looks like at one date/time for a party of this size — the live
+ * preview behind the staff "add / edit reservation" modals, so the floor situation
+ * is visible BEFORE saving rather than as a rejection afterwards. Read-only.
+ *
+ * In tables mode `capacity`/`occupied` count seats across the whole (staff-visible)
+ * inventory, which is informative but not the deciding factor: `fits` is, because a
+ * free seat on an occupied 2-top can't take a third person. The UI shows both.
+ */
+export async function slotCapacitySnapshot(
+  restaurantId: string,
+  dateStr: string,
+  time: string,
+  partySize: number,
+  area?: Area,
+  excludeReservationId?: string,
+): Promise<SlotSnapshot> {
+  const cfg = await getReservationConfig(restaurantId);
+  const turnMinutes = turnFor(partySize, cfg);
+  const closed = await isDateClosed(restaurantId, dateStr);
+  const day = new Date(`${dateStr}T00:00:00`).getDay();
+  const hours = (await getReservationHours(restaurantId)).filter((h) => h.dayOfWeek === day && h.enabled);
+  const inProgram = hours.length > 0 && slotsWithCapacity(hours, area).has(time);
+  const base = { mode: cfg.mode, closed, inProgram, turnMinutes };
+  if (hours.length === 0) {
+    return { ...base, capacity: 0, occupied: 0, remaining: 0, overflow: 0, fits: false };
+  }
+
+  const booked = await db
+    .select({
+      time: reservations.time,
+      partySize: reservations.partySize,
+      area: reservations.area,
+      turnMinutes: reservations.turnMinutes,
+      assignedTableIds: reservations.assignedTableIds,
+    })
+    .from(reservations)
+    .where(
+      and(
+        eq(reservations.restaurantId, restaurantId),
+        eq(reservations.date, dateStr),
+        inArray(reservations.status, ["pending", "confirmed"]),
+        excludeReservationId ? ne(reservations.id, excludeReservationId) : undefined,
+      ),
+    );
+
+  const start = toMinutes(time);
+  const end = start + turnMinutes;
+
+  if (cfg.mode === "tables") {
+    const tables = await getReservationTables(restaurantId, area, "staff");
+    const capacity = tables.reduce((s, t) => s + t.seats, 0);
+    const busy = new Set<string>();
+    for (const b of booked) {
+      const bs = toMinutes(b.time);
+      if (start < bs + (b.turnMinutes ?? cfg.turn) && bs < end) parseTableIds(b.assignedTableIds).forEach((id) => busy.add(id));
+    }
+    const free = tables.filter((t) => !busy.has(t.id));
+    const occupied = capacity - free.reduce((s, t) => s + t.seats, 0);
+    const assign = canSeat(partySize, free, cfg.maxJoin, await getReservationTableGroups(restaurantId));
+    const byId = new Map(tables.map((t) => [t.id, t.label]));
+    return {
+      ...base,
+      capacity,
+      occupied,
+      remaining: capacity - occupied,
+      overflow: Math.max(0, partySize - (capacity - occupied)),
+      fits: !!assign,
+      freeTables: free.length,
+      wouldAssign: assign ? assign.map((id) => byId.get(id) ?? "?") : [],
+    };
+  }
+
+  const windows = booked
+    .filter((b) => !area || b.area === area)
+    .map((b) => ({ start: toMinutes(b.time), end: toMinutes(b.time) + (b.turnMinutes ?? cfg.turn), size: b.partySize }));
+  const takenAt = (tick: number) => windows.reduce((sum, w) => (tick >= w.start && tick < w.end ? sum + w.size : sum), 0);
+  const capacityAt = (tick: number) => {
+    let cap = 0;
+    for (const h of hours) {
+      const s = toMinutes(h.startTime);
+      const e = toMinutes(h.endTime);
+      if (tick >= s && tick <= e) cap = Math.max(cap, windowCapacity(h, area));
+    }
+    return cap;
+  };
+
+  // Report the tightest moment across the window — that's the one that decides.
+  let capacity = 0;
+  let occupied = 0;
+  let overflow = 0;
+  let tightest = Infinity;
+  for (let t = start; t < end; t += CAPACITY_TICK) {
+    const cap = capacityAt(t);
+    if (cap <= 0) continue; // outside the program the seat pool isn't enforced
+    const taken = takenAt(t);
+    if (cap - taken < tightest) { tightest = cap - taken; capacity = cap; occupied = taken; }
+    overflow = Math.max(overflow, taken + partySize - cap);
+  }
+  return {
+    ...base,
+    capacity,
+    occupied,
+    remaining: Math.max(0, capacity - occupied),
+    overflow: Math.max(0, overflow),
+    fits: overflow <= 0,
+  };
+}
+
 /**
  * Server-side validity check at booking time (re-checked to prevent oversell):
  * party within the restaurant cap, and the slot has enough seats for this party in
@@ -686,7 +1023,10 @@ export async function validateBooking(
   partySize: number,
   area?: Area,
   excludeReservationId?: string,
-): Promise<{ ok: boolean; reason?: string; assignedTableIds?: string[] }> {
+  // `acceptReducedTurn`: the guest chose a slot the form flagged as shorter-than-usual.
+  // Never trusted — the reduced fit is re-derived here before it's honoured.
+  opts: { channel?: BookingChannel; acceptReducedTurn?: boolean } = {},
+): Promise<{ ok: boolean; reason?: string; assignedTableIds?: string[]; turnMinutes?: number }> {
   const cap = await getMaxPartySize(restaurantId);
   if (partySize < 1 || partySize > cap) {
     return { ok: false, reason: `Numărul de persoane trebuie să fie între 1 și ${cap}.` };
@@ -698,22 +1038,46 @@ export async function validateBooking(
     }
   }
 
-  // Tables mode: re-check by picking an actual free table (or join) at this exact
-  // time, and return the assignment so the caller can persist it on the booking.
-  const { mode } = await getReservationConfig(restaurantId);
-  if (mode === "tables") {
-    const assigned = await assignTablesFor(restaurantId, dateStr, time, partySize, area, excludeReservationId);
-    if (!assigned) {
-      return { ok: false, reason: "Nu mai avem o masă liberă pentru acest număr de persoane la ora aleasă. Alege altă oră." };
+  const channel = opts.channel ?? "online";
+  const cfg = await getReservationConfig(restaurantId);
+
+  if (channel === "online") {
+    // The date input's min/max is a convenience, not a gate — a direct POST bypasses
+    // it, so the window is enforced here too. A past-dated booking would otherwise be
+    // created and then never appear on the board (which only lists today onward).
+    const outside = outsideBookingWindow(dateStr, cfg.advanceDays);
+    if (outside === "past") {
+      return { ok: false, reason: "Data a trecut. Alege o zi din viitor." };
     }
-    return { ok: true, assignedTableIds: assigned };
+    if (outside === "too-far") {
+      return { ok: false, reason: `Poți rezerva cu cel mult ${cfg.advanceDays} de zile înainte.` };
+    }
+    if (await isDateClosed(restaurantId, dateStr)) {
+      return { ok: false, reason: "Restaurantul nu primește rezervări în această zi. Alege altă dată." };
+    }
   }
 
-  const available = await availableSlotsForDay(restaurantId, dateStr, partySize, area, excludeReservationId);
-  if (!available.includes(time)) {
-    return { ok: false, reason: "Ora selectată nu mai este disponibilă. Alege altă oră." };
+  const fullTurn = turnFor(partySize, cfg);
+  // A shorter stay is only ever an option when the long-turn rule is what's binding.
+  const mayReduce = !!opts.acceptReducedTurn && cfg.allowReducedTurn && fullTurn > cfg.turn;
+
+  // Tables mode: re-check by picking an actual free table (or join) at this exact
+  // time, and return the assignment so the caller can persist it on the booking.
+  if (cfg.mode === "tables") {
+    const assigned = await assignTablesFor(restaurantId, dateStr, time, partySize, area, excludeReservationId, { turnMinutes: fullTurn, channel });
+    if (assigned) return { ok: true, assignedTableIds: assigned, turnMinutes: fullTurn };
+
+    if (mayReduce) {
+      const short = await assignTablesFor(restaurantId, dateStr, time, partySize, area, excludeReservationId, { turnMinutes: cfg.turn, channel });
+      if (short) return { ok: true, assignedTableIds: short, turnMinutes: cfg.turn };
+    }
+    return { ok: false, reason: "Nu mai avem o masă liberă pentru acest număr de persoane la ora aleasă. Alege altă oră." };
   }
-  return { ok: true };
+
+  const avail = await availabilityForDay(restaurantId, dateStr, partySize, area, excludeReservationId, channel);
+  if (avail.slots.includes(time)) return { ok: true, turnMinutes: fullTurn };
+  if (mayReduce && avail.reducedSlots.includes(time)) return { ok: true, turnMinutes: cfg.turn };
+  return { ok: false, reason: "Ora selectată nu mai este disponibilă. Alege altă oră." };
 }
 
 /**
@@ -742,26 +1106,46 @@ export async function createManualReservation(
     return { ok: false, reason: "Ora nu este într-un interval de program." };
   }
 
+  // A closed day is hidden from clients but staff may still log a booking on it —
+  // they just have to confirm they meant to (private event, exceptional opening).
+  if (!force && (await isDateClosed(restaurantId, input.date))) {
+    return { ok: false, reason: "Această zi este marcată ca închisă pentru rezervări online.", overridable: true };
+  }
+
   // Capacity check — unless forced. In tables mode this also picks the table(s).
-  const { mode } = await getReservationConfig(restaurantId);
+  const cfg = await getReservationConfig(restaurantId);
+  const fullTurn = turnFor(input.partySize, cfg);
+  const mayReduce = cfg.allowReducedTurn && fullTurn > cfg.turn;
+  let turnMinutes = fullTurn;
   let assignedTableIds: string[] | null = null;
+  // Staff see the whole floor, including tables held back from online booking.
+  const staff = { channel: "staff" as const };
+
   if (!force) {
-    if (mode === "tables") {
-      const assigned = await assignTablesFor(restaurantId, input.date, input.time, input.partySize, area);
+    if (cfg.mode === "tables") {
+      let assigned = await assignTablesFor(restaurantId, input.date, input.time, input.partySize, area, undefined, { ...staff, turnMinutes: fullTurn });
+      if (!assigned && mayReduce) {
+        assigned = await assignTablesFor(restaurantId, input.date, input.time, input.partySize, area, undefined, { ...staff, turnMinutes: cfg.turn });
+        if (assigned) turnMinutes = cfg.turn;
+      }
       if (!assigned) {
         return { ok: false, reason: "Nu mai avem o masă liberă pentru acest număr de persoane la ora aleasă.", overridable: true };
       }
       assignedTableIds = assigned;
     } else {
-      const available = await availableSlotsForDay(restaurantId, input.date, input.partySize, area);
-      if (!available.includes(input.time)) {
-        const over = await seatOverflowForSlot(restaurantId, input.date, input.time, input.partySize, area);
-        return { ok: false, reason: overflowReason(over), overridable: true };
+      const avail = await availabilityForDay(restaurantId, input.date, input.partySize, area, undefined, "staff");
+      if (!avail.slots.includes(input.time)) {
+        if (mayReduce && avail.reducedSlots.includes(input.time)) {
+          turnMinutes = cfg.turn;
+        } else {
+          const over = await seatOverflowForSlot(restaurantId, input.date, input.time, input.partySize, area, undefined, fullTurn);
+          return { ok: false, reason: overflowReason(over), overridable: true };
+        }
       }
     }
-  } else if (mode === "tables") {
+  } else if (cfg.mode === "tables") {
     // Forced booking: still try to attach a free table if one fits, but don't block.
-    assignedTableIds = await assignTablesFor(restaurantId, input.date, input.time, input.partySize, area);
+    assignedTableIds = await assignTablesFor(restaurantId, input.date, input.time, input.partySize, area, undefined, { ...staff, turnMinutes: fullTurn });
   }
 
   await db.insert(reservations).values({
@@ -774,6 +1158,7 @@ export async function createManualReservation(
     guestEmail: null,
     area: area ?? null,
     assignedTableIds: assignedTableIds ? JSON.stringify(assignedTableIds) : null,
+    turnMinutes,
     status: "confirmed", // staff take it live → already confirmed
     note: input.note || null,
   });
@@ -828,25 +1213,45 @@ export async function updateReservation(
     return { ok: false, reason: "Ora nu este într-un interval de program." };
   }
 
-  // Capacity check EXCLUDING this reservation — unless forced. Tables mode re-picks table(s).
-  const { mode } = await getReservationConfig(restaurantId);
+  // A closed day is overridable here too — same reasoning as a manual booking.
+  if (!force && (await isDateClosed(restaurantId, input.date))) {
+    return { ok: false, reason: "Această zi este marcată ca închisă pentru rezervări online.", overridable: true };
+  }
+
+  // Capacity check EXCLUDING this reservation — unless forced. Tables mode re-picks
+  // table(s). The duration is recomputed from the NEW party size, so growing a
+  // booking past the large-party threshold correctly extends how long it holds the table.
+  const cfg = await getReservationConfig(restaurantId);
+  const fullTurn = turnFor(input.partySize, cfg);
+  const mayReduce = cfg.allowReducedTurn && fullTurn > cfg.turn;
+  let turnMinutes = fullTurn;
   let assignedTableIds: string[] | null = null;
+  const staff = { channel: "staff" as const };
+
   if (!force) {
-    if (mode === "tables") {
-      const assigned = await assignTablesFor(restaurantId, input.date, input.time, input.partySize, area, reservationId);
+    if (cfg.mode === "tables") {
+      let assigned = await assignTablesFor(restaurantId, input.date, input.time, input.partySize, area, reservationId, { ...staff, turnMinutes: fullTurn });
+      if (!assigned && mayReduce) {
+        assigned = await assignTablesFor(restaurantId, input.date, input.time, input.partySize, area, reservationId, { ...staff, turnMinutes: cfg.turn });
+        if (assigned) turnMinutes = cfg.turn;
+      }
       if (!assigned) {
         return { ok: false, reason: "Nu mai avem o masă liberă pentru acest număr de persoane la ora aleasă.", overridable: true };
       }
       assignedTableIds = assigned;
     } else {
-      const available = await availableSlotsForDay(restaurantId, input.date, input.partySize, area, reservationId);
-      if (!available.includes(input.time)) {
-        const over = await seatOverflowForSlot(restaurantId, input.date, input.time, input.partySize, area, reservationId);
-        return { ok: false, reason: overflowReason(over), overridable: true };
+      const avail = await availabilityForDay(restaurantId, input.date, input.partySize, area, reservationId, "staff");
+      if (!avail.slots.includes(input.time)) {
+        if (mayReduce && avail.reducedSlots.includes(input.time)) {
+          turnMinutes = cfg.turn;
+        } else {
+          const over = await seatOverflowForSlot(restaurantId, input.date, input.time, input.partySize, area, reservationId, fullTurn);
+          return { ok: false, reason: overflowReason(over), overridable: true };
+        }
       }
     }
-  } else if (mode === "tables") {
-    assignedTableIds = await assignTablesFor(restaurantId, input.date, input.time, input.partySize, area, reservationId);
+  } else if (cfg.mode === "tables") {
+    assignedTableIds = await assignTablesFor(restaurantId, input.date, input.time, input.partySize, area, reservationId, { ...staff, turnMinutes: fullTurn });
   }
 
   await db
@@ -855,7 +1260,8 @@ export async function updateReservation(
       date: input.date,
       time: input.time,
       partySize: input.partySize,
-      assignedTableIds: mode === "tables" ? (assignedTableIds ? JSON.stringify(assignedTableIds) : null) : null,
+      assignedTableIds: cfg.mode === "tables" ? (assignedTableIds ? JSON.stringify(assignedTableIds) : null) : null,
+      turnMinutes,
       updatedAt: new Date(),
     })
     .where(eq(reservations.id, reservationId));

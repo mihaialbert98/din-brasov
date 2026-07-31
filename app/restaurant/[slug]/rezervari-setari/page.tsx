@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { restaurants, reservationTables } from "@/lib/db/schema";
 import { eq, asc } from "drizzle-orm";
 import { getRestaurantBySlug, canManageRestaurant } from "@/lib/restaurant-permissions";
-import { getReservationHours, getReservationTableGroups } from "@/lib/reservations";
+import { getReservationHours, getReservationTableGroups, getClosures } from "@/lib/reservations";
 import ReservationSettings from "@/components/restaurant/ReservationSettings";
 import ReservationHelp from "@/components/restaurant/ReservationHelp";
 
@@ -42,6 +42,11 @@ export default async function RezervariSetariPage({
       capacityMode: restaurants.reservationCapacityMode,
       maxJoin: restaurants.reservationMaxJoin,
       advanceDays: restaurants.reservationAdvanceDays,
+      longTurnEnabled: restaurants.reservationLongTurnEnabled,
+      longTurnFromParty: restaurants.reservationLongTurnFromParty,
+      longTurnMinutes: restaurants.reservationLongTurnMinutes,
+      allowReducedTurn: restaurants.reservationAllowReducedTurn,
+      showDuration: restaurants.reservationShowDuration,
     })
     .from(restaurants)
     .where(eq(restaurants.id, restaurant.id))
@@ -54,6 +59,7 @@ export default async function RezervariSetariPage({
     .where(eq(reservationTables.restaurantId, restaurant.id))
     .orderBy(asc(reservationTables.createdAt));
   const resGroups = await getReservationTableGroups(restaurant.id);
+  const closures = await getClosures(restaurant.id);
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -101,6 +107,12 @@ export default async function RezervariSetariPage({
             initialAdvanceDays={row.advanceDays ?? 60}
             initialResTables={resTables}
             initialGroups={resGroups}
+            initialLongTurnEnabled={row.longTurnEnabled ?? false}
+            initialLongTurnFromParty={row.longTurnFromParty ?? 6}
+            initialLongTurnMinutes={row.longTurnMinutes ?? 120}
+            initialAllowReducedTurn={row.allowReducedTurn ?? true}
+            initialShowDuration={row.showDuration ?? false}
+            initialClosures={closures}
           />
         </>
       )}

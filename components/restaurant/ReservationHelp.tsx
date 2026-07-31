@@ -59,6 +59,29 @@ export default function ReservationHelp() {
             <span className="font-medium text-gray-800">Durata unei mese.</span> Cât timp ține o
             rezervare masa ocupată (ex: 90 min). O masă rezervată la 19:00 e liberă din nou după ce trece
             durata — nimeni altcineva nu o poate lua în acest timp.
+            <ul className="mt-1.5 space-y-1.5 list-disc pl-5 marker:text-gray-300">
+              <li>
+                <span className="font-medium text-gray-800">Durată mai mare pentru grupuri</span> —
+                opțional. Pornești opțiunea, spui de la câte persoane se aplică și cât ține (ex: de la 6
+                persoane, 2 ore). Restul rezervărilor păstrează durata obișnuită.
+              </li>
+              <li>
+                <span className="font-medium text-gray-800">Acceptă și rezervări cu durată redusă</span> —
+                bifă în aceeași secțiune. Dacă între două rezervări rămâne loc doar cât durata obișnuită,
+                îi oferim totuși ora grupului, scriindu-i clar până la ce oră are masa. Fără bifă, ora nu
+                apare deloc și pierzi rezervarea.
+              </li>
+              <li>
+                <span className="font-medium text-gray-800">Arată durata rezervării</span> — dacă o
+                pornești, clientul vede pe formular cât timp are masa (ex: „Masa este rezervată 2 ore”).
+                E oprită implicit; pornește-o mai ales dacă ai pus durată mai mare pentru grupuri, altfel
+                clienții văd mai puține ore libere fără să înțeleagă de ce.
+              </li>
+            </ul>
+            <p className="mt-1.5">
+              Fiecare rezervare reține durata cu care a fost făcută. Dacă schimbi aceste setări,
+              rezervările deja făcute rămân exact cum au fost — se aplică doar celor noi.
+            </p>
           </li>
           <li>
             <span className="font-medium text-gray-800">Adaugă programul.</span> Intervalele în care
@@ -68,7 +91,16 @@ export default function ReservationHelp() {
           </li>
           <li>
             <span className="font-medium text-gray-800">Cu cât timp înainte.</span> Cât de departe în
-            viitor pot rezerva clienții (ex: 60 de zile).
+            viitor pot rezerva <em>clienții</em> (ex: 60 de zile). Pe tine nu te limitează: poți adăuga
+            oricând o rezervare mai îndepărtată (o nuntă, o petrecere) din „Rezervări”.
+          </li>
+          <li>
+            <span className="font-medium text-gray-800">Zile închise — opțional.</span> Marchezi o zi sau
+            o perioadă (sărbători, eveniment privat, concediu) și ziua dispare din formularul clienților.
+            Rezervările deja făcute <em>nu</em> se anulează — dacă în perioada aleasă există rezervări,
+            îți arătăm lista cu nume și telefon ca să suni clienții, și decizi tu dacă închizi oricum.
+            Tu poți adăuga în continuare rezervări telefonice în acele zile (îți cerem o confirmare).
+            Ca să redeschizi o perioadă, apasă „Redeschide”.
           </li>
         </ol>
 
@@ -86,14 +118,36 @@ export default function ReservationHelp() {
               schimbi orele, „Start la fiecare” sau locurile. Se aplică doar rezervărilor viitoare.
             </li>
             <li>
+              <span className="font-medium text-gray-800">Ștergi un interval?</span> Dacă are rezervări
+              viitoare, îți arătăm întâi lista (cu telefoane) și îți propunem „Oprește temporar” — care e
+              reversibil, spre deosebire de ștergere. Rezervările nu se anulează în niciun caz.
+            </li>
+            <li>
               <span className="font-medium text-gray-800">Modifică o rezervare</span> — din „Rezervări”,
               apasă „Editează” pe o rezervare ca să schimbi data, ora sau numărul de persoane. Clientul
               primește un email cu noile detalii; dacă nu are email, îți amintim să-l suni.
             </li>
             <li>
               <span className="font-medium text-gray-800">Poți depăși limitele</span> — la rezervările
-              adăugate sau modificate de tine poți trece peste numărul maxim de persoane sau peste
-              capacitatea slotului. Îți arătăm cu cât se depășește și poți salva oricum.
+              adăugate sau modificate de tine poți trece peste numărul maxim de persoane, peste
+              capacitatea slotului sau peste o zi închisă. Înainte să salvezi îți arătăm cât e ocupat la
+              acea oră, dacă rezervarea încape și ce durată va avea; dacă depășește, îți spunem cu cât și
+              poți salva oricum.
+            </li>
+            <li>
+              <span className="font-medium text-gray-800">Locuri păstrate pentru walk-in</span> (doar la
+              „Mese individuale”) — apasă „Ține pentru walk-in” la o masă și ea dispare din formularul
+              online, dar rămâne disponibilă pentru tine (rezervări telefonice, clienți care vin fără
+              rezervare). E diferit de „Dezactivează”, care ascunde masa complet, inclusiv de tine.
+              Dacă ajungi să ții <em>toate</em> mesele pentru walk-in (sau să le dezactivezi pe toate),
+              te avertizăm: clienții nu mai pot rezerva deloc online.
+            </li>
+            <li>
+              <span className="font-medium text-gray-800">Grupuri mari văd mai puține ore</span> — e
+              normal, dacă ai pus o durată mai mare pentru ele: au nevoie de un interval liber mai lung,
+              așa că o pauză de 90 de minute între două rezervări nu le încape. Cu „Acceptă și rezervări
+              cu durată redusă” pornit, ora le apare totuși, într-o secțiune separată, cu mențiunea până
+              la ce oră au masa.
             </li>
             <li>
               <span className="font-medium text-gray-800">Dezactivează vs. șterge o masă</span> — dacă o

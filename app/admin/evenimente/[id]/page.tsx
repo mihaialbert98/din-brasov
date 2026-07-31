@@ -175,10 +175,12 @@ export default function EditEvenimentPage() {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        {/* Start/end stack on phones — two date+time pairs side by side left each
+            input around a quarter of the screen, too narrow for a date picker. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="flex flex-col gap-1">
             <label className="font-medium text-gray-700">Data început *</label>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <input
                 type="date" required value={sDate}
                 onChange={(e) => setStartsAt(joinDateTime(e.target.value, sTime))}
@@ -187,21 +189,33 @@ export default function EditEvenimentPage() {
               <input
                 aria-label="Ora început (opțional)" type="time" value={sTime}
                 onChange={(e) => setStartsAt(joinDateTime(sDate, e.target.value))}
-                className="w-32 border border-gray-300 rounded-lg px-3 py-3 text-base focus:outline-none focus:border-[#c84b1e]"
+                className="w-full sm:w-32 border border-gray-300 rounded-lg px-3 py-3 text-base focus:outline-none focus:border-[#c84b1e]"
               />
             </div>
             <span className="text-xs text-gray-400">Ora e opțională — lasă gol dacă nu se știe încă.</span>
           </div>
           <div className="flex flex-col gap-1">
             <label className="font-medium text-gray-700">Data sfârșit</label>
-            <input
-              type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)}
-              className="border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:border-[#c84b1e]"
-            />
+            {/* Split date + time, like the start field. A datetime-local input renders
+                BLANK for a date-only value ("2026-08-05"), so editing an event whose end
+                has no hour used to show an empty field and wipe the end date on save. */}
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="date" value={eDate}
+                onChange={(e) => setEndsAt(joinDateTime(e.target.value, eTime))}
+                className="flex-1 min-w-0 border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:border-[#c84b1e]"
+              />
+              <input
+                aria-label="Ora sfârșit (opțional)" type="time" value={eTime}
+                onChange={(e) => setEndsAt(joinDateTime(eDate, e.target.value))}
+                className="w-full sm:w-32 border border-gray-300 rounded-lg px-3 py-3 text-base focus:outline-none focus:border-[#c84b1e]"
+              />
+            </div>
+            <span className="text-xs text-gray-400">Opțional, la fel și ora.</span>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="flex flex-col gap-1">
             <label className="font-medium text-gray-700">Locație</label>
             <input

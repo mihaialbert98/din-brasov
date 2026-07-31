@@ -23,6 +23,9 @@ const schema = z.object({
   guestEmail: z.string().email().max(200).optional().or(z.literal("")),
   area: z.enum(["inside", "outside"]).optional(),
   note: z.string().max(500).optional(),
+  // The guest picked a slot the form flagged as shorter than usual. Re-derived
+  // server-side before it's honoured — never taken on trust.
+  acceptReducedTurn: z.boolean().optional(),
   // Logged-in extras: update the account phone; subscribe to Brașov restaurant promos.
   updatePhone: z.boolean().optional(),
   subscribePromo: z.boolean().optional(),
@@ -52,7 +55,9 @@ export async function POST(req: Request) {
 
   // Slot must fall within an enabled window, party within the cap, and the slot
   // must still have enough free seats in the chosen area (re-checked to prevent oversell).
-  const slot = await validateBooking(d.restaurantId, d.date, d.time, d.partySize, d.area);
+  const slot = await validateBooking(d.restaurantId, d.date, d.time, d.partySize, d.area, undefined, {
+    acceptReducedTurn: d.acceptReducedTurn,
+  });
   if (!slot.ok) return NextResponse.json({ error: slot.reason }, { status: 400 });
 
   // Rate limit by phone (anti-spam).
@@ -83,6 +88,9 @@ export async function POST(req: Request) {
     area: d.area ?? null,
     // Tables mode: the table(s) validateBooking assigned to this booking.
     assignedTableIds: slot.assignedTableIds ? JSON.stringify(slot.assignedTableIds) : null,
+    // The duration this booking was accepted with — shorter than the large-party
+    // turn when the guest took a reduced-duration slot. Fixed from here on.
+    turnMinutes: slot.turnMinutes ?? null,
     userId,
     status,
     note: d.note || null,

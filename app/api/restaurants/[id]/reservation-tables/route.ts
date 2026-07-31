@@ -21,6 +21,9 @@ const patchSchema = z.object({
   joinable: z.boolean().optional(),
   area: z.enum(["inside", "outside"]).nullable().optional(),
   isActive: z.boolean().optional(),
+  // Held back for walk-ins / phone bookings: hidden from the public form, still
+  // fully usable by staff. Unlike isActive, it never leaves a booking table-less.
+  bookableOnline: z.boolean().optional(),
 });
 
 async function gate(id: string) {
@@ -53,12 +56,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Date invalide." }, { status: 400 });
   }
   const d = parsed.data;
+  // With zones on, a table MUST belong to one: availability filters per area, so an
+  // area-less table would match neither and be unbookable. Default to the main room.
+  const [rest] = await db
+    .select({ areasEnabled: restaurants.reservationAreasEnabled })
+    .from(restaurants)
+    .where(eq(restaurants.id, id))
+    .limit(1);
+  const area = d.area ?? (rest?.areasEnabled ? "inside" : null);
+
   await db.insert(reservationTables).values({
     restaurantId: id,
     label: d.label.trim(),
     seats: d.seats,
     joinable: d.joinable ?? false,
-    area: d.area ?? null,
+    area,
   });
   await auditAdminReservationChange(session, role, id, "a adăugat o masă de rezervare");
 
@@ -107,6 +119,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (d.joinable !== undefined) patch.joinable = d.joinable;
   if (d.area !== undefined) patch.area = d.area;
   if (d.isActive !== undefined) patch.isActive = d.isActive;
+  if (d.bookableOnline !== undefined) patch.bookableOnline = d.bookableOnline;
 
   await db
     .update(reservationTables)
