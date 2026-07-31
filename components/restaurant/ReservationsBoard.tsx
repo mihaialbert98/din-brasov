@@ -335,6 +335,106 @@ export default function ReservationsBoard({
   );
 }
 
+type Snapshot = {
+  mode: "seats" | "tables";
+  closed: boolean;
+  inProgram: boolean;
+  capacity: number;
+  occupied: number;
+  remaining: number;
+  overflow: number;
+  fits: boolean;
+  turnMinutes: number;
+  freeTables?: number;
+  wouldAssign?: string[];
+};
+
+/** 90 → "1 oră 30 min", 120 → "2 ore", 60 → "1 oră". */
+function formatDuration(mins: number): string {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  const hPart = h === 0 ? "" : h === 1 ? "1 oră" : `${h} ore`;
+  const mPart = m === 0 ? "" : `${m} min`;
+  return [hPart, mPart].filter(Boolean).join(" ");
+}
+
+/**
+ * Live read-out of how full the room is at the chosen date/time, shown BEFORE staff
+ * save a manual reservation — so an over-capacity booking is a deliberate choice
+ * rather than a surprise rejection. Debounced; the save path re-validates anyway.
+ */
+function CapacityPreview({
+  basePath,
+  date,
+  time,
+  partySize,
+  exclude,
+}: {
+  basePath: string;
+  date: string;
+  time: string;
+  partySize: number;
+  /** When editing, the reservation must not count against itself. */
+  exclude?: string;
+}) {
+  const [snap, setSnap] = useState<Snapshot | null>(null);
+
+  useEffect(() => {
+    if (!date || !time || partySize < 1) { setSnap(null); return; }
+    let cancelled = false;
+    const t = setTimeout(() => {
+      const q = new URLSearchParams({ date, time, partySize: String(partySize) });
+      if (exclude) q.set("exclude", exclude);
+      fetch(`${basePath}/reservations/capacity?${q}`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (!cancelled) setSnap(d); })
+        .catch(() => { if (!cancelled) setSnap(null); });
+    }, 300); // debounce while the fields are being typed into
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [basePath, date, time, partySize, exclude]);
+
+  if (!snap) return null;
+
+  if (!snap.inProgram) {
+    return (
+      <p className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 mb-3">
+        Ora nu este într-un interval de program. Poți salva oricum — rezervarea nu va ocupa un slot public.
+      </p>
+    );
+  }
+
+  const tone = !snap.fits || snap.closed
+    ? "text-amber-900 bg-amber-50 border-amber-200"
+    : "text-green-900 bg-green-50 border-green-200";
+
+  return (
+    <div className={`text-xs rounded-lg border px-3 py-2 mb-3 space-y-1 ${tone}`}>
+      {snap.closed && <p className="font-medium">Zi marcată ca închisă pentru rezervări online.</p>}
+      <p>
+        La {time}: <span className="font-medium tabular-nums">{snap.occupied}/{snap.capacity}</span> locuri ocupate
+        {snap.mode === "tables" && typeof snap.freeTables === "number" && (
+          <> · <span className="font-medium tabular-nums">{snap.freeTables}</span> {snap.freeTables === 1 ? "masă liberă" : "mese libere"}</>
+        )}
+      </p>
+      {snap.fits ? (
+        <p>
+          Rezervarea încape.
+          {snap.mode === "tables" && !!snap.wouldAssign?.length && <> Masa: <span className="font-medium">{snap.wouldAssign.join(" + ")}</span>.</>}
+        </p>
+      ) : snap.mode === "tables" ? (
+        <p className="font-medium">
+          Nicio masă liberă pentru {partySize} {partySize === 1 ? "persoană" : "persoane"} la această oră.
+        </p>
+      ) : (
+        <p className="font-medium">
+          Depășește capacitatea cu {snap.overflow} {snap.overflow === 1 ? "loc" : "locuri"}.
+        </p>
+      )}
+      <p className="opacity-80">Durata acestei rezervări: {formatDuration(snap.turnMinutes)}.</p>
+    </div>
+  );
+}
+
 /** Modal for staff to add a phone-in reservation. Confirmed immediately; can force a full slot. */
 function ManualReservationModal({
   basePath,
@@ -417,6 +517,8 @@ function ManualReservationModal({
             onBlur={() => { if (partySize === "" || partySize < 1) setPartySize(1); }}
             className={`mt-1 ${field}`} />
         </label>
+        <CapacityPreview basePath={basePath} date={date} time={time} partySize={partySize === "" ? 0 : partySize} />
+
         <label className="block text-xs font-medium text-gray-500 mb-3">Nume *
           <input type="text" value={guestName} onChange={(e) => setGuestName(e.target.value)} className={`mt-1 ${field}`} />
         </label>
@@ -556,6 +658,14 @@ function EditReservationModal({
             onBlur={() => { if (partySize === "" || partySize < 1) setPartySize(1); }}
             className={`mt-1 ${field}`} />
         </label>
+
+        <CapacityPreview
+          basePath={basePath}
+          date={date}
+          time={time}
+          partySize={partySize === "" ? 0 : partySize}
+          exclude={reservation.id}
+        />
 
         <button onClick={() => submit(false)} disabled={saving} className="w-full bg-[#c84b1e] text-white font-semibold py-2.5 rounded-lg hover:bg-[#d9603a] transition-colors disabled:opacity-60">
           {saving ? "Se salvează…" : "Salvează modificările"}

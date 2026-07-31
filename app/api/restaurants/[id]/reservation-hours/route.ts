@@ -6,7 +6,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { reservationHours } from "@/lib/db/schema";
 import { authorizeReservationSettings } from "@/lib/restaurant-permissions";
-import { auditAdminReservationChange } from "@/lib/reservations";
+import { auditAdminReservationChange, bookingsInHoursWindow } from "@/lib/reservations";
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -121,8 +121,29 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   const gate = await authorizeReservationSettings(session, role, id);
   if ("error" in gate) return NextResponse.json({ error: gate.error }, { status: gate.status });
 
-  const hourId = new URL(req.url).searchParams.get("hourId");
+  const url = new URL(req.url);
+  const hourId = url.searchParams.get("hourId");
   if (!hourId) return NextResponse.json({ error: "Lipsește hourId." }, { status: 400 });
+  const force = url.searchParams.get("force") === "true";
+
+  // Deleting an interval doesn't cancel the bookings inside it — but „șterge” sits
+  // right next to „pauză” and only pausing is reversible, so show what's in there
+  // first. The UI offers „Oprește temporar” as the safer alternative.
+  if (!force) {
+    const affected = await bookingsInHoursWindow(id, hourId);
+    if (affected === null) return NextResponse.json({ error: "Interval negăsit." }, { status: 404 });
+    if (affected.length > 0) {
+      return NextResponse.json(
+        {
+          error: `${affected.length} ${affected.length === 1 ? "rezervare viitoare este" : "rezervări viitoare sunt"} în acest interval.`,
+          needsConfirm: true,
+          bookings: affected.slice(0, 10),
+          affected: affected.length,
+        },
+        { status: 409 },
+      );
+    }
+  }
 
   await db
     .delete(reservationHours)

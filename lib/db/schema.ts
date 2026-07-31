@@ -624,6 +624,20 @@ export const restaurants = pgTable(
     // holds its seats across [19:15, 19:15+turn) for the sliding-window availability
     // check, so a later start that overlaps can't reuse the same seats. Restaurant-wide.
     reservationTurnMinutes: integer("reservation_turn_minutes").notNull().default(90),
+    // Optional rule: parties at or above `fromParty` hold the table for LONGER than
+    // the standard turn (a group of 8 lingers). Only ever applied to NEW bookings —
+    // each reservation stores the duration it was booked with (reservations.turnMinutes),
+    // so switching this on can never retroactively overlap existing bookings.
+    reservationLongTurnEnabled: boolean("reservation_long_turn_enabled").notNull().default(false),
+    reservationLongTurnFromParty: integer("reservation_long_turn_from_party").notNull().default(6),
+    reservationLongTurnMinutes: integer("reservation_long_turn_minutes").notNull().default(120),
+    // When the long turn doesn't fit but the STANDARD turn does (a 90-min gap between
+    // two bookings), still offer the slot — labelled with its real end time — instead
+    // of losing the booking. Off = those slots are hidden and the guest is told to call.
+    reservationAllowReducedTurn: boolean("reservation_allow_reduced_turn").notNull().default(true),
+    // Show the guest how long the table is held, on the booking form + success screen.
+    // Opt-in: some owners would rather not advertise a time limit.
+    reservationShowDuration: boolean("reservation_show_duration").notNull().default(false),
     // Capacity model: "seats" = a single seat pool (seatsPerSlot / per-area seats on
     // reservation_hours); "tables" = individual reservation_tables, availability by
     // whether a free table (or a join of joinable ones) fits the party. Default seats
@@ -790,6 +804,28 @@ export const reservationHours = pgTable(
   (t) => [index("reservation_hours_restaurant_idx").on(t.restaurantId)]
 );
 
+// Dates the restaurant takes NO online bookings (holiday, private event, vacation).
+// A closure hides the date from the public form entirely; staff can still add a
+// booking on it (with a warning) since they know the real floor. Existing
+// reservations on a closed date are never touched — the owner phones those guests.
+// Whole-restaurant only: a single-area closure is already expressible by pausing
+// that area's interval or deactivating its tables.
+export const reservationClosures = pgTable(
+  "reservation_closures",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    // Inclusive range — a single closed day has dateFrom === dateTo.
+    dateFrom: text("date_from").notNull(), // "YYYY-MM-DD"
+    dateTo: text("date_to").notNull(), // "YYYY-MM-DD"
+    reason: text("reason"), // optional, owner-facing only
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("reservation_closures_restaurant_idx").on(t.restaurantId)]
+);
+
 // A table reservation. Persistent (unlike the transient service queue) with a
 // status lifecycle. Guest is anonymous (name + phone mandatory, email optional);
 // userId is set only when a logged-in Din Brașov member booked.
@@ -813,6 +849,11 @@ export const reservations = pgTable(
     // Tables mode: JSON array of reservation_tables ids this booking occupies (so
     // overlapping bookings can't reuse them). Null in seats mode / unassigned.
     assignedTableIds: text("assigned_table_ids"),
+    // How long THIS booking holds its seats/tables, fixed at booking time. Null =
+    // "the restaurant's standard turn", which is how every pre-existing row behaves.
+    // Storing it means changing the restaurant's turn settings never retroactively
+    // moves an existing booking's end time (and so can never create a new overlap).
+    turnMinutes: integer("turn_minutes"),
     note: text("note"),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
@@ -840,6 +881,11 @@ export const reservationTables = pgTable(
     joinable: boolean("joinable").notNull().default(false),
     area: text("area"), // inside | outside | null (when areas off)
     isActive: boolean("is_active").notNull().default(true),
+    // Held back from the public form: the table stays fully bookable by staff (phone
+    // bookings, walk-ins) but is invisible to online availability. Distinct from
+    // isActive=false, which hides it from EVERYONE — including the staff assignment,
+    // which would leave a forced booking holding no table at all.
+    bookableOnline: boolean("bookable_online").notNull().default(true),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => [index("reservation_tables_restaurant_idx").on(t.restaurantId)]
@@ -971,6 +1017,8 @@ export type RestaurantTable = typeof restaurantTables.$inferSelect;
 export type NewRestaurantTable = typeof restaurantTables.$inferInsert;
 export type ReservationTable = typeof reservationTables.$inferSelect;
 export type NewReservationTable = typeof reservationTables.$inferInsert;
+export type ReservationClosure = typeof reservationClosures.$inferSelect;
+export type NewReservationClosure = typeof reservationClosures.$inferInsert;
 export type ServiceRequest = typeof serviceRequests.$inferSelect;
 export type NewServiceRequest = typeof serviceRequests.$inferInsert;
 export type RestaurantEditUnlock = typeof restaurantEditUnlocks.$inferSelect;

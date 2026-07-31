@@ -2,14 +2,24 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2, Plus, Power, CheckCircle2, Clock, Users, Home, Trees, LayoutGrid, Pause, Play, Pencil, X } from "lucide-react";
-import type { ReservationHour } from "@/lib/reservations";
+import { Trash2, Plus, Power, CheckCircle2, Clock, Users, Home, Trees, LayoutGrid, Pause, Play, Pencil, X, CalendarOff, Eye, Hourglass } from "lucide-react";
+import type { ReservationHour, Closure } from "@/lib/reservations";
 import ReservationTablesManager, { type ResTableRow } from "@/components/restaurant/ReservationTablesManager";
 import ReservationTableGroupsManager, { type GroupRow } from "@/components/restaurant/ReservationTableGroupsManager";
 import EditHoursModal from "@/components/restaurant/EditHoursModal";
 
 const DAYS = ["Duminică", "Luni", "Marți", "Miercuri", "Joi", "Vineri", "Sâmbătă"];
 const DAYS_SHORT = ["Dum", "Lun", "Mar", "Mie", "Joi", "Vin", "Sâm"];
+
+/** "2026-08-04" → "mar., 4 aug. 2026". Parsed as a LOCAL date, never UTC. */
+function formatRoDate(iso: string): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString("ro-RO", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
 
 /** Owner/manager controls: enable, confirm mode, party cap, and hours + seats. */
 export default function ReservationSettings({
@@ -25,6 +35,12 @@ export default function ReservationSettings({
   initialAdvanceDays,
   initialResTables,
   initialGroups,
+  initialLongTurnEnabled,
+  initialLongTurnFromParty,
+  initialLongTurnMinutes,
+  initialAllowReducedTurn,
+  initialShowDuration,
+  initialClosures,
 }: {
   restaurantId: string;
   initialEnabled: boolean;
@@ -38,6 +54,12 @@ export default function ReservationSettings({
   initialAdvanceDays: number;
   initialResTables: ResTableRow[];
   initialGroups: GroupRow[];
+  initialLongTurnEnabled: boolean;
+  initialLongTurnFromParty: number;
+  initialLongTurnMinutes: number;
+  initialAllowReducedTurn: boolean;
+  initialShowDuration: boolean;
+  initialClosures: Closure[];
 }) {
   const router = useRouter();
   const [enabled, setEnabled] = useState(initialEnabled);
@@ -48,6 +70,21 @@ export default function ReservationSettings({
   const [capacityMode, setCapacityMode] = useState<"seats" | "tables">(initialCapacityMode);
   const [maxJoin, setMaxJoin] = useState(initialMaxJoin);
   const [advanceDays, setAdvanceDays] = useState<number | "">(initialAdvanceDays);
+  // Long-turn rule for large parties + the shorter-stay fallback.
+  const [longTurnOn, setLongTurnOn] = useState(initialLongTurnEnabled);
+  const [longFrom, setLongFrom] = useState<number | "">(initialLongTurnFromParty);
+  const [longMinutes, setLongMinutes] = useState(initialLongTurnMinutes);
+  const [allowReduced, setAllowReduced] = useState(initialAllowReducedTurn);
+  const [showDuration, setShowDuration] = useState(initialShowDuration);
+  // Closed dates.
+  const [closures, setClosures] = useState<Closure[]>(initialClosures);
+  const [closeFrom, setCloseFrom] = useState("");
+  const [closeTo, setCloseTo] = useState("");
+  const [closeReason, setCloseReason] = useState("");
+  const [closeError, setCloseError] = useState<string | null>(null);
+  const [confirmClosure, setConfirmClosure] = useState<{ count: number; affected: { date: string; time: string; partySize: number; guestName: string; guestPhone: string }[] } | null>(null);
+  // Deleting an interval that still has bookings in it — show them, offer pausing instead.
+  const [confirmDeleteHour, setConfirmDeleteHour] = useState<{ hourId: string; count: number; bookings: { date: string; time: string; partySize: number; guestName: string; guestPhone: string }[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [editingHour, setEditingHour] = useState<ReservationHour | null>(null);
@@ -75,7 +112,7 @@ export default function ReservationSettings({
   // Windows missing per-area seats (nudge after enabling areas).
   const windowsMissingAreas = initialHours.filter((h) => h.seatsInside == null && h.seatsOutside == null);
 
-  async function patchSettings(next: { enabled?: boolean; confirmMode?: "auto" | "manual"; maxPartySize?: number; areasEnabled?: boolean; turnMinutes?: number; capacityMode?: "seats" | "tables"; maxJoin?: number; advanceDays?: number }) {
+  async function patchSettings(next: { enabled?: boolean; confirmMode?: "auto" | "manual"; maxPartySize?: number; areasEnabled?: boolean; turnMinutes?: number; capacityMode?: "seats" | "tables"; maxJoin?: number; advanceDays?: number; longTurnEnabled?: boolean; longTurnFromParty?: number; longTurnMinutes?: number; allowReducedTurn?: boolean; showDuration?: boolean }) {
     setBusy(true);
     setError(null);
     const res = await fetch(`/api/restaurants/${restaurantId}/reservations-settings`, {
@@ -88,6 +125,38 @@ export default function ReservationSettings({
     if (res.ok) { router.refresh(); return d ?? {}; }
     setError(d.error ?? "Eroare.");
     return null;
+  }
+
+  /** Close a date range. `force` is set after the owner saw the affected bookings. */
+  async function addClosure(force: boolean) {
+    if (!closeFrom) { setCloseError("Alege data."); return; }
+    if (closeTo && closeTo < closeFrom) { setCloseError("Data de sfârșit trebuie să fie după cea de început."); return; }
+    setBusy(true);
+    setCloseError(null);
+    const res = await fetch(`/api/restaurants/${restaurantId}/reservation-closures`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dateFrom: closeFrom, dateTo: closeTo || closeFrom, reason: closeReason || undefined, force }),
+    });
+    setBusy(false);
+    const d = await res.json().catch(() => ({}));
+    if (res.ok) {
+      setClosures((c) => [...c, { id: crypto.randomUUID(), dateFrom: closeFrom, dateTo: closeTo || closeFrom, reason: closeReason || null }].sort((a, b) => a.dateFrom.localeCompare(b.dateFrom)));
+      setCloseFrom(""); setCloseTo(""); setCloseReason(""); setConfirmClosure(null);
+      router.refresh();
+      return;
+    }
+    // Bookings already exist in the range — show them so the owner can call those guests.
+    if (d.needsConfirm) { setConfirmClosure({ count: d.affected?.length ?? 0, affected: d.affected ?? [] }); return; }
+    setCloseError(d.error ?? "Eroare.");
+  }
+
+  async function removeClosure(id: string) {
+    setBusy(true);
+    const res = await fetch(`/api/restaurants/${restaurantId}/reservation-closures?closureId=${id}`, { method: "DELETE" });
+    setBusy(false);
+    if (res.ok) { setClosures((c) => c.filter((x) => x.id !== id)); router.refresh(); }
+    else setCloseError("Eroare la ștergere.");
   }
 
   async function addHours() {
@@ -124,28 +193,39 @@ export default function ReservationSettings({
     setConfirmDisableAreas(false);
   }
 
-  async function removeHours(hourId: string) {
+  /** Delete an interval. `force` is set after the owner has seen what's booked in it. */
+  async function removeHours(hourId: string, force = false) {
     setBusy(true);
     setError(null);
-    const res = await fetch(`/api/restaurants/${restaurantId}/reservation-hours?hourId=${hourId}`, { method: "DELETE" });
+    const res = await fetch(
+      `/api/restaurants/${restaurantId}/reservation-hours?hourId=${hourId}${force ? "&force=true" : ""}`,
+      { method: "DELETE" },
+    );
     setBusy(false);
-    if (res.ok) router.refresh();
-    else { const d = await res.json().catch(() => ({})); setError(d.error ?? "Eroare la ștergere."); }
+    if (res.ok) { setConfirmDeleteHour(null); router.refresh(); return; }
+    const d = await res.json().catch(() => ({}));
+    // Bookings exist inside this interval — show them, and offer pausing instead.
+    if (d.needsConfirm) {
+      setConfirmDeleteHour({ hourId, count: d.affected ?? 0, bookings: d.bookings ?? [] });
+      return;
+    }
+    setError(d.error ?? "Eroare la ștergere.");
   }
 
   // Pause/resume an interval — kept but excluded from new bookings until re-enabled.
-  async function toggleHour(h: ReservationHour) {
+  async function setHourEnabled(hourId: string, enabled: boolean) {
     setBusy(true);
     setError(null);
     const res = await fetch(`/api/restaurants/${restaurantId}/reservation-hours`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ hourId: h.id, enabled: !h.enabled }),
+      body: JSON.stringify({ hourId, enabled }),
     });
     setBusy(false);
     if (res.ok) router.refresh();
     else { const d = await res.json().catch(() => ({})); setError(d.error ?? "Eroare."); }
   }
+  const toggleHour = (h: ReservationHour) => setHourEnabled(h.id, !h.enabled);
 
   // Group windows by day for a friendly weekly view.
   const byDay = initialHours.reduce<Record<number, ReservationHour[]>>((acc, h) => {
@@ -276,6 +356,130 @@ export default function ReservationSettings({
                   <option value={180}>3 ore</option>
                 </select>
               </div>
+            </div>
+          </div>
+
+          {/* Card 3a1 — Longer turn for large parties */}
+          <div className={cardClass}>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <span className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${longTurnOn ? "bg-[#c84b1e]/10" : "bg-gray-100"}`}>
+                  <Hourglass className={`w-5 h-5 ${longTurnOn ? "text-[#c84b1e]" : "text-gray-500"}`} aria-hidden />
+                </span>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Durată mai mare pentru grupuri</h3>
+                  <p className="text-sm text-gray-500">
+                    Grupurile mari stau de obicei mai mult. Poți să le rezervi masa pentru mai mult timp
+                    decât durata obișnuită.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={async () => { const n = !longTurnOn; if (await patchSettings({ longTurnEnabled: n })) setLongTurnOn(n); }}
+                disabled={busy}
+                role="switch"
+                aria-checked={longTurnOn}
+                aria-label="Durată mai mare pentru grupuri"
+                style={{ width: 44, height: 24, minWidth: 44, minHeight: 24 }}
+                className={`relative inline-flex items-center rounded-full transition-colors flex-shrink-0 disabled:opacity-60 border ${
+                  longTurnOn ? "bg-green-600 border-green-600" : "bg-gray-200 border-gray-300"
+                }`}
+              >
+                <span
+                  style={{ width: 18, height: 18, transform: longTurnOn ? "translateX(22px)" : "translateX(3px)" }}
+                  className="inline-block rounded-full bg-white shadow-sm transition-transform"
+                />
+              </button>
+            </div>
+
+            {longTurnOn && (
+              <div className="mt-4 pt-4 border-t border-gray-100 space-y-4">
+                <div className="flex flex-wrap items-center gap-2 text-sm text-gray-700">
+                  <span>De la</span>
+                  <input
+                    type="number" min={2} max={50} value={longFrom}
+                    onChange={(e) => setLongFrom(numOrEmpty(e.target.value))}
+                    onBlur={() => { const v = longFrom === "" ? 6 : longFrom; setLongFrom(v); patchSettings({ longTurnFromParty: v }); }}
+                    className="w-20 border border-gray-300 rounded-lg px-2 py-2 text-sm text-center"
+                  />
+                  <span>persoane, masa este rezervată</span>
+                  <select
+                    value={longMinutes}
+                    onChange={(e) => { const v = Number(e.target.value); setLongMinutes(v); patchSettings({ longTurnMinutes: v }); }}
+                    disabled={busy}
+                    className="border border-gray-300 rounded-lg px-2 py-2 text-sm"
+                  >
+                    <option value={90}>1 oră 30 min</option>
+                    <option value={120}>2 ore</option>
+                    <option value={150}>2 ore 30 min</option>
+                    <option value={180}>3 ore</option>
+                    <option value={210}>3 ore 30 min</option>
+                    <option value={240}>4 ore</option>
+                  </select>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Restul rezervărilor păstrează durata obișnuită de mai sus.
+                </p>
+
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={allowReduced}
+                    onChange={async (e) => { const n = e.target.checked; setAllowReduced(n); await patchSettings({ allowReducedTurn: n }); }}
+                    disabled={busy}
+                    className="mt-0.5 w-4 h-4 accent-[#c84b1e] flex-shrink-0"
+                  />
+                  <span className="text-sm">
+                    <span className="font-medium text-gray-800">Acceptă și rezervări cu durată redusă</span>
+                    <span className="block text-gray-500 mt-0.5">
+                      Dacă între două rezervări rămâne loc doar pentru durata obișnuită, oferă totuși ora
+                      grupului — clientul vede clar până la ce oră are masa. Fără această opțiune, ora nu
+                      apare deloc și pierzi rezervarea.
+                    </span>
+                  </span>
+                </label>
+
+                {!showDuration && (
+                  <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    Recomandat: pornește „Arată durata rezervării” mai jos. Altfel clienții văd mai puține
+                    ore libere pentru grupuri mari, fără să înțeleagă de ce.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Card 3a1b — Show the duration to the guest */}
+          <div className={cardClass}>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <span className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                  <Eye className="w-5 h-5 text-gray-500" aria-hidden />
+                </span>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Arată durata rezervării</h3>
+                  <p className="text-sm text-gray-500">
+                    Clientul vede pe formular cât timp are masa rezervată. Dacă nu vrei să afișezi o
+                    limită de timp, lasă opțiunea oprită.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={async () => { const n = !showDuration; if (await patchSettings({ showDuration: n })) setShowDuration(n); }}
+                disabled={busy}
+                role="switch"
+                aria-checked={showDuration}
+                aria-label="Arată durata rezervării"
+                style={{ width: 44, height: 24, minWidth: 44, minHeight: 24 }}
+                className={`relative inline-flex items-center rounded-full transition-colors flex-shrink-0 disabled:opacity-60 border ${
+                  showDuration ? "bg-green-600 border-green-600" : "bg-gray-200 border-gray-300"
+                }`}
+              >
+                <span
+                  style={{ width: 18, height: 18, transform: showDuration ? "translateX(22px)" : "translateX(3px)" }}
+                  className="inline-block rounded-full bg-white shadow-sm transition-transform"
+                />
+              </button>
             </div>
           </div>
 
@@ -526,7 +730,161 @@ export default function ReservationSettings({
               {hoursError && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2 mt-3">{hoursError}</p>}
             </div>
           </div>
+
+          {/* Card 5 — Closed dates (no ONLINE bookings on these days) */}
+          <div className={cardClass}>
+            <div className="flex items-start gap-3 mb-1">
+              <span className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                <CalendarOff className="w-5 h-5 text-gray-500" aria-hidden />
+              </span>
+              <div>
+                <h3 className="font-semibold text-gray-900">Zile închise</h3>
+                <p className="text-sm text-gray-500">
+                  Zile în care nu primești rezervări online (sărbători, eveniment privat, concediu).
+                  Ziua dispare din formularul clienților. Rezervările deja făcute rămân neatinse, iar
+                  tu poți adăuga în continuare rezervări telefonice.
+                </p>
+              </div>
+            </div>
+
+            {closures.length > 0 && (
+              <ul className="mt-4 divide-y divide-gray-100 border-t border-gray-100">
+                {closures.map((c) => (
+                  <li key={c.id} className="py-2.5 flex items-center gap-3">
+                    <span className="flex-1 min-w-0">
+                      <span className="text-sm font-medium text-gray-900">
+                        {c.dateFrom === c.dateTo ? formatRoDate(c.dateFrom) : `${formatRoDate(c.dateFrom)} – ${formatRoDate(c.dateTo)}`}
+                      </span>
+                      {c.reason && <span className="block text-xs text-gray-500 truncate">{c.reason}</span>}
+                    </span>
+                    <button
+                      onClick={() => removeClosure(c.id)}
+                      disabled={busy}
+                      className="text-sm text-gray-500 hover:text-red-600 disabled:opacity-50 px-2 py-1"
+                    >
+                      Redeschide
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <label className={labelClass} title="Prima zi închisă">De la
+                <input type="date" value={closeFrom} onChange={(e) => setCloseFrom(e.target.value)} className={fieldClass} />
+              </label>
+              <label className={labelClass} title="Ultima zi închisă — lasă gol pentru o singură zi">Până la
+                <input type="date" value={closeTo} min={closeFrom || undefined} onChange={(e) => setCloseTo(e.target.value)} className={fieldClass} />
+              </label>
+              <label className={labelClass} title="Doar pentru tine — clienții nu văd acest text">Motiv
+                <input type="text" value={closeReason} maxLength={200} placeholder="opțional" onChange={(e) => setCloseReason(e.target.value)} className={fieldClass} />
+              </label>
+              <button
+                onClick={() => addClosure(false)}
+                disabled={busy || !closeFrom}
+                className="inline-flex items-center justify-center gap-1 bg-[#1a1a1a] text-white text-sm h-[38px] px-3 rounded-lg hover:bg-gray-700 disabled:opacity-50 col-span-2 sm:col-span-1 self-end"
+              >
+                <Plus className="w-4 h-4" aria-hidden /> Închide
+              </button>
+            </div>
+            {closeError && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2 mt-3">{closeError}</p>}
+          </div>
         </>
+      )}
+
+      {/* Deleting an interval that still has bookings. They are NOT cancelled, but the
+          owner may have meant „pauză” — which is reversible — so offer that first. */}
+      {confirmDeleteHour && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40" onClick={() => setConfirmDeleteHour(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-md p-5 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <h3 className="font-semibold text-gray-900">
+                Ai {confirmDeleteHour.count} {confirmDeleteHour.count === 1 ? "rezervare" : "rezervări"} în acest interval
+              </h3>
+              <button onClick={() => setConfirmDeleteHour(null)} aria-label="Închide" className="text-gray-400 hover:text-gray-700">
+                <X className="w-5 h-5" aria-hidden />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600">
+              Ștergerea intervalului <span className="font-medium">nu anulează</span> aceste rezervări — le
+              vezi în continuare în „Rezervări”. Dar dacă vrei doar să nu mai primești rezervări noi aici,
+              folosește <span className="font-medium">„Oprește temporar”</span> (⏸): e reversibil, ștergerea nu.
+            </p>
+            <ul className="mt-3 divide-y divide-gray-100 border-y border-gray-100">
+              {confirmDeleteHour.bookings.map((b, i) => (
+                <li key={i} className="py-2 text-sm flex items-center justify-between gap-3">
+                  <span className="min-w-0">
+                    <span className="font-medium text-gray-900">{b.guestName}</span>
+                    <span className="block text-xs text-gray-500">
+                      {formatRoDate(b.date)} · {b.time} · {b.partySize} pers.
+                    </span>
+                  </span>
+                  <a href={`tel:${b.guestPhone}`} className="text-[#c84b1e] font-medium whitespace-nowrap">{b.guestPhone}</a>
+                </li>
+              ))}
+            </ul>
+            <div className="flex flex-col sm:flex-row gap-2 mt-4">
+              <button onClick={() => setConfirmDeleteHour(null)} className="flex-1 border border-gray-300 rounded-lg py-2.5 text-sm font-medium hover:bg-gray-50">
+                Renunță
+              </button>
+              <button
+                onClick={async () => {
+                  const hourId = confirmDeleteHour.hourId;
+                  setConfirmDeleteHour(null);
+                  await setHourEnabled(hourId, false);
+                }}
+                disabled={busy}
+                className="flex-1 bg-[#1a1a1a] text-white rounded-lg py-2.5 text-sm font-medium hover:bg-gray-700 disabled:opacity-60"
+              >
+                Oprește temporar
+              </button>
+              <button onClick={() => removeHours(confirmDeleteHour.hourId, true)} disabled={busy} className="flex-1 border border-red-300 text-red-700 rounded-lg py-2.5 text-sm font-medium hover:bg-red-50 disabled:opacity-60">
+                Șterge oricum
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Closing a range that already holds bookings — show them so the owner can call. */}
+      {confirmClosure && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40" onClick={() => setConfirmClosure(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-md p-5 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <h3 className="font-semibold text-gray-900">
+                Ai {confirmClosure.count} {confirmClosure.count === 1 ? "rezervare" : "rezervări"} în această perioadă
+              </h3>
+              <button onClick={() => setConfirmClosure(null)} aria-label="Închide" className="text-gray-400 hover:text-gray-700">
+                <X className="w-5 h-5" aria-hidden />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600">
+              Închiderea zilelor <span className="font-medium">nu anulează</span> aceste rezervări — ele rămân
+              valabile. Dacă nu le mai poți onora, sună clienții.
+            </p>
+            <ul className="mt-3 divide-y divide-gray-100 border-y border-gray-100">
+              {confirmClosure.affected.map((b, i) => (
+                <li key={i} className="py-2 text-sm flex items-center justify-between gap-3">
+                  <span className="min-w-0">
+                    <span className="font-medium text-gray-900">{b.guestName}</span>
+                    <span className="block text-xs text-gray-500">
+                      {formatRoDate(b.date)} · {b.time} · {b.partySize} pers.
+                    </span>
+                  </span>
+                  <a href={`tel:${b.guestPhone}`} className="text-[#c84b1e] font-medium whitespace-nowrap">{b.guestPhone}</a>
+                </li>
+              ))}
+            </ul>
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setConfirmClosure(null)} className="flex-1 border border-gray-300 rounded-lg py-2.5 text-sm font-medium hover:bg-gray-50">
+                Renunță
+              </button>
+              <button onClick={() => addClosure(true)} disabled={busy} className="flex-1 bg-[#c84b1e] text-white rounded-lg py-2.5 text-sm font-medium hover:bg-[#a83d18] disabled:opacity-60">
+                Închide oricum
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {editingHour && (

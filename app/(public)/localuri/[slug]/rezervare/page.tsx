@@ -6,7 +6,7 @@ import type { Metadata } from "next";
 import { db } from "@/lib/db";
 import { restaurants, places, users, newsletterSubscribers } from "@/lib/db/schema";
 import { auth } from "@/lib/auth";
-import { canReserve, getReservationHours, getMaxPartySize } from "@/lib/reservations";
+import { canReserve, getReservationHours, getMaxPartySize, getClosures, getReservationConfig } from "@/lib/reservations";
 import ReservationForm from "@/components/restaurant/ReservationForm";
 import { pageMetadata } from "@/lib/seo";
 
@@ -58,6 +58,9 @@ export default async function ReservationPage({ params }: Props) {
 
   const hours = await getReservationHours(restaurant.id);
   const maxParty = await getMaxPartySize(restaurant.id);
+  // Closed dates are dropped from the day picker; the duration config lets the form
+  // name the stay length for the current party size without an extra request.
+  const [closures, cfg] = await Promise.all([getClosures(restaurant.id), getReservationConfig(restaurant.id)]);
 
   // Pre-fill for logged-in members (convenience — never required). Also load
   // whether the account already saved a phone and whether they're a newsletter
@@ -109,6 +112,8 @@ export default async function ReservationPage({ params }: Props) {
         hasSavedPhone={hasSavedPhone}
         isSubscriber={isSubscriber}
         advanceDays={restaurant.advanceDays ?? 60}
+        closures={closures.map((c) => ({ dateFrom: c.dateFrom, dateTo: c.dateTo }))}
+        duration={{ show: cfg.showDuration, turn: cfg.turn, longTurn: cfg.longTurn }}
       />
     </div>
   );
