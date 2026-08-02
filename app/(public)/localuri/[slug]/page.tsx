@@ -11,8 +11,16 @@ import JsonLd from "@/components/seo/JsonLd";
 import { pageMetadata, localBusinessJsonLd, breadcrumbJsonLd } from "@/lib/seo";
 import { canReserve } from "@/lib/reservations";
 import { mapsUrl } from "@/lib/maps";
+import { langFrom, strings, withLang } from "@/lib/i18n-reservation";
+import LangToggle from "@/components/ui/LangToggle";
 
-type Props = { params: Promise<{ slug: string }> };
+// `?lang=en` carries through from the QR menu so the whole restaurant → menu →
+// booking path stays in one language. pageMetadata() canonicalises without query
+// strings, so this adds no duplicate-content risk (see lib/seo.ts).
+type Props = {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ lang?: string }>;
+};
 
 async function getPlace(slug: string) {
   const [item] = await db.select().from(places).where(eq(places.slug, slug)).limit(1);
@@ -52,10 +60,14 @@ async function restaurantActions(placeId: string): Promise<{ menu: boolean; rese
   return { menu, reserve: await canReserve(r.id) };
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+// The card is already language-neutral: the title is the venue's own name, and the
+// description is the owner's Romanian text, which has no English column yet (Stage 2).
+// So only the declared OG locale follows `?lang=en`; the canonical is untouched.
+export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const { slug } = await params;
+  const lang = langFrom((await searchParams).lang);
   const place = await getPlace(slug);
-  if (!place || place.status !== "published") return { title: "Local negăsit" };
+  if (!place || place.status !== "published") return { title: lang === "en" ? "Venue not found" : "Local negăsit" };
   const images: string[] = place.imagesJson ? JSON.parse(place.imagesJson) : [];
   return pageMetadata({
     title: place.name,
@@ -63,10 +75,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     path: `/localuri/${place.slug}`,
     image: images[0],
     section: "Localuri",
+    locale: lang === "en" ? "en_GB" : undefined,
   });
 }
 
-export default async function LocalPage({ params }: Props) {
+export default async function LocalPage({ params, searchParams }: Props) {
+  const lang = langFrom((await searchParams).lang);
+  const t = strings(lang);
   const { slug } = await params;
   const place = await getPlace(slug);
 
@@ -109,6 +124,13 @@ export default async function LocalPage({ params }: Props) {
           <Image src={images[0]} alt={place.name} fill priority sizes="(max-width: 768px) 100vw, 672px" className="object-cover" />
         </div>
       )}
+      {/* The toggle only appears where the language actually changes something —
+          i.e. on restaurants, whose menu and booking form are translated. */}
+      {(actions.menu || actions.reserve) && (
+        <div className="flex justify-end mb-3">
+          <LangToggle lang={lang} path={`/localuri/${place.slug}`} />
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         {place.category && (
           <Badge variant="category" category={place.category}>
@@ -127,20 +149,20 @@ export default async function LocalPage({ params }: Props) {
         <div className="flex flex-wrap gap-3 mb-6">
           {actions.menu && (
             <Link
-              href={`/localuri/${place.slug}/meniu`}
+              href={withLang(`/localuri/${place.slug}/meniu`, lang)}
               className="inline-flex items-center gap-2 bg-accent text-white font-semibold px-5 py-3 rounded-xl hover:bg-accent-hover transition-colors"
             >
               <UtensilsCrossed className="w-5 h-5" aria-hidden />
-              Vezi meniul
+              {t.seeMenu}
             </Link>
           )}
           {actions.reserve && (
             <Link
-              href={`/localuri/${place.slug}/rezervare`}
+              href={withLang(`/localuri/${place.slug}/rezervare`, lang)}
               className="inline-flex items-center gap-2 border border-accent text-accent font-semibold px-5 py-3 rounded-xl hover:bg-accent/5 transition-colors"
             >
               <CalendarClock className="w-5 h-5" aria-hidden />
-              Rezervă o masă
+              {t.bookTable}
             </Link>
           )}
         </div>
@@ -161,10 +183,10 @@ export default async function LocalPage({ params }: Props) {
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 hover:text-accent transition-colors"
-              title="Deschide în Google Maps"
+              title={t.openInMaps}
             >
               {inner}
-              <span className="text-xs text-accent whitespace-nowrap">Vezi pe hartă ↗</span>
+              <span className="text-xs text-accent whitespace-nowrap">{t.viewOnMap} ↗</span>
             </a>
           ) : (
             <p className="flex items-center gap-2">{inner}</p>

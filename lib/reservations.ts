@@ -1012,6 +1012,31 @@ export async function slotCapacitySnapshot(
 }
 
 /**
+ * Why a public booking was refused, as a STABLE CODE plus the values needed to phrase
+ * it. The client localises this; `reason` stays alongside as the Romanian fallback for
+ * the API and for staff-facing callers. Codes exist so the booking form never has to
+ * string-match a translated sentence.
+ */
+export type BookingRefusal =
+  | { code: "party_size"; max: number }
+  | { code: "area_required" }
+  | { code: "date_past" }
+  | { code: "date_too_far"; advanceDays: number }
+  | { code: "date_closed" }
+  | { code: "no_table" }
+  | { code: "slot_taken" };
+
+/** Kept as one loose shape (not a discriminated union) to match how every caller and
+ *  test already reads this result; `refusal` is present exactly when `ok` is false. */
+export type BookingValidation = {
+  ok: boolean;
+  reason?: string;
+  refusal?: BookingRefusal;
+  assignedTableIds?: string[];
+  turnMinutes?: number;
+};
+
+/**
  * Server-side validity check at booking time (re-checked to prevent oversell):
  * party within the restaurant cap, and the slot has enough seats for this party in
  * the chosen area (or single capacity when areas are off).
@@ -1026,15 +1051,15 @@ export async function validateBooking(
   // `acceptReducedTurn`: the guest chose a slot the form flagged as shorter-than-usual.
   // Never trusted — the reduced fit is re-derived here before it's honoured.
   opts: { channel?: BookingChannel; acceptReducedTurn?: boolean } = {},
-): Promise<{ ok: boolean; reason?: string; assignedTableIds?: string[]; turnMinutes?: number }> {
+): Promise<BookingValidation> {
   const cap = await getMaxPartySize(restaurantId);
   if (partySize < 1 || partySize > cap) {
-    return { ok: false, reason: `Numărul de persoane trebuie să fie între 1 și ${cap}.` };
+    return { ok: false, reason: `Numărul de persoane trebuie să fie între 1 și ${cap}.`, refusal: { code: "party_size", max: cap } };
   }
   // When areas are on, an area is required.
   if (await areasEnabled(restaurantId)) {
     if (area !== "inside" && area !== "outside") {
-      return { ok: false, reason: "Alege zona (interior sau terasă)." };
+      return { ok: false, reason: "Alege zona (interior sau terasă).", refusal: { code: "area_required" } };
     }
   }
 
@@ -1047,13 +1072,13 @@ export async function validateBooking(
     // created and then never appear on the board (which only lists today onward).
     const outside = outsideBookingWindow(dateStr, cfg.advanceDays);
     if (outside === "past") {
-      return { ok: false, reason: "Data a trecut. Alege o zi din viitor." };
+      return { ok: false, reason: "Data a trecut. Alege o zi din viitor.", refusal: { code: "date_past" } };
     }
     if (outside === "too-far") {
-      return { ok: false, reason: `Poți rezerva cu cel mult ${cfg.advanceDays} de zile înainte.` };
+      return { ok: false, reason: `Poți rezerva cu cel mult ${cfg.advanceDays} de zile înainte.`, refusal: { code: "date_too_far", advanceDays: cfg.advanceDays } };
     }
     if (await isDateClosed(restaurantId, dateStr)) {
-      return { ok: false, reason: "Restaurantul nu primește rezervări în această zi. Alege altă dată." };
+      return { ok: false, reason: "Restaurantul nu primește rezervări în această zi. Alege altă dată.", refusal: { code: "date_closed" } };
     }
   }
 
@@ -1071,13 +1096,13 @@ export async function validateBooking(
       const short = await assignTablesFor(restaurantId, dateStr, time, partySize, area, excludeReservationId, { turnMinutes: cfg.turn, channel });
       if (short) return { ok: true, assignedTableIds: short, turnMinutes: cfg.turn };
     }
-    return { ok: false, reason: "Nu mai avem o masă liberă pentru acest număr de persoane la ora aleasă. Alege altă oră." };
+    return { ok: false, reason: "Nu mai avem o masă liberă pentru acest număr de persoane la ora aleasă. Alege altă oră.", refusal: { code: "no_table" } };
   }
 
   const avail = await availabilityForDay(restaurantId, dateStr, partySize, area, excludeReservationId, channel);
   if (avail.slots.includes(time)) return { ok: true, turnMinutes: fullTurn };
   if (mayReduce && avail.reducedSlots.includes(time)) return { ok: true, turnMinutes: cfg.turn };
-  return { ok: false, reason: "Ora selectată nu mai este disponibilă. Alege altă oră." };
+  return { ok: false, reason: "Ora selectată nu mai este disponibilă. Alege altă oră.", refusal: { code: "slot_taken" } };
 }
 
 /**

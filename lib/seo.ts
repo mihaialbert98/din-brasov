@@ -59,6 +59,10 @@ export function pageMetadata(opts: {
   type?: "website" | "article";
   publishedTime?: string;
   section?: string; // for the OG fallback image label
+  // OG locale, e.g. "en_GB" for a `?lang=en` view. The canonical and og:url stay on
+  // the clean path either way, so both language views consolidate to one URL — social
+  // engagement counts don't split, and Google indexes a single page.
+  locale?: string;
 }): Metadata {
   const description = opts.description ? metaDescription(opts.description) : SITE_DESCRIPTION;
   const url = absoluteUrl(opts.path);
@@ -73,7 +77,7 @@ export function pageMetadata(opts: {
       description,
       url,
       siteName: SITE_NAME,
-      locale: SITE_LOCALE,
+      locale: opts.locale ?? SITE_LOCALE,
       type: opts.type ?? "website",
       images: [{ url: image, width: 1200, height: 630 }],
       ...(opts.publishedTime ? { publishedTime: opts.publishedTime } : {}),

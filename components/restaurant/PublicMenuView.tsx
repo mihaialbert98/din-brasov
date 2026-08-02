@@ -7,7 +7,9 @@ import type { MenuDesignId } from "@/lib/menu-themes";
 /**
  * Public read-only menu shell — like MenuShell but WITHOUT the service buttons
  * (call waiter / bill). Used on the browse-before-you-visit menu reached from
- * Localuri (`/restaurant/[slug]/meniu`). Owns the RO/EN language state.
+ * Localuri (`/restaurant/[slug]/meniu`). Owns the RO/EN language state, seeded from
+ * `?lang=` so the choice carries in from the restaurant page and back out to the
+ * booking form — the toggle then keeps working client-side as before.
  */
 export default function PublicMenuView({
   design,
@@ -15,14 +17,16 @@ export default function PublicMenuView({
   logoUrl,
   coverUrl,
   categories,
+  initialLang = "ro",
 }: {
   design: MenuDesignId;
   restaurantName: string;
   logoUrl: string | null;
   coverUrl?: string | null;
   categories: MenuViewCategory[];
+  initialLang?: MenuLang;
 }) {
-  const [lang, setLang] = useState<MenuLang>("ro");
+  const [lang, setLang] = useState<MenuLang>(initialLang);
 
   return (
     <MenuView

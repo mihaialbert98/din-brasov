@@ -58,7 +58,8 @@ export async function POST(req: Request) {
   const slot = await validateBooking(d.restaurantId, d.date, d.time, d.partySize, d.area, undefined, {
     acceptReducedTurn: d.acceptReducedTurn,
   });
-  if (!slot.ok) return NextResponse.json({ error: slot.reason }, { status: 400 });
+  // `refusal` is a stable code the form localises; `error` stays as the RO fallback.
+  if (!slot.ok) return NextResponse.json({ error: slot.reason, refusal: slot.refusal }, { status: 400 });
 
   // Rate limit by phone (anti-spam).
   if (!(await checkReservationLimit(d.guestPhone))) {

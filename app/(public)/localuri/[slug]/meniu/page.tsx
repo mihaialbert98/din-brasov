@@ -9,11 +9,15 @@ import { getRestaurantMenu } from "@/lib/menu";
 import { canReserve } from "@/lib/reservations";
 import { resolveTheme, themeStyle } from "@/lib/menu-themes";
 import PublicMenuView from "@/components/restaurant/PublicMenuView";
+import { langFrom } from "@/lib/i18n-reservation";
 import JsonLd from "@/components/seo/JsonLd";
 import { pageMetadata, localBusinessJsonLd, breadcrumbJsonLd, menuJsonLd } from "@/lib/seo";
 import { mapsUrl } from "@/lib/maps";
 
-type Props = { params: Promise<{ slug: string }> };
+type Props = {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ lang?: string }>;
+};
 
 /**
  * Resolve a published Localuri place slug → its opted-in, active restaurant (the
@@ -71,7 +75,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   });
 }
 
-export default async function PlaceMenuPage({ params }: Props) {
+export default async function PlaceMenuPage({ params, searchParams }: Props) {
+  const lang = langFrom((await searchParams).lang);
   const { slug } = await params;
   const data = await getPlaceMenu(slug);
   if (!data) notFound();
@@ -157,6 +162,7 @@ export default async function PlaceMenuPage({ params }: Props) {
       ) : (
         <div className="menu-theme mt-4" style={themeStyle(theme) as React.CSSProperties}>
           <PublicMenuView
+            initialLang={lang}
             design={design.id}
             restaurantName={restaurant.name}
             logoUrl={restaurant.logoUrl}
