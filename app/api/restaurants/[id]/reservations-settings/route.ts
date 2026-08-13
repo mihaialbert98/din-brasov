@@ -28,6 +28,8 @@ const schema = z.object({
   allowReducedTurn: z.boolean().optional(),
   // Show the guest how long the table is held (booking form + success screen).
   showDuration: z.boolean().optional(),
+  // Auto-confirm only: mention the confirmation email on the success screen.
+  showEmailNotice: z.boolean().optional(),
   // Capacity model + its knobs.
   capacityMode: z.enum(["seats", "tables"]).optional(),
   maxJoin: z.number().int().min(1).max(6).optional(),
@@ -75,6 +77,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (parsed.data.longTurnMinutes !== undefined) patch.reservationLongTurnMinutes = parsed.data.longTurnMinutes;
   if (parsed.data.allowReducedTurn !== undefined) patch.reservationAllowReducedTurn = parsed.data.allowReducedTurn;
   if (parsed.data.showDuration !== undefined) patch.reservationShowDuration = parsed.data.showDuration;
+  if (parsed.data.showEmailNotice !== undefined) patch.reservationShowEmailNotice = parsed.data.showEmailNotice;
   if (parsed.data.capacityMode !== undefined) patch.reservationCapacityMode = parsed.data.capacityMode;
   if (parsed.data.maxJoin !== undefined) patch.reservationMaxJoin = parsed.data.maxJoin;
   if (parsed.data.advanceDays !== undefined) patch.reservationAdvanceDays = parsed.data.advanceDays;

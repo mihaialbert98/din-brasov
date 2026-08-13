@@ -22,6 +22,13 @@ export type DurationInfo = {
   longTurn: { enabled: boolean; fromParty: number; minutes: number };
 };
 
+/** Owner choices that only affect WORDING on the success screen, never behaviour. */
+export type SuccessCopyInfo = {
+  /** Auto-confirm only: mention that a confirmation email is coming. The email is
+   *  sent regardless — this just decides whether the screen says so. */
+  showEmailNotice: boolean;
+};
+
 /** Add days to a "YYYY-MM-DD" date (UTC arithmetic, so DST can't shift it). */
 function addDaysISO(iso: string, days: number): string {
   const [y, m, d] = iso.split("-").map(Number);
@@ -76,6 +83,7 @@ export default function ReservationForm({
   advanceDays = 60,
   closures = [],
   duration,
+  successCopy = { showEmailNotice: true },
   lang = "ro",
 }: {
   restaurantId: string;
@@ -91,6 +99,7 @@ export default function ReservationForm({
   advanceDays?: number;
   closures?: ClosureRange[];
   duration: DurationInfo;
+  successCopy?: SuccessCopyInfo;
   lang?: Lang;
 }) {
   const t = strings(lang);
@@ -282,12 +291,12 @@ export default function ReservationForm({
           <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
             <Check className="w-6 h-6 text-green-700" aria-hidden />
           </div>
-          <h2 className="font-serif text-xl font-semibold text-ink mb-1">
+          <h2 className="font-serif text-xl font-semibold text-ink mb-1 uppercase tracking-wide">
             {done === "confirmed" ? t.confirmedTitle : t.pendingTitle}
           </h2>
           <p className="text-sm text-muted">
             {(done === "confirmed"
-              ? willEmail
+              ? willEmail && successCopy.showEmailNotice
                 ? t.confirmedWithEmail
                 : t.confirmedNoEmail(restaurantName)
               : willEmail
