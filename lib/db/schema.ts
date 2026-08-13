@@ -638,6 +638,10 @@ export const restaurants = pgTable(
     // Show the guest how long the table is held, on the booking form + success screen.
     // Opt-in: some owners would rather not advertise a time limit.
     reservationShowDuration: boolean("reservation_show_duration").notNull().default(false),
+    // Auto-confirm restaurants only: whether the success screen tells the guest a
+    // confirmation email is on its way. Purely wording — the email is sent either
+    // way. Default true = the message every existing restaurant already shows.
+    reservationShowEmailNotice: boolean("reservation_show_email_notice").notNull().default(true),
     // Capacity model: "seats" = a single seat pool (seatsPerSlot / per-area seats on
     // reservation_hours); "tables" = individual reservation_tables, availability by
     // whether a free table (or a join of joinable ones) fits the party. Default seats

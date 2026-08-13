@@ -124,6 +124,8 @@ export type ReservationConfig = {
   longTurn: { enabled: boolean; fromParty: number; minutes: number };
   allowReducedTurn: boolean;
   showDuration: boolean;
+  /** Auto-confirm only: whether the success screen mentions the confirmation email. */
+  showEmailNotice: boolean;
 };
 
 /** Restaurant-level reservation config that drives which capacity model to use. */
@@ -139,6 +141,7 @@ export async function getReservationConfig(restaurantId: string): Promise<Reserv
       longMinutes: restaurants.reservationLongTurnMinutes,
       allowReduced: restaurants.reservationAllowReducedTurn,
       showDuration: restaurants.reservationShowDuration,
+      showEmailNotice: restaurants.reservationShowEmailNotice,
     })
     .from(restaurants)
     .where(eq(restaurants.id, restaurantId))
@@ -158,6 +161,7 @@ export async function getReservationConfig(restaurantId: string): Promise<Reserv
     },
     allowReducedTurn: r?.allowReduced ?? true,
     showDuration: !!r?.showDuration,
+    showEmailNotice: r?.showEmailNotice ?? true,
   };
 }
 

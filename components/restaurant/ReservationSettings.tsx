@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2, Plus, Power, CheckCircle2, Clock, Users, Home, Trees, LayoutGrid, Pause, Play, Pencil, X, CalendarOff, Eye, Hourglass } from "lucide-react";
+import { Trash2, Plus, Power, CheckCircle2, Clock, Users, Home, Trees, LayoutGrid, Pause, Play, Pencil, X, CalendarOff, Eye, Hourglass, Mail } from "lucide-react";
 import type { ReservationHour, Closure } from "@/lib/reservations";
 import ReservationTablesManager, { type ResTableRow } from "@/components/restaurant/ReservationTablesManager";
 import ReservationTableGroupsManager, { type GroupRow } from "@/components/restaurant/ReservationTableGroupsManager";
@@ -40,6 +40,7 @@ export default function ReservationSettings({
   initialLongTurnMinutes,
   initialAllowReducedTurn,
   initialShowDuration,
+  initialShowEmailNotice,
   initialClosures,
 }: {
   restaurantId: string;
@@ -59,6 +60,7 @@ export default function ReservationSettings({
   initialLongTurnMinutes: number;
   initialAllowReducedTurn: boolean;
   initialShowDuration: boolean;
+  initialShowEmailNotice: boolean;
   initialClosures: Closure[];
 }) {
   const router = useRouter();
@@ -76,6 +78,7 @@ export default function ReservationSettings({
   const [longMinutes, setLongMinutes] = useState(initialLongTurnMinutes);
   const [allowReduced, setAllowReduced] = useState(initialAllowReducedTurn);
   const [showDuration, setShowDuration] = useState(initialShowDuration);
+  const [showEmailNotice, setShowEmailNotice] = useState(initialShowEmailNotice);
   // Closed dates.
   const [closures, setClosures] = useState<Closure[]>(initialClosures);
   const [closeFrom, setCloseFrom] = useState("");
@@ -112,7 +115,7 @@ export default function ReservationSettings({
   // Windows missing per-area seats (nudge after enabling areas).
   const windowsMissingAreas = initialHours.filter((h) => h.seatsInside == null && h.seatsOutside == null);
 
-  async function patchSettings(next: { enabled?: boolean; confirmMode?: "auto" | "manual"; maxPartySize?: number; areasEnabled?: boolean; turnMinutes?: number; capacityMode?: "seats" | "tables"; maxJoin?: number; advanceDays?: number; longTurnEnabled?: boolean; longTurnFromParty?: number; longTurnMinutes?: number; allowReducedTurn?: boolean; showDuration?: boolean }) {
+  async function patchSettings(next: { enabled?: boolean; confirmMode?: "auto" | "manual"; maxPartySize?: number; areasEnabled?: boolean; turnMinutes?: number; capacityMode?: "seats" | "tables"; maxJoin?: number; advanceDays?: number; longTurnEnabled?: boolean; longTurnFromParty?: number; longTurnMinutes?: number; allowReducedTurn?: boolean; showDuration?: boolean; showEmailNotice?: boolean }) {
     setBusy(true);
     setError(null);
     const res = await fetch(`/api/restaurants/${restaurantId}/reservations-settings`, {
@@ -482,6 +485,45 @@ export default function ReservationSettings({
               </button>
             </div>
           </div>
+
+          {/* Card 3a1c — Auto-confirm only: mention the email on the success screen */}
+          {mode === "auto" && (
+            <div className={cardClass}>
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <span className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                    <Mail className="w-5 h-5 text-gray-500" aria-hidden />
+                  </span>
+                  <div>
+                    <h3 className="font-semibold text-gray-900">Anunță clientul că primește email</h3>
+                    <p className="text-sm text-gray-500">
+                      După ce rezervarea e confirmată automat, clientul vede și mesajul „vei primi în
+                      câteva minute un email de confirmare”. Oprește-l dacă preferi un mesaj mai scurt.
+                      <span className="block mt-1 text-gray-400">
+                        Emailul se trimite în ambele cazuri — se schimbă doar textul de pe ecran.
+                      </span>
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={async () => { const n = !showEmailNotice; if (await patchSettings({ showEmailNotice: n })) setShowEmailNotice(n); }}
+                  disabled={busy}
+                  role="switch"
+                  aria-checked={showEmailNotice}
+                  aria-label="Anunță clientul că primește email"
+                  style={{ width: 44, height: 24, minWidth: 44, minHeight: 24 }}
+                  className={`relative inline-flex items-center rounded-full transition-colors flex-shrink-0 disabled:opacity-60 border ${
+                    showEmailNotice ? "bg-green-600 border-green-600" : "bg-gray-200 border-gray-300"
+                  }`}
+                >
+                  <span
+                    style={{ width: 18, height: 18, transform: showEmailNotice ? "translateX(22px)" : "translateX(3px)" }}
+                    className="inline-block rounded-full bg-white shadow-sm transition-transform"
+                  />
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Card 3a2 — Advance booking window */}
           <div className={cardClass}>

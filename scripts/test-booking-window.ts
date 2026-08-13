@@ -134,11 +134,21 @@ async function main() {
 
   // ── 4. Client picker agrees with the server, every time ─────────────────────
   sec("4. The date picker's verdict matches the server's");
-  await db.insert(reservationClosures).values({ restaurantId: r, dateFrom: day(3), dateTo: day(4), reason: "Privat" });
   // Close Sundays so a "closed weekday" case exists too.
   await db.delete(reservationHours).where(eq(reservationHours.dayOfWeek, 0));
   const bookableDays = new Set([1, 2, 3, 4, 5, 6]);
-  const closures = [{ dateFrom: day(3), dateTo: day(4) }];
+
+  // The closed RANGE must sit on days the restaurant is otherwise OPEN — the weekday
+  // check runs before the closure check (deliberately: see 4c), so closing a Sunday
+  // would report "closed-weekday" and tell us nothing about closures. Pick the first
+  // open weekday inside the window rather than hard-coding an offset, which made this
+  // fail roughly one day in seven depending on what weekday the run landed on.
+  const openOffset = [...Array(ADVANCE).keys()]
+    .map((i) => i + 1)
+    .find((o) => bookableDays.has(new Date(`${day(o)}T00:00:00`).getDay()))!;
+  const closedFrom = day(openOffset);
+  await db.insert(reservationClosures).values({ restaurantId: r, dateFrom: closedFrom, dateTo: closedFrom, reason: "Privat" });
+  const closures = [{ dateFrom: closedFrom, dateTo: closedFrom }];
 
   let agreed = 0;
   const disagreements: string[] = [];
@@ -157,7 +167,8 @@ async function main() {
   sec("4b. Each refusal reason is triggered by its own cause");
   ok(clientBlockedReason(day(-1), { bookableDays, closures, advanceDays: ADVANCE }) === "past", "a past date → „a trecut”");
   ok(clientBlockedReason(day(ADVANCE + 1), { bookableDays, closures, advanceDays: ADVANCE }) === "too-far", "beyond the window → „cel mult N zile”");
-  ok(clientBlockedReason(day(3), { bookableDays, closures, advanceDays: ADVANCE }) === "closed-period", "inside a closure → „nu primește rezervări în această perioadă”");
+  ok(clientBlockedReason(closedFrom, { bookableDays, closures, advanceDays: ADVANCE }) === "closed-period",
+    `inside a closure on an OPEN weekday (${closedFrom}) → „nu primește rezervări în această perioadă”`);
   const sunday = [...Array(ADVANCE + 1).keys()].map(day).find((d) => new Date(`${d}T00:00:00`).getDay() === 0);
   if (sunday) ok(clientBlockedReason(sunday, { bookableDays, closures, advanceDays: ADVANCE }) === "closed-weekday", "a closed weekday → „închis în această zi”");
 

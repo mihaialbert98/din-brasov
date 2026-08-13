@@ -47,6 +47,7 @@ export default async function RezervariSetariPage({
       longTurnMinutes: restaurants.reservationLongTurnMinutes,
       allowReducedTurn: restaurants.reservationAllowReducedTurn,
       showDuration: restaurants.reservationShowDuration,
+      showEmailNotice: restaurants.reservationShowEmailNotice,
     })
     .from(restaurants)
     .where(eq(restaurants.id, restaurant.id))
@@ -112,6 +113,7 @@ export default async function RezervariSetariPage({
             initialLongTurnMinutes={row.longTurnMinutes ?? 120}
             initialAllowReducedTurn={row.allowReducedTurn ?? true}
             initialShowDuration={row.showDuration ?? false}
+            initialShowEmailNotice={row.showEmailNotice ?? true}
             initialClosures={closures}
           />
         </>

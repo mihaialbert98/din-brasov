@@ -26,7 +26,9 @@ export default function ReservationHelp() {
             <span className="font-medium text-gray-800">Alege modul de confirmare.</span>{" "}
             <em>Automat</em> = rezervarea e confirmată pe loc. <em>Manual</em> = primești o cerere și o
             confirmi sau o refuzi tu (din tab-ul „Rezervări”); clientul e anunțat pe email dacă și-a lăsat
-            adresa.
+            adresa. La <em>Automat</em> poți alege dacă mesajul de final îi spune clientului că primește
+            un email de confirmare („Anunță clientul că primește email”) — emailul pleacă oricum, se
+            schimbă doar textul.
           </li>
           <li>
             <span className="font-medium text-gray-800">Setează capacitatea.</span>

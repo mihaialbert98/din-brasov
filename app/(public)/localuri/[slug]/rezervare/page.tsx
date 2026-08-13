@@ -138,6 +138,7 @@ export default async function ReservationPage({ params, searchParams }: Props) {
         advanceDays={restaurant.advanceDays ?? 60}
         closures={closures.map((c) => ({ dateFrom: c.dateFrom, dateTo: c.dateTo }))}
         duration={{ show: cfg.showDuration, turn: cfg.turn, longTurn: cfg.longTurn }}
+        successCopy={{ showEmailNotice: cfg.showEmailNotice }}
         lang={lang}
       />
     </div>
