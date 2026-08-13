@@ -4,6 +4,7 @@ import { eq, and, gte, lte, ne, asc, inArray, isNull, isNotNull, sql, type AnyCo
 import { alias } from "drizzle-orm/pg-core";
 import { sendReservationConfirmedEmail, sendReservationDeclinedEmail, sendReservationCancelledEmail, sendReservationUpdatedEmail } from "@/lib/email";
 import { isPlatformStaff } from "@/lib/restaurant-permissions";
+import { runAfterResponse } from "@/lib/after-response";
 import type { Session } from "next-auth";
 
 export type Area = "inside" | "outside";
@@ -1295,7 +1296,9 @@ export async function updateReservation(
     })
     .where(eq(reservations.id, reservationId));
 
-  void notifyReservationUpdated(res, input);
+  // Scheduled, not fire-and-forget: a floating promise can be dropped when the
+  // serverless response returns. See lib/after-response.ts.
+  await runAfterResponse(() => notifyReservationUpdated(res, input));
   return { ok: true, notifiableByEmail: !!res.guestEmail || !!res.userId };
 }
 
@@ -1504,7 +1507,8 @@ export async function setReservationStatus(
   // Notify the guest by email on every status change — confirm, decline or cancel —
   // if we have one (booking email, else the linked account's email). Fire-and-forget;
   // email failure never blocks. Guests with no email are phoned by staff (board modal).
-  void notifyReservationStatus(res, status);
+  // Scheduled, not fire-and-forget — see lib/after-response.ts.
+  await runAfterResponse(() => notifyReservationStatus(res, status));
   return true;
 }
 

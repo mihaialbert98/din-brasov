@@ -12,6 +12,7 @@ import { auth } from "@/lib/auth";
 import { canReserve, validateBooking } from "@/lib/reservations";
 import { sendReservationConfirmedEmail, sendNewsletterWelcomeEmail } from "@/lib/email";
 import { checkReservationLimit, hashIp, getIp } from "@/lib/rate-limit";
+import { runAfterResponse } from "@/lib/after-response";
 
 const schema = z.object({
   restaurantId: z.string().min(1),
@@ -139,7 +140,7 @@ export async function POST(req: Request) {
             consentGivenAt: new Date(),
             ipHash: hashIp(getIp(req)),
           });
-          void sendNewsletterWelcomeEmail(subEmail, token).catch(() => {});
+          await runAfterResponse(() => sendNewsletterWelcomeEmail(subEmail, token));
         }
       } catch {
         /* unique race or send failure → ignore; the booking already succeeded */
@@ -151,13 +152,16 @@ export async function POST(req: Request) {
   // an email). In manual mode nothing is sent here — the email goes out when a staff
   // member confirms/declines the pending request. Best-effort; never blocks the booking.
   if (status === "confirmed" && notifyEmail) {
-    void sendReservationConfirmedEmail(notifyEmail, {
-      restaurantName: r.name,
-      date: d.date,
-      time: d.time,
-      partySize: d.partySize,
-      guestName: d.guestName,
-    }).catch(() => {});
+    const to = notifyEmail;
+    await runAfterResponse(() =>
+      sendReservationConfirmedEmail(to, {
+        restaurantName: r.name,
+        date: d.date,
+        time: d.time,
+        partySize: d.partySize,
+        guestName: d.guestName,
+      }),
+    );
   }
 
   return NextResponse.json({ ok: true, status });
