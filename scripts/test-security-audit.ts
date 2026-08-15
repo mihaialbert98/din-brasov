@@ -16,7 +16,7 @@ import { users, places, restaurants, restaurantMembers, reservations, reservatio
 import { eq, inArray, like } from "drizzle-orm";
 import {
   authorizeReservationSettings, authorizeMenuEdit, canManageRestaurant, canServeRestaurant,
-  canEditMenuNow, isPlatformStaff, getUserRestaurants,
+  isPlatformStaff, getUserRestaurants,
 } from "../lib/restaurant-permissions";
 import { availableSlotsForDay, validateBooking } from "../lib/reservations";
 
@@ -84,14 +84,17 @@ async function main() {
 
   // ─────────────────────────────────────────────────────────────────────────
   sec("2. Menu-edit authz (the item-create gate)");
-  // Owners need a 2FA unlock window → without it, 423 (locked), not open.
-  const gOwnerNoUnlock = await authorizeMenuEdit(S(ownerA), "user", rA!.id);
-  ok("error" in gOwnerNoUnlock && (gOwnerNoUnlock as any).status === 423, "owner without 2FA unlock → 423 locked (not open)");
-  ok("error" in (await authorizeMenuEdit(S(ownerB), "user", rA!.id)) && (await authorizeMenuEdit(S(ownerB), "user", rA!.id) as any).status === 403, "owner of B → 403 on A's menu (cross-tenant)");
-  ok("error" in (await authorizeMenuEdit(S(attacker), "user", rA!.id)), "random user → blocked from A's menu");
-  ok(!("error" in (await authorizeMenuEdit(S(admin), "admin", rA!.id))), "platform admin → menu edit allowed (no 2FA)");
-  ok(await canEditMenuNow(admin, rA!.id, "admin"), "canEditMenuNow true for platform admin");
-  ok(!(await canEditMenuNow(ownerA, rA!.id, "user")), "canEditMenuNow false for owner without unlock");
+  // The emailed-code second factor was removed (Aug 2026) — an owner's own session
+  // is now enough. What must NOT have changed is tenant isolation: these assertions
+  // are the guard that dropping the extra factor didn't open anyone else's menu.
+  ok(!("error" in (await authorizeMenuEdit(S(ownerA), "user", rA!.id))), "owner of A → allowed on A's own menu (no code needed any more)");
+  const gCross = await authorizeMenuEdit(S(ownerB), "user", rA!.id);
+  ok("error" in gCross && (gCross as any).status === 403, "owner of B → still 403 on A's menu (cross-tenant isolation intact)");
+  ok("error" in (await authorizeMenuEdit(S(attacker), "user", rA!.id)), "random user → still blocked from A's menu");
+  const gAnon = await authorizeMenuEdit(null, null, rA!.id);
+  ok("error" in gAnon && (gAnon as any).status === 401, "logged-out → 401, never open");
+  ok(!("error" in (await authorizeMenuEdit(S(admin), "admin", rA!.id))), "platform admin → allowed (oversight)");
+  ok(!("error" in (await authorizeMenuEdit(S(ownerB), "user", rB!.id))), "owner of B → allowed on B's own menu");
 
   // ─────────────────────────────────────────────────────────────────────────
   sec("3. Cross-tenant management/isolation (merged-admin capabilities)");

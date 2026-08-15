@@ -5,6 +5,7 @@ import ServiceBoard from "@/components/restaurant/ServiceBoard";
 import ReservationsBoard from "@/components/restaurant/ReservationsBoard";
 import { useVisiblePoll } from "@/lib/useVisiblePoll";
 import { notify } from "@/lib/chime";
+import { useRepeatingChime, serviceNeedsNudge, reservationsNeedNudge } from "@/lib/useRepeatingChime";
 
 /**
  * Tabbed staff surface: the live service queue and (when the restaurant takes
@@ -68,6 +69,15 @@ export default function StaffBoardTabs({
 
   // Background poll: service is time-sensitive (8s), reservations less so (20s).
   useVisiblePoll(pollBackground, tab === "serviciu" ? 20000 : 8000, 30000);
+
+  // The mounted board nudges for its own items; this covers the OTHER tab, so a
+  // waiter sitting on Serviciu still gets nagged about a reservation waiting for a
+  // decision (and vice-versa). Reservations only when they need one — see above.
+  useRepeatingChime(
+    tab === "serviciu"
+      ? reservationsNeedNudge(manualConfirm, reservationCount)
+      : serviceNeedsNudge(serviceCount),
+  );
 
   // When switching tabs, reset the background baseline for the now-inactive board so
   // we don't fire a spurious chime from a stale prev value on the next poll.

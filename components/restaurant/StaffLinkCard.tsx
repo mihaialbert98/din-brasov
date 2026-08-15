@@ -42,12 +42,7 @@ export default function StaffLinkCard({
       const res = await fetch(`/api/restaurants/${restaurantId}/staff-token/regenerate`, { method: "POST" });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) {
-        // 423 = menu-edit lock; the owner unlocks on the Meniu/Aspect page.
-        setError(
-          res.status === 423
-            ? "Deblochează editarea (cu codul de pe email, din secțiunea Meniu) înainte de a genera un cod nou."
-            : d.error ?? "Eroare la generare."
-        );
+        setError(d.error ?? "Eroare la generare.");
         return;
       }
       router.refresh();

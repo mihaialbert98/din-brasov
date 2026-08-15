@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { notify } from "@/lib/chime";
+import { useRepeatingChime, serviceNeedsNudge } from "@/lib/useRepeatingChime";
 import { useVisiblePoll } from "@/lib/useVisiblePoll";
 import NotifyPermission from "@/components/restaurant/NotifyPermission";
 
@@ -60,7 +61,6 @@ export default function ServiceBoard({ basePath, onCount }: { basePath: string; 
       // Tab title badge + chime/notification when a NEW request arrives.
       const list: ServiceRequest[] = data ?? [];
       const count = list.length;
-      onCount?.(count);
       if (count > prevCount.current) {
         document.title = `(${count}) Serviciu — Din Brașov`;
         // Describe the newest request (last by createdAt) for the OS notification.
@@ -81,6 +81,18 @@ export default function ServiceBoard({ basePath, onCount }: { basePath: string; 
   // Poll every 8s while visible, 30s when the tab is hidden (background OS
   // notifications still fire, at a lower rate to save requests at scale).
   useVisiblePoll(fetchRequests, 8000, 30000);
+
+  // Keep chiming every 15s while a table is still waiting — one alert is easy to
+  // miss mid-service. Stops as soon as the last request is acknowledged.
+  useRepeatingChime(serviceNeedsNudge(requests.length));
+
+  // Single place that reports the open-request count to the parent badge, in an
+  // EFFECT rather than during render. Also lowers the chime baseline when requests
+  // are acknowledged, so the next genuinely new one still registers as a rise.
+  useEffect(() => {
+    onCount?.(requests.length);
+    if (requests.length < prevCount.current) prevCount.current = requests.length;
+  }, [requests.length, onCount]);
   useEffect(() => () => { document.title = "Din Brașov"; }, []);
 
   async function ack(id: string) {
@@ -90,12 +102,11 @@ export default function ServiceBoard({ basePath, onCount }: { basePath: string; 
         method: "POST",
       });
       if (res.ok) {
-        setRequests((rs) => {
-          const next = rs.filter((r) => r.id !== id);
-          prevCount.current = next.length;
-          onCount?.(next.length); // update the tab badge immediately
-          return next;
-        });
+        // Optimistic removal. The updater stays PURE: React runs it during the
+        // render phase, so calling the parent's setState (onCount) from inside it
+        // raised "Cannot update a component while rendering a different component".
+        // The badge and the chime baseline are synced by the effect below instead.
+        setRequests((rs) => rs.filter((r) => r.id !== id));
       }
     } finally {
       setAcking(null);

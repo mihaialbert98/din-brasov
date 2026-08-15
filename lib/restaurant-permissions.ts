@@ -9,7 +9,7 @@
  * Never trust a restaurantId/role taken from the request body alone.
  */
 import { db } from "@/lib/db";
-import { restaurants, restaurantMembers, restaurantEditUnlocks } from "@/lib/db/schema";
+import { restaurants, restaurantMembers } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { slugify } from "@/lib/slugify";
 import type { RestaurantMember } from "@/lib/db/schema";
@@ -68,29 +68,6 @@ export async function canServeRestaurant(
   return m?.memberRole === "owner" || m?.memberRole === "waiter";
 }
 
-/**
- * Whether menu MUTATIONS are currently allowed. Platform staff (admin) always.
- * Owners must hold an active email-code unlock window (2FA on the shared screen).
- * Caller must already have passed canManageRestaurant.
- */
-export async function canEditMenuNow(
-  userId: string,
-  restaurantId: string,
-  platformRole?: string | null
-): Promise<boolean> {
-  if (isPlatformStaff(platformRole)) return true;
-  const [row] = await db
-    .select({ unlockedUntil: restaurantEditUnlocks.unlockedUntil })
-    .from(restaurantEditUnlocks)
-    .where(
-      and(
-        eq(restaurantEditUnlocks.restaurantId, restaurantId),
-        eq(restaurantEditUnlocks.userId, userId)
-      )
-    )
-    .limit(1);
-  return !!row?.unlockedUntil && row.unlockedUntil.getTime() > Date.now();
-}
 
 /** All restaurants the user belongs to, with their membership role. */
 export async function getUserRestaurants(userId: string) {
@@ -108,23 +85,24 @@ export async function getUserRestaurants(userId: string) {
 }
 
 /**
- * Full gate for a menu MUTATION request: must be the session owner/admin AND
- * (for owners) hold an active edit-unlock window. Returns the userId on success,
- * or an { error, status } to return directly. `locked` distinguishes "needs the
- * 2FA code" (423) from "not your restaurant" (403) so the UI can prompt for a code.
+ * Gate for a menu MUTATION request (menu, appearance, visibility, staff token):
+ * must be the session owner, or a platform admin. Returns the userId on success,
+ * or an { error, status } to return directly.
+ *
+ * There used to be a second factor here — a 6-digit code emailed to the owner,
+ * unlocking edits for a window — which was dropped as unnecessary friction. This is
+ * now the same gate as authorizeReservationSettings; the two are kept separate only
+ * so the menu side can diverge again later without touching every reservation route.
  */
 export async function authorizeMenuEdit(
   session: { user?: { id?: string } } | null,
   platformRole: string | null | undefined,
   restaurantId: string
-): Promise<{ userId: string } | { error: string; status: 401 | 403 | 423 }> {
+): Promise<{ userId: string } | { error: string; status: 401 | 403 }> {
   const userId = session?.user?.id;
   if (!userId) return { error: "Neautorizat", status: 401 };
   if (!(await canManageRestaurant(userId, restaurantId, platformRole))) {
     return { error: "Neautorizat", status: 403 };
-  }
-  if (!(await canEditMenuNow(userId, restaurantId, platformRole))) {
-    return { error: "Editarea meniului este blocată. Deblochează cu codul trimis pe email.", status: 423 };
   }
   return { userId };
 }

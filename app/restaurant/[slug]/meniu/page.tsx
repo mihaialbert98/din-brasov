@@ -7,7 +7,6 @@ import { eq, asc } from "drizzle-orm";
 import {
   getRestaurantBySlug,
   canManageRestaurant,
-  canEditMenuNow,
   isPlatformStaff,
 } from "@/lib/restaurant-permissions";
 import MenuManager, { type MenuCategoryData } from "@/components/restaurant/MenuManager";
@@ -67,7 +66,6 @@ export default async function MeniuPage({
 
   // Admins bypass the 2FA lock; owners start locked unless within an active window.
   const isAdmin = isPlatformStaff(role);
-  const initiallyUnlocked = isAdmin || (await canEditMenuNow(session.user.id, restaurant.id, role));
 
   // "See it as a customer" preview. Two possible targets, so the link works even
   // for a restaurant with no tables yet:
@@ -117,8 +115,6 @@ export default async function MeniuPage({
       <MenuManager
         restaurantId={restaurant.id}
         initialCategories={data}
-        requiresUnlock={!isAdmin}
-        initiallyUnlocked={initiallyUnlocked}
       />
     </div>
   );

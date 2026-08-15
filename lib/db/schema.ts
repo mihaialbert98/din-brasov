@@ -960,6 +960,10 @@ export const restaurantClientNotes = pgTable(
 // Email-code 2FA for menu edits. The owner requests a code (emailed), verifies it,
 // and gets a short unlock window during which menu mutations are allowed. Protects
 // the shared service screen from unauthorised edits. One row per (restaurant, user).
+// DEPRECATED (Aug 2026): the emailed 6-digit code that gated menu/appearance edits
+// was removed — an owner's own session is now enough. Nothing reads or writes this
+// table any more. It is kept for one release so a rollback to v0.28.1 still finds it;
+// drop it in a later, separate migration once that window has passed.
 export const restaurantEditUnlocks = pgTable(
   "restaurant_edit_unlocks",
   {
