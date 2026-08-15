@@ -10,6 +10,7 @@ import {
   canServeRestaurant,
   canManageRestaurant,
 } from "@/lib/restaurant-permissions";
+import { floorPlanEnabled } from "@/lib/floor-plan";
 import ReservationsBoard from "@/components/restaurant/ReservationsBoard";
 
 /**
@@ -37,12 +38,15 @@ export default async function RezervariPage({
       adminGrant: restaurants.reservationsEnabledByAdmin,
       ownerEnabled: restaurants.reservationsEnabledByOwner,
       confirmMode: restaurants.reservationConfirmMode,
+      capacityMode: restaurants.reservationCapacityMode,
     })
     .from(restaurants)
     .where(eq(restaurants.id, restaurant.id))
     .limit(1);
 
   const isManager = await canManageRestaurant(session.user.id, restaurant.id, role);
+  // Offer the optional table picker only when there's a floor plan to pick from.
+  const withFloorPlan = await floorPlanEnabled(restaurant.id);
   const enabled = !!row?.adminGrant && !!row?.ownerEnabled;
 
   return (
@@ -69,7 +73,12 @@ export default async function RezervariPage({
             : "Funcția de rezervări nu este activată pentru acest restaurant. Cere activarea de la echipa Din Brașov."}
         </div>
       ) : (
-        <ReservationsBoard basePath={`/api/restaurants/${restaurant.id}`} manualConfirm={row?.confirmMode !== "auto"} />
+        <ReservationsBoard
+          basePath={`/api/restaurants/${restaurant.id}`}
+          manualConfirm={row?.confirmMode !== "auto"}
+          floorPlanEnabled={withFloorPlan}
+          tablesMode={row?.capacityMode === "tables"}
+        />
       )}
     </div>
   );

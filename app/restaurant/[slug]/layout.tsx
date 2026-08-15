@@ -43,6 +43,7 @@ export default async function RestaurantLayout({
     { href: `/restaurant/${slug}/serviciu`, label: "Serviciu", badge: "service" },
     { href: `/restaurant/${slug}/rezervari`, label: "Rezervări", badge: "reservations" },
     { href: `/restaurant/${slug}/rezervari-setari`, label: "Setări rezervări" },
+    { href: `/restaurant/${slug}/plan-sala`, label: "Plan de sală" },
     { href: `/restaurant/${slug}/clienti`, label: "Clienți" },
     { href: `/restaurant/${slug}/personal`, label: "Membri echipă" },
   ];
