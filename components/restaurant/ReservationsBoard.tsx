@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Phone, Mail, Users, Clock, Check, X, CalendarClock, Plus, StickyNote, Pencil } from "lucide-react";
+import { Phone, Mail, Users, Clock, Check, X, CalendarClock, Plus, StickyNote, Pencil, LayoutGrid } from "lucide-react";
 import { notify } from "@/lib/chime";
 import { useRepeatingChime, reservationsNeedNudge } from "@/lib/useRepeatingChime";
 import { useVisiblePoll } from "@/lib/useVisiblePoll";
 import NotifyPermission from "@/components/restaurant/NotifyPermission";
+import FloorTablePicker from "@/components/restaurant/FloorTablePicker";
+import ChangeTableModal from "@/components/restaurant/ChangeTableModal";
 
 interface Reservation {
   id: string;
@@ -18,6 +20,10 @@ interface Reservation {
   status: "pending" | "confirmed" | "declined" | "cancelled";
   area: "inside" | "outside" | null;
   tables?: string[];
+  /** „Plan de sală” tables staff pinned by hand (seats mode). Empty = none chosen,
+   *  which is a completely ordinary booking — never rendered as something missing. */
+  floorTableIds?: string[];
+  floorTables?: string[];
   note: string | null;
   /** The client's saved CRM note (read-only here; edited on the Clienți page). */
   clientNote: string | null;
@@ -59,11 +65,18 @@ export default function ReservationsBoard({
   basePath,
   onCount,
   manualConfirm = false,
+  floorPlanEnabled = false,
+  tablesMode = false,
 }: {
   basePath: string;
   onCount?: (n: number) => void;
   /** Restaurant requires manual confirmation → show the "În așteptare" filter. */
   manualConfirm?: boolean;
+  /** „Capacitate totală” + at least one usable table → offer the optional table picker.
+   *  False leaves the board exactly as it was before the floor plan existed. */
+  floorPlanEnabled?: boolean;
+  /** „Mese individuale” → offer „Schimbă masa”, the override of the automatic choice. */
+  tablesMode?: boolean;
 }) {
   const [rows, setRows] = useState<Reservation[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -71,6 +84,15 @@ export default function ReservationsBoard({
   const [filter, setFilter] = useState<Filter>("azi");
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Reservation | null>(null);
+  // Assigning tables from the card („Plan de sală”). Purely optional, so it's its own
+  // small dialog rather than a step inside anything else.
+  const [assigning, setAssigning] = useState<Reservation | null>(null);
+  // „Mese individuale”: overriding the automatically-chosen table.
+  const [changingTable, setChangingTable] = useState<Reservation | null>(null);
+  // Said when an edit forced a table STAFF had chosen to move.
+  const [tableMoved, setTableMoved] = useState<{ from: string[]; to: string[] } | null>(null);
+  // Said only when an edit invalidated tables staff HAD chosen — never when there were none.
+  const [clearedTables, setClearedTables] = useState<string[] | null>(null);
   // After a status change / edit on a reservation that has no email, prompt staff to phone the guest.
   const [callPrompt, setCallPrompt] = useState<{ name: string; phone: string; action: "confirmed" | "declined" | "cancelled" | "updated" } | null>(null);
   // Chime + tab badge when a NEW pending reservation arrives (board must be open).
@@ -213,9 +235,37 @@ export default function ReservationsBoard({
         </button>
       </div>
 
+      {clearedTables && clearedTables.length > 0 && (
+        <div className="flex items-start gap-2 text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+          <LayoutGrid className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-600" aria-hidden />
+          <p className="flex-1">
+            {clearedTables.length === 1 ? `Masa ${clearedTables[0]} era` : `Mesele ${clearedTables.join(", ")} erau`} deja
+            ocupate la noua oră, așa că rezervarea a rămas fără masă. Poți alege alta din „Mese”.
+          </p>
+          <button onClick={() => setClearedTables(null)} className="text-amber-700 hover:text-amber-900" aria-label="Închide">
+            <X className="w-4 h-4" aria-hidden />
+          </button>
+        </div>
+      )}
+
+      {tableMoved && (
+        <div className="flex items-start gap-2 text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+          <LayoutGrid className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-600" aria-hidden />
+          <p className="flex-1">
+            {tableMoved.from.join(" + ")} nu mai {tableMoved.from.length === 1 ? "era potrivită" : "erau potrivite"} după
+            modificare, așa că rezervarea a fost mutată {tableMoved.to.length > 0 ? `pe ${tableMoved.to.join(" + ")}` : "automat"}.
+            O poți schimba din „Schimbă masa”.
+          </p>
+          <button onClick={() => setTableMoved(null)} className="text-amber-700 hover:text-amber-900" aria-label="Închide">
+            <X className="w-4 h-4" aria-hidden />
+          </button>
+        </div>
+      )}
+
       {adding && (
         <ManualReservationModal
           basePath={basePath}
+          floorPlanEnabled={floorPlanEnabled}
           onClose={() => setAdding(false)}
           onAdded={() => { setAdding(false); fetchRows(); }}
         />
@@ -225,13 +275,34 @@ export default function ReservationsBoard({
         <EditReservationModal
           basePath={basePath}
           reservation={editing}
+          floorPlanEnabled={floorPlanEnabled}
           onClose={() => setEditing(null)}
-          onSaved={(r) => {
+          onSaved={(r, cleared, moved) => {
             setEditing(null);
             fetchRows();
+            setClearedTables(cleared.length > 0 ? cleared : null);
+            setTableMoved(moved);
             // No email → the guest can only be told about the change by phone.
             if (!r.notifiableByEmail) setCallPrompt({ name: r.guestName, phone: r.guestPhone, action: "updated" });
           }}
+        />
+      )}
+
+      {changingTable && (
+        <ChangeTableModal
+          basePath={basePath}
+          reservation={changingTable}
+          onClose={() => setChangingTable(null)}
+          onSaved={() => { setChangingTable(null); fetchRows(); }}
+        />
+      )}
+
+      {assigning && (
+        <AssignTablesModal
+          basePath={basePath}
+          reservation={assigning}
+          onClose={() => setAssigning(null)}
+          onSaved={() => { setAssigning(null); fetchRows(); }}
         />
       )}
 
@@ -281,6 +352,19 @@ export default function ReservationsBoard({
                             {r.tables.join(" + ")}
                           </span>
                         )}
+                        {/* Hand-picked tables („Plan de sală”). Nothing renders when none
+                            were chosen — that is a normal booking, not a missing field.
+                            Gated on floorPlanEnabled as well: a restaurant that switched to
+                            „Mese individuale” gets its tables assigned automatically, and
+                            showing a leftover hand-picked name NEXT to the automatic one
+                            would be two different tables for one booking — with no way to
+                            clear it, since the picker is gone in that mode. The value stays
+                            in the row and reappears if they switch back. */}
+                        {floorPlanEnabled && r.floorTables && r.floorTables.length > 0 && (
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-purple-50 text-purple-700" title="Masă aleasă de tine">
+                            {r.floorTables.join(" + ")}
+                          </span>
+                        )}
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ml-auto ${STATUS_CLASS[r.status]}`}>
                           {STATUS_LABEL[r.status]}
                         </span>
@@ -322,6 +406,18 @@ export default function ReservationsBoard({
                             className="inline-flex items-center gap-1 text-sm text-gray-600 border border-gray-300 px-3 py-2 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors">
                             <Pencil className="w-4 h-4" aria-hidden /> Editează
                           </button>
+                          {tablesMode && (
+                            <button onClick={() => setChangingTable(r)} disabled={busy === r.id}
+                              className="inline-flex items-center gap-1 text-sm text-gray-600 border border-gray-300 px-3 py-2 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors">
+                              <LayoutGrid className="w-4 h-4" aria-hidden /> Schimbă masa
+                            </button>
+                          )}
+                          {floorPlanEnabled && (
+                            <button onClick={() => setAssigning(r)} disabled={busy === r.id}
+                              className="inline-flex items-center gap-1 text-sm text-gray-600 border border-gray-300 px-3 py-2 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors">
+                              <LayoutGrid className="w-4 h-4" aria-hidden /> Mese
+                            </button>
+                          )}
                           {r.status === "confirmed" && (
                             <button onClick={() => setStatus(r.id, "cancelled")} disabled={busy === r.id}
                               className="inline-flex items-center gap-1 text-sm border border-red-300 text-red-600 px-3 py-2 rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors">
@@ -445,10 +541,12 @@ function CapacityPreview({
 /** Modal for staff to add a phone-in reservation. Confirmed immediately; can force a full slot. */
 function ManualReservationModal({
   basePath,
+  floorPlanEnabled,
   onClose,
   onAdded,
 }: {
   basePath: string;
+  floorPlanEnabled: boolean;
   onClose: () => void;
   onAdded: () => void;
 }) {
@@ -463,6 +561,8 @@ function ManualReservationModal({
   const [error, setError] = useState<string | null>(null);
   const [overridable, setOverridable] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Optional: staff may pick tables here, or never touch this and save as before.
+  const [floorTableIds, setFloorTableIds] = useState<string[]>([]);
 
   async function submit(force: boolean) {
     if (guestName.trim().length < 2 || guestPhone.trim().length < 6) {
@@ -479,7 +579,7 @@ function ManualReservationModal({
     const res = await fetch(`${basePath}/reservations/create`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date, time, partySize: nParty, guestName: guestName.trim(), guestPhone: guestPhone.trim(), note: note.trim() || undefined, force }),
+      body: JSON.stringify({ date, time, partySize: nParty, guestName: guestName.trim(), guestPhone: guestPhone.trim(), note: note.trim() || undefined, floorTableIds, force }),
     });
     setSaving(false);
     if (res.ok) { onAdded(); return; }
@@ -525,6 +625,17 @@ function ManualReservationModal({
             className={`mt-1 ${field}`} />
         </label>
         <CapacityPreview basePath={basePath} date={date} time={time} partySize={partySize === "" ? 0 : partySize} />
+        {floorPlanEnabled && (
+          <FloorTablePicker
+            basePath={basePath}
+            date={date}
+            time={time}
+            partySize={partySize === "" ? 0 : partySize}
+            value={floorTableIds}
+            onChange={setFloorTableIds}
+            disabled={saving}
+          />
+        )}
 
         <label className="block text-xs font-medium text-gray-500 mb-3">Nume *
           <input type="text" value={guestName} onChange={(e) => setGuestName(e.target.value)} className={`mt-1 ${field}`} />
@@ -596,13 +707,17 @@ function CallGuestModal({
 function EditReservationModal({
   basePath,
   reservation,
+  floorPlanEnabled,
   onClose,
   onSaved,
 }: {
   basePath: string;
   reservation: Reservation;
+  floorPlanEnabled: boolean;
   onClose: () => void;
-  onSaved: (r: Reservation) => void;
+  /** `cleared` = „Plan de sală” tables that no longer fit the new time.
+   *  `moved`   = „Mese individuale” table staff had chosen that the engine had to re-pick. */
+  onSaved: (r: Reservation, cleared: string[], moved: { from: string[]; to: string[] } | null) => void;
 }) {
   const [date, setDate] = useState(reservation.date);
   const [time, setTime] = useState(reservation.time);
@@ -610,6 +725,7 @@ function EditReservationModal({
   const [error, setError] = useState<string | null>(null);
   const [overridable, setOverridable] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [floorTableIds, setFloorTableIds] = useState<string[]>(reservation.floorTableIds ?? []);
 
   async function submit(force: boolean) {
     const nParty = partySize === "" ? 0 : partySize;
@@ -619,11 +735,11 @@ function EditReservationModal({
     const res = await fetch(`${basePath}/reservations/${reservation.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date, time, partySize: nParty, force }),
+      body: JSON.stringify({ date, time, partySize: nParty, floorTableIds: floorPlanEnabled ? floorTableIds : undefined, force }),
     });
-    setSaving(false);
-    if (res.ok) { onSaved(reservation); return; }
     const d = await res.json().catch(() => ({}));
+    setSaving(false);
+    if (res.ok) { onSaved(reservation, d.floorTablesCleared ?? [], d.tableTakenOver ?? null); return; }
     setError(d.error ?? "Eroare.");
     setOverridable(!!d.overridable);
   }
@@ -673,9 +789,92 @@ function EditReservationModal({
           partySize={partySize === "" ? 0 : partySize}
           exclude={reservation.id}
         />
+        {floorPlanEnabled && (
+          <FloorTablePicker
+            basePath={basePath}
+            date={date}
+            time={time}
+            partySize={partySize === "" ? 0 : partySize}
+            exclude={reservation.id}
+            value={floorTableIds}
+            onChange={setFloorTableIds}
+            disabled={saving}
+          />
+        )}
 
         <button onClick={() => submit(false)} disabled={saving} className="w-full bg-[#c84b1e] text-white font-semibold py-2.5 rounded-lg hover:bg-[#d9603a] transition-colors disabled:opacity-60">
           {saving ? "Se salvează…" : "Salvează modificările"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Pick (or clear) the tables a booking sits at, from its card. Deliberately a small,
+ * self-contained dialog: assigning is optional and has nothing to do with the booking's
+ * details, so it must never feel like a step in editing one.
+ */
+function AssignTablesModal({
+  basePath,
+  reservation,
+  onClose,
+  onSaved,
+}: {
+  basePath: string;
+  reservation: Reservation;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [ids, setIds] = useState<string[]>(reservation.floorTableIds ?? []);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    const res = await fetch(`${basePath}/reservations/${reservation.id}/floor-tables`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tableIds: ids }),
+    });
+    setSaving(false);
+    if (res.ok) { onSaved(); return; }
+    const d = await res.json().catch(() => ({}));
+    setError(d.error ?? "Eroare.");
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="font-semibold text-gray-900">Masa pentru rezervare</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700" aria-label="Închide"><X className="w-5 h-5" aria-hidden /></button>
+        </div>
+        <p className="text-xs text-gray-500 mb-4">
+          {reservation.guestName} · {reservation.time} · {reservation.partySize} pers.
+        </p>
+
+        {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-3 py-2 mb-3">{error}</div>}
+
+        <FloorTablePicker
+          basePath={basePath}
+          date={reservation.date}
+          time={reservation.time}
+          partySize={reservation.partySize}
+          exclude={reservation.id}
+          value={ids}
+          onChange={setIds}
+          disabled={saving}
+        />
+
+        <p className="text-xs text-gray-400 mb-4">
+          Opțional. Poți lăsa rezervarea fără masă — nu schimbă cu nimic rezervarea, iar clientul nu
+          vede masa aleasă.
+        </p>
+
+        <button onClick={save} disabled={saving} className="w-full bg-[#c84b1e] text-white font-semibold py-2.5 rounded-lg hover:bg-[#d9603a] transition-colors disabled:opacity-60">
+          {saving ? "Se salvează…" : "Salvează"}
         </button>
       </div>
     </div>

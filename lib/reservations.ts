@@ -1,7 +1,19 @@
 import { db } from "@/lib/db";
-import { restaurants, reservationHours, reservationClosures, reservations, reservationTables, reservationTableGroups, reservationTableGroupMembers, restaurantClientNotes, adminAuditLog, places, users } from "@/lib/db/schema";
+import { restaurants, reservationHours, reservationClosures, reservations, reservationTables, reservationTableGroups, reservationTableGroupMembers, floorTables, restaurantClientNotes, adminAuditLog, places, users } from "@/lib/db/schema";
 import { eq, and, gte, lte, ne, asc, inArray, isNull, isNotNull, sql, type AnyColumn } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import {
+  getReservationConfig,
+  turnFor,
+  toMinutes,
+  toHHMM,
+  nowInReservationTZ,
+  parseTableIds,
+  type ReservationConfig,
+  type CapacityMode,
+} from "@/lib/reservation-core";
+import { validateFloorTables, reconcileFloorTables, type FloorConflict } from "@/lib/floor-plan";
+import { manualChoiceStillWorks, tableLabels } from "@/lib/table-override";
 import { sendReservationConfirmedEmail, sendReservationDeclinedEmail, sendReservationCancelledEmail, sendReservationUpdatedEmail } from "@/lib/email";
 import { isPlatformStaff } from "@/lib/restaurant-permissions";
 import { runAfterResponse } from "@/lib/after-response";
@@ -106,8 +118,6 @@ export async function getMaxPartySize(restaurantId: string): Promise<number> {
   return r?.cap ?? 12;
 }
 
-export type CapacityMode = "seats" | "tables";
-
 /**
  * Who is booking. "online" = the public form: held-back tables are invisible and a
  * closed date offers nothing. "staff" = owner/waiter: they see the whole floor and
@@ -115,61 +125,19 @@ export type CapacityMode = "seats" | "tables";
  */
 export type BookingChannel = "online" | "staff";
 
-export type ReservationConfig = {
-  mode: CapacityMode;
-  maxJoin: number;
-  advanceDays: number;
-  /** Standard turn (minutes) — how long an ordinary booking holds its seats. */
-  turn: number;
-  /** Optional longer turn for big parties. `minutes` is never below `turn`. */
-  longTurn: { enabled: boolean; fromParty: number; minutes: number };
-  allowReducedTurn: boolean;
-  showDuration: boolean;
-  /** Auto-confirm only: whether the success screen mentions the confirmation email. */
-  showEmailNotice: boolean;
-};
-
-/** Restaurant-level reservation config that drives which capacity model to use. */
-export async function getReservationConfig(restaurantId: string): Promise<ReservationConfig> {
-  const [r] = await db
-    .select({
-      mode: restaurants.reservationCapacityMode,
-      maxJoin: restaurants.reservationMaxJoin,
-      advanceDays: restaurants.reservationAdvanceDays,
-      turn: restaurants.reservationTurnMinutes,
-      longEnabled: restaurants.reservationLongTurnEnabled,
-      longFrom: restaurants.reservationLongTurnFromParty,
-      longMinutes: restaurants.reservationLongTurnMinutes,
-      allowReduced: restaurants.reservationAllowReducedTurn,
-      showDuration: restaurants.reservationShowDuration,
-      showEmailNotice: restaurants.reservationShowEmailNotice,
-    })
-    .from(restaurants)
-    .where(eq(restaurants.id, restaurantId))
-    .limit(1);
-  const turn = r?.turn && r.turn > 0 ? r.turn : 90;
-  return {
-    mode: r?.mode === "tables" ? "tables" : "seats",
-    maxJoin: r?.maxJoin && r.maxJoin > 0 ? r.maxJoin : 2,
-    advanceDays: r?.advanceDays && r.advanceDays > 0 ? r.advanceDays : 60,
-    turn,
-    longTurn: {
-      enabled: !!r?.longEnabled,
-      fromParty: r?.longFrom && r.longFrom > 1 ? r.longFrom : 6,
-      // Clamped so a misconfigured "long" turn shorter than the standard one can't
-      // invert the rule (the reduced-turn fallback below assumes long ≥ standard).
-      minutes: Math.max(turn, r?.longMinutes && r.longMinutes > 0 ? r.longMinutes : 120),
-    },
-    allowReducedTurn: r?.allowReduced ?? true,
-    showDuration: !!r?.showDuration,
-    showEmailNotice: r?.showEmailNotice ?? true,
-  };
-}
-
-/** How long a booking of this size holds the table, per the restaurant's rules. Pure. */
-export function turnFor(partySize: number, cfg: ReservationConfig): number {
-  return cfg.longTurn.enabled && partySize >= cfg.longTurn.fromParty ? cfg.longTurn.minutes : cfg.turn;
-}
+// The turn rules, the config reader and the time helpers live in lib/reservation-core.ts
+// so lib/floor-plan.ts can use them without importing this file (which imports IT, at the
+// two points where a booking is written). Re-exported here — every existing importer of
+// `@/lib/reservations` keeps working unchanged.
+export {
+  getReservationConfig,
+  turnFor,
+  toMinutes,
+  toHHMM,
+  nowInReservationTZ,
+  parseTableIds,
+} from "@/lib/reservation-core";
+export type { ReservationConfig, CapacityMode } from "@/lib/reservation-core";
 
 export type Closure = { id: string; dateFrom: string; dateTo: string; reason: string | null };
 
@@ -352,17 +320,6 @@ export function canSeat(partySize: number, free: ResTable[], maxJoin: number, gr
   return candidates[0].map((t) => t.id);
 }
 
-function toMinutes(hhmm: string): number {
-  const [h, m] = hhmm.split(":").map(Number);
-  return h * 60 + m;
-}
-
-function toHHMM(mins: number): string {
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
-
 /** The seat capacity of a window for the given area (or single capacity when null). */
 function windowCapacity(h: ReservationHour, area?: Area): number {
   if (area === "inside") return h.seatsInside ?? 0;
@@ -402,24 +359,6 @@ export function slotsForDay(hours: ReservationHour[]): string[] {
 // windows are evaluated at every TICK minutes so an overlapping start can't reuse
 // seats held by an earlier, still-seated party.
 const CAPACITY_TICK = 15;
-
-// Reservations are wall-clock local to the venue (Brașov). "Today" and past-slot
-// checks must use THIS timezone, never the server's UTC — otherwise the small hours
-// roll the date (the same class of bug the booking form's date chips had).
-const RESERVATION_TZ = "Europe/Bucharest";
-
-/** Current { date: "YYYY-MM-DD", minutes: since local midnight } in the venue TZ. */
-function nowInReservationTZ(): { date: string; minutes: number } {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: RESERVATION_TZ,
-    year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", hour12: false,
-  }).formatToParts(new Date());
-  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "0";
-  let hour = parseInt(get("hour"), 10);
-  if (hour === 24) hour = 0; // some ICU builds render local midnight as "24"
-  return { date: `${get("year")}-${get("month")}-${get("day")}`, minutes: hour * 60 + parseInt(get("minute"), 10) };
-}
 
 /** Hide slots earlier than now WHEN dateStr is today (venue TZ). Other days pass
  *  through untouched; a slot at exactly the current minute is kept. */
@@ -601,17 +540,6 @@ export async function availableSlotsForDay(
   channel: BookingChannel = "online",
 ): Promise<string[]> {
   return (await availabilityForDay(restaurantId, dateStr, partySize, area, excludeReservationId, channel)).slots;
-}
-
-/** Parse a reservation's assignedTableIds JSON into a string[] (empty on null/bad). */
-function parseTableIds(json: string | null): string[] {
-  if (!json) return [];
-  try {
-    const v = JSON.parse(json);
-    return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
-  } catch {
-    return [];
-  }
 }
 
 /**
@@ -797,7 +725,16 @@ export async function backfillTableAssignments(restaurantId: string): Promise<Ta
     if (ids) {
       await db
         .update(reservations)
-        .set({ assignedTableIds: JSON.stringify(ids), updatedAt: new Date() })
+        .set({
+          assignedTableIds: JSON.stringify(ids),
+          // The ENGINE picked this one, so it must not be left marked as staff's choice.
+          // Reachable when a table someone had chosen by hand is deleted: the delete path
+          // clears the booking and re-seats it here, and a stale flag would then pin the
+          // booking to a table nobody chose — and later blame staff for it in
+          // „masa a fost schimbată”.
+          assignedTablesManual: false,
+          updatedAt: new Date(),
+        })
         .where(eq(reservations.id, b.id));
       report.assigned++;
     } else {
@@ -1117,9 +1054,9 @@ export async function validateBooking(
  */
 export async function createManualReservation(
   restaurantId: string,
-  input: { date: string; time: string; partySize: number; guestName: string; guestPhone: string; note?: string; area?: Area },
+  input: { date: string; time: string; partySize: number; guestName: string; guestPhone: string; note?: string; area?: Area; floorTableIds?: string[] },
   force: boolean,
-): Promise<{ ok: true } | { ok: false; reason: string; overridable?: boolean }> {
+): Promise<{ ok: true } | { ok: false; reason: string; overridable?: boolean; conflicts?: FloorConflict[] }> {
   if (input.partySize < 1) return { ok: false, reason: "Număr de persoane invalid." };
 
   const withAreas = await areasEnabled(restaurantId);
@@ -1178,6 +1115,18 @@ export async function createManualReservation(
     assignedTableIds = await assignTablesFor(restaurantId, input.date, input.time, input.partySize, area, undefined, { ...staff, turnMinutes: fullTurn });
   }
 
+  // „Plan de sală” (optional): staff may have picked tables while filling the form. Only
+  // checked once `turnMinutes` is final — including the reduced-turn fallback above — so
+  // the window we test is the one this booking will really occupy. Refused BEFORE the
+  // insert, so a clash never leaves a half-created booking behind. `force` does not apply:
+  // two bookings on one table is never something staff meant, and skipping the tables
+  // entirely is always available.
+  const floorIds = input.floorTableIds ?? [];
+  if (floorIds.length > 0) {
+    const v = await validateFloorTables(restaurantId, input.date, input.time, turnMinutes, floorIds);
+    if (!v.ok) return { ok: false, reason: v.reason, conflicts: v.conflicts };
+  }
+
   await db.insert(reservations).values({
     restaurantId,
     date: input.date,
@@ -1188,6 +1137,7 @@ export async function createManualReservation(
     guestEmail: null,
     area: area ?? null,
     assignedTableIds: assignedTableIds ? JSON.stringify(assignedTableIds) : null,
+    floorTableIds: floorIds.length ? JSON.stringify(floorIds) : null,
     turnMinutes,
     status: "confirmed", // staff take it live → already confirmed
     note: input.note || null,
@@ -1206,9 +1156,18 @@ export async function createManualReservation(
 export async function updateReservation(
   restaurantId: string,
   reservationId: string,
-  input: { date: string; time: string; partySize: number },
+  input: { date: string; time: string; partySize: number; floorTableIds?: string[] },
   force: boolean,
-): Promise<{ ok: true; notifiableByEmail: boolean } | { ok: false; reason: string; overridable?: boolean }> {
+): Promise<
+  | {
+      ok: true;
+      notifiableByEmail: boolean;
+      floorTablesCleared: string[];
+      /** Set only when a table STAFF had chosen stopped working and the engine re-picked. */
+      tableTakenOver: { from: string[]; to: string[] } | null;
+    }
+  | { ok: false; reason: string; overridable?: boolean }
+> {
   const [res] = await db
     .select({
       status: reservations.status,
@@ -1216,6 +1175,8 @@ export async function updateReservation(
       guestName: reservations.guestName,
       guestEmail: reservations.guestEmail,
       userId: reservations.userId,
+      assignedTableIds: reservations.assignedTableIds,
+      assignedTablesManual: reservations.assignedTablesManual,
       restaurantName: restaurants.name,
     })
     .from(reservations)
@@ -1258,17 +1219,31 @@ export async function updateReservation(
   let assignedTableIds: string[] | null = null;
   const staff = { channel: "staff" as const };
 
+  // A table staff picked by hand („Schimbă masa”) is not re-decided behind their back. It
+  // is kept whenever it still seats the party and is still free at the NEW date/time; only
+  // when the edit makes it impossible does the engine take the booking back — and the
+  // caller is told, so the change is never silent. Checked before the branch so a forced
+  // edit honours the choice too.
+  const manual =
+    cfg.mode === "tables"
+      ? await manualChoiceStillWorks(restaurantId, reservationId, input.date, input.time, input.partySize, fullTurn)
+      : { keep: false as const };
+  const keptManualChoice = manual.keep;
+  if (manual.keep) assignedTableIds = manual.ids;
+
   if (!force) {
     if (cfg.mode === "tables") {
-      let assigned = await assignTablesFor(restaurantId, input.date, input.time, input.partySize, area, reservationId, { ...staff, turnMinutes: fullTurn });
-      if (!assigned && mayReduce) {
-        assigned = await assignTablesFor(restaurantId, input.date, input.time, input.partySize, area, reservationId, { ...staff, turnMinutes: cfg.turn });
-        if (assigned) turnMinutes = cfg.turn;
+      if (!manual.keep) {
+        let assigned = await assignTablesFor(restaurantId, input.date, input.time, input.partySize, area, reservationId, { ...staff, turnMinutes: fullTurn });
+        if (!assigned && mayReduce) {
+          assigned = await assignTablesFor(restaurantId, input.date, input.time, input.partySize, area, reservationId, { ...staff, turnMinutes: cfg.turn });
+          if (assigned) turnMinutes = cfg.turn;
+        }
+        if (!assigned) {
+          return { ok: false, reason: "Nu mai avem o masă liberă pentru acest număr de persoane la ora aleasă.", overridable: true };
+        }
+        assignedTableIds = assigned;
       }
-      if (!assigned) {
-        return { ok: false, reason: "Nu mai avem o masă liberă pentru acest număr de persoane la ora aleasă.", overridable: true };
-      }
-      assignedTableIds = assigned;
     } else {
       const avail = await availabilityForDay(restaurantId, input.date, input.partySize, area, reservationId, "staff");
       if (!avail.slots.includes(input.time)) {
@@ -1280,9 +1255,12 @@ export async function updateReservation(
         }
       }
     }
-  } else if (cfg.mode === "tables") {
+  } else if (cfg.mode === "tables" && !manual.keep) {
     assignedTableIds = await assignTablesFor(restaurantId, input.date, input.time, input.partySize, area, reservationId, { ...staff, turnMinutes: fullTurn });
   }
+
+  // Which tables the booking held BEFORE this edit, so we can say if they changed.
+  const previousTables = parseTableIds(res.assignedTableIds);
 
   await db
     .update(reservations)
@@ -1291,15 +1269,40 @@ export async function updateReservation(
       time: input.time,
       partySize: input.partySize,
       assignedTableIds: cfg.mode === "tables" ? (assignedTableIds ? JSON.stringify(assignedTableIds) : null) : null,
+      // The choice stops being "staff's" the moment the engine had to re-pick.
+      assignedTablesManual: cfg.mode === "tables" ? keptManualChoice : false,
       turnMinutes,
       updatedAt: new Date(),
     })
     .where(eq(reservations.id, reservationId));
 
+  // Reported only when staff had CHOSEN a table and the edit forced it to move — an
+  // automatic assignment shifting is unremarkable and stays quiet.
+  const tableTakenOver =
+    cfg.mode === "tables" && res.assignedTablesManual && !keptManualChoice && previousTables.length > 0
+      ? {
+          from: await tableLabels(restaurantId, previousTables),
+          to: await tableLabels(restaurantId, assignedTableIds ?? []),
+        }
+      : null;
+
+  // „Plan de sală” (optional): the booking just moved, so its tables have to be re-checked
+  // against the NEW window. Still free → kept. Now clashing with someone else → cleared,
+  // and the labels come back so the board can tell staff to pick again. Deliberately does
+  // NOT refuse the edit: the edit is about the guest, and an internal seating note must
+  // never be able to block moving their booking. A booking that had no tables stays silent.
+  // Skipped entirely in „Mese individuale”: that mode assigns its own tables, the floor
+  // plan is hidden, and clearing a leftover assignment there would raise a „pick another
+  // table” prompt pointing at a picker the owner can no longer open. Left untouched, it
+  // simply waits, intact, in case they switch back.
+  const { cleared } = cfg.mode === "tables"
+    ? { cleared: [] as string[] }
+    : await reconcileFloorTables(restaurantId, reservationId, input.date, input.time, turnMinutes, input.floorTableIds);
+
   // Scheduled, not fire-and-forget: a floating promise can be dropped when the
   // serverless response returns. See lib/after-response.ts.
   await runAfterResponse(() => notifyReservationUpdated(res, input));
-  return { ok: true, notifiableByEmail: !!res.guestEmail || !!res.userId };
+  return { ok: true, notifiableByEmail: !!res.guestEmail || !!res.userId, floorTablesCleared: cleared, tableTakenOver };
 }
 
 /** Upcoming reservations for the board (today onward, excluding declined). */
@@ -1322,21 +1325,36 @@ export async function listUpcomingReservations(restaurantId: string) {
       status: reservations.status,
       area: reservations.area,
       assignedTableIds: reservations.assignedTableIds,
+      floorTableIds: reservations.floorTableIds,
       note: reservations.note,
       clientNote: sql<string | null>`coalesce(${cnUser.note}, ${cnPhone.note})`,
       // False only when there's no way to email the guest (no booking email AND no
       // linked account) — the board then prompts staff to phone them on confirm.
       notifiableByEmail: sql<boolean>`(${reservations.guestEmail} is not null or ${reservations.userId} is not null)`,
       createdAt: reservations.createdAt,
+      // Joined here rather than read separately: it costs nothing on this query and it
+      // decides which of the two table systems the board is even allowed to see.
+      capacityMode: restaurants.reservationCapacityMode,
     })
     .from(reservations)
+    .innerJoin(restaurants, eq(restaurants.id, reservations.restaurantId))
     .leftJoin(cnUser, and(eq(cnUser.restaurantId, restaurantId), eq(cnUser.userId, reservations.userId)))
     .leftJoin(cnPhone, and(eq(cnPhone.restaurantId, restaurantId), isNull(reservations.userId), eq(cnPhone.guestPhone, phoneDigits(reservations.guestPhone))))
     .where(and(eq(reservations.restaurantId, restaurantId), gte(reservations.date, today), ne(reservations.status, "declined")))
     .orderBy(asc(reservations.date), asc(reservations.time));
 
+  // ONE table system per capacity mode, decided here on the server rather than left to
+  // the board to hide. Both columns can hold values at once — a restaurant that has used
+  // both modes keeps whatever the other mode wrote — and showing a „Plan de sală” name
+  // next to an automatically assigned one would be two different tables for one booking.
+  // Gating it in the UI alone was not enough: the board receives the mode as a prop
+  // rendered on the server, so switching mode in another tab left an open board showing
+  // the wrong system until someone reloaded it. Not sending the labels makes that
+  // impossible. Nothing is deleted — the other mode's values are simply not read.
+  const inTablesMode = rows[0]?.capacityMode === "tables";
+
   // Resolve assigned table ids → labels once (tables mode board display).
-  const anyAssigned = rows.some((r) => r.assignedTableIds);
+  const anyAssigned = inTablesMode && rows.some((r) => r.assignedTableIds);
   const labelById = new Map<string, string>();
   if (anyAssigned) {
     const tbls = await db
@@ -1345,9 +1363,27 @@ export async function listUpcomingReservations(restaurantId: string) {
       .where(eq(reservationTables.restaurantId, restaurantId));
     tbls.forEach((t) => labelById.set(t.id, t.label));
   }
-  return rows.map(({ assignedTableIds, ...r }) => ({
+
+  // Same, for the „Plan de sală” tables staff pinned by hand (seats mode). Separate id
+  // space, so a separate lookup — and skipped entirely when nobody has pinned anything,
+  // which is the normal case for a restaurant that doesn't use the floor plan.
+  const anyFloor = !inTablesMode && rows.some((r) => r.floorTableIds);
+  const floorLabelById = new Map<string, string>();
+  if (anyFloor) {
+    const tbls = await db
+      .select({ id: floorTables.id, label: floorTables.label })
+      .from(floorTables)
+      .where(eq(floorTables.restaurantId, restaurantId));
+    tbls.forEach((t) => floorLabelById.set(t.id, t.label));
+  }
+
+  return rows.map(({ assignedTableIds, floorTableIds, capacityMode: _mode, ...r }) => ({
     ...r,
-    tables: parseTableIds(assignedTableIds).map((id) => labelById.get(id) ?? "?").filter(Boolean),
+    // Each list is empty unless its own mode is the active one — see above.
+    tables: anyAssigned ? parseTableIds(assignedTableIds).map((id) => labelById.get(id) ?? "?").filter(Boolean) : [],
+    // Ids kept alongside the labels: the picker needs them to show what's already chosen.
+    floorTableIds: anyFloor ? parseTableIds(floorTableIds) : [],
+    floorTables: anyFloor ? parseTableIds(floorTableIds).map((id) => floorLabelById.get(id) ?? "?").filter(Boolean) : [],
   }));
 }
 

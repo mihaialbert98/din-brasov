@@ -171,7 +171,10 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   if (affected.length > 0) {
     await db
       .update(reservations)
-      .set({ assignedTableIds: null, updatedAt: new Date() })
+      // The manual flag goes with the tables: whatever these bookings end up on next was
+      // decided by the engine, not by staff. Cleared here too (not only in the backfill)
+      // so a booking that can't be re-seated at all isn't left claiming a choice either.
+      .set({ assignedTableIds: null, assignedTablesManual: false, updatedAt: new Date() })
       .where(inArray(reservations.id, affected.map((b) => b.id)));
   }
   await db

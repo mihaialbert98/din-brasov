@@ -12,6 +12,9 @@ const schema = z.object({
   guestPhone: z.string().min(6).max(20),
   area: z.enum(["inside", "outside"]).optional(),
   note: z.string().max(500).optional(),
+  // „Plan de sală” (optional): tables staff picked while filling the form. Absent or
+  // empty = no table chosen, which is the ordinary case.
+  floorTableIds: z.array(z.string()).max(20).optional(),
   force: z.boolean().optional(),
 });
 
@@ -26,7 +29,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   const { force, ...input } = parsed.data;
   const result = await createManualReservation(restaurant.id, input, !!force);
   if (!result.ok) {
-    return NextResponse.json({ error: result.reason, overridable: result.overridable }, { status: 409 });
+    return NextResponse.json(
+      { error: result.reason, overridable: result.overridable, conflicts: result.conflicts },
+      { status: 409 },
+    );
   }
   return NextResponse.json({ ok: true });
 }

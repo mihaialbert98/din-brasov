@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { restaurants } from "@/lib/db/schema";
 import { getRestaurantByStaffToken } from "@/lib/restaurant-permissions";
+import { floorPlanEnabled } from "@/lib/floor-plan";
 import StaffBoardTabs from "@/components/restaurant/StaffBoardTabs";
 
 // Live board — always fresh.
@@ -26,12 +27,14 @@ export default async function StaffBoardPage({ params }: Props) {
       admin: restaurants.reservationsEnabledByAdmin,
       owner: restaurants.reservationsEnabledByOwner,
       confirmMode: restaurants.reservationConfirmMode,
+      capacityMode: restaurants.reservationCapacityMode,
     })
     .from(restaurants)
     .where(eq(restaurants.id, restaurant.id))
     .limit(1);
   const showReservations = !!flags?.admin && !!flags?.owner;
   const manualConfirm = flags?.confirmMode !== "auto";
+  const withFloorPlan = showReservations && (await floorPlanEnabled(restaurant.id));
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -45,7 +48,13 @@ export default async function StaffBoardPage({ params }: Props) {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-6">
-        <StaffBoardTabs basePath={`/api/s/${token}`} showReservations={showReservations} manualConfirm={manualConfirm} />
+        <StaffBoardTabs
+          basePath={`/api/s/${token}`}
+          showReservations={showReservations}
+          manualConfirm={manualConfirm}
+          floorPlanEnabled={withFloorPlan}
+          tablesMode={showReservations && flags?.capacityMode === "tables"}
+        />
       </main>
     </div>
   );

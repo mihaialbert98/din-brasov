@@ -21,10 +21,15 @@ export default function StaffBoardTabs({
   basePath,
   showReservations,
   manualConfirm = false,
+  floorPlanEnabled = false,
+  tablesMode = false,
 }: {
   basePath: string;
   showReservations: boolean;
   manualConfirm?: boolean;
+  /** Passed straight through to the reservations board — see it for what these gate. */
+  floorPlanEnabled?: boolean;
+  tablesMode?: boolean;
 }) {
   const [tab, setTab] = useState<"serviciu" | "rezervari">("serviciu");
   const [serviceCount, setServiceCount] = useState(0);
@@ -116,7 +121,7 @@ export default function StaffBoardTabs({
       {tab === "serviciu" ? (
         <ServiceBoard basePath={basePath} onCount={setServiceCount} />
       ) : (
-        <ReservationsBoard basePath={basePath} onCount={setReservationCount} manualConfirm={manualConfirm} />
+        <ReservationsBoard basePath={basePath} onCount={setReservationCount} manualConfirm={manualConfirm} floorPlanEnabled={floorPlanEnabled} tablesMode={tablesMode} />
       )}
     </div>
   );

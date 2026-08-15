@@ -853,6 +853,16 @@ export const reservations = pgTable(
     // Tables mode: JSON array of reservation_tables ids this booking occupies (so
     // overlapping bookings can't reuse them). Null in seats mode / unassigned.
     assignedTableIds: text("assigned_table_ids"),
+    // True when STAFF chose those tables by hand („Schimbă masa”) rather than the engine
+    // picking them. Without this an edit would silently recompute the assignment and undo
+    // the owner's choice. A manual choice is kept as long as it still fits the party and
+    // is still free; when it stops working the engine takes over again and says so.
+    assignedTablesManual: boolean("assigned_tables_manual").notNull().default(false),
+    // „Plan de sală” (seats mode): JSON array of floor_tables ids staff chose by hand —
+    // purely organisational, and entirely OPTIONAL. Null = nobody picked a table, which
+    // is a perfectly normal booking and is never flagged as missing anything. Separate
+    // from assignedTableIds above so the two id spaces can never be confused.
+    floorTableIds: text("floor_table_ids"),
     // How long THIS booking holds its seats/tables, fixed at booking time. Null =
     // "the restaurant's standard turn", which is how every pre-existing row behaves.
     // Storing it means changing the restaurant's turn settings never retroactively
@@ -929,6 +939,55 @@ export const reservationTableGroupMembers = pgTable(
     foreignKey({ columns: [t.tableId], foreignColumns: [reservationTables.id], name: "rtgm_table_fk" }).onDelete("cascade"),
     index("reservation_table_group_members_group_idx").on(t.groupId),
     uniqueIndex("reservation_table_group_members_unique").on(t.groupId, t.tableId),
+  ]
+);
+
+// ── Plan de sală ─────────────────────────────────────────────────────────────
+// A THIRD, deliberately separate table concept. The other two:
+//   restaurant_tables  → QR service tables (a guest scans one to call a waiter)
+//   reservation_tables → the "mese individuale" capacity model, where a table's SEAT
+//                        count decides what the public form offers
+// These are neither. They are the physical room as staff think of it — „m1 in Sala 1” —
+// used only to record WHO SITS WHERE on a booking. They carry no seat count (the owner
+// said size is irrelevant here) and never touch public availability, which for these
+// restaurants stays „Capacitate totală”. Offered only in seats mode: in tables mode the
+// engine already assigns real tables, and two sources of truth would fight.
+//
+// Reusing reservation_tables was rejected: its `seats` is NOT NULL and drives tables-mode
+// availability, so floor-plan rows created with a placeholder seat count would silently
+// break availability the day an owner switched modes.
+export const floorSections = pgTable(
+  "floor_sections",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    label: text("label").notNull(), // owner's own wording: "Sala 1", "Terasă", "Etaj"
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("floor_sections_restaurant_idx").on(t.restaurantId)]
+);
+
+export const floorTables = pgTable(
+  "floor_tables",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    // SET NULL, not cascade: deleting a section must never delete tables that bookings
+    // are assigned to. They fall back to „Fără secțiune” and keep their assignments.
+    sectionId: text("section_id").references(() => floorSections.id, { onDelete: "set null" }),
+    label: text("label").notNull(), // "m1", "Masa 3", "Colț fereastră"
+    // Out of use (repair, stored away): stops being offered in the picker, while
+    // bookings already assigned to it keep it.
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("floor_tables_restaurant_idx").on(t.restaurantId),
+    index("floor_tables_section_idx").on(t.sectionId),
   ]
 );
 
@@ -1025,6 +1084,10 @@ export type RestaurantTable = typeof restaurantTables.$inferSelect;
 export type NewRestaurantTable = typeof restaurantTables.$inferInsert;
 export type ReservationTable = typeof reservationTables.$inferSelect;
 export type NewReservationTable = typeof reservationTables.$inferInsert;
+export type FloorSection = typeof floorSections.$inferSelect;
+export type NewFloorSection = typeof floorSections.$inferInsert;
+export type FloorTable = typeof floorTables.$inferSelect;
+export type NewFloorTable = typeof floorTables.$inferInsert;
 export type ReservationClosure = typeof reservationClosures.$inferSelect;
 export type NewReservationClosure = typeof reservationClosures.$inferInsert;
 export type ServiceRequest = typeof serviceRequests.$inferSelect;

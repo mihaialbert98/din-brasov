@@ -162,6 +162,57 @@ export default function ReservationHelp() {
               „Mese individuale”, atribuim automat mese rezervărilor viitoare făcute înainte, ca să nu se
               suprarezerve. Cele care nu încap îți sunt listate.
             </li>
+            <li>
+              <span className="font-medium text-gray-800">Schimbă masa unei rezervări</span> (doar la
+              „Mese individuale”) — masa e aleasă automat, dar tu decizi. Din „Rezervări”, apasă
+              „Schimbă masa” pe o rezervare și alegi altă masă: poate vrei să ții masa mare liberă
+              pentru un grup care vine mai târziu, sau clientul a cerut masa de la fereastră.
+              <ul className="mt-1.5 space-y-1.5 list-disc pl-5 marker:text-gray-300">
+                <li>
+                  Poți alege doar mese <span className="font-medium text-gray-800">în care încap</span> cei
+                  din rezervare și care sunt <span className="font-medium text-gray-800">libere</span> în
+                  intervalul ei. Îți arătăm la fiecare masă câte locuri are și, dacă e ocupată, cine o
+                  ține și până la ce oră.
+                </li>
+                <li>
+                  Poți selecta <span className="font-medium text-gray-800">mai multe mese</span> — locurile
+                  se adună (ex: două mese de 4 pentru 7 persoane). Mesele de la interior nu se pot uni cu
+                  cele de pe terasă.
+                </li>
+                <li>
+                  Masa aleasă de tine <span className="font-medium text-gray-800">rămâne</span>: dacă
+                  modifici ora sau numărul de persoane, nu ți-o schimbăm pe la spate. Doar dacă alegerea
+                  ta nu mai e posibilă (grupul a crescut peste masă, sau la ora nouă e deja ocupată)
+                  revine alegerea automată — și îți spunem clar ce s-a schimbat.
+                </li>
+                <li>
+                  Masa aleasă de tine e o rezervare reală: nimeni altcineva nu o poate primi în acel
+                  interval, la fel ca la o masă atribuită automat.
+                </li>
+              </ul>
+            </li>
+            <li>
+              <span className="font-medium text-gray-800">Plan de sală</span> (doar la „Capacitate
+              totală”) — dacă vrei să știi <em>cine unde stă</em>, îți poți desena sala din meniul
+              „Plan de sală”: adaugi mesele cu numele tău (m1, m2, Colț fereastră…) și le grupezi pe
+              secțiuni (Sala 1, Terasă, Etaj). Apoi, la o rezervare, alegi masa din „Mese”. Masa aleasă
+              rămâne ocupată exact cât ține acea rezervare — inclusiv durata mai mare pentru grupuri —
+              așa că nu o mai poți da din greșeală altcuiva în același interval. Când rezervarea se
+              termină (sau o anulezi), masa e liberă din nou.
+              <p className="mt-1.5">
+                E complet opțional: nu ești obligat să faci un plan, și nici să alegi masa la fiecare
+                rezervare. Rezervările funcționează la fel și fără. Nu schimbă cu nimic ce văd clienții —
+                disponibilitatea rămâne cea din „Capacitate totală”, iar masa aleasă e doar pentru tine.
+              </p>
+              <p className="mt-1.5">
+                <span className="font-medium text-gray-800">Nu confunda cele două:</span> la „Mese
+                individuale”, mesele au număr de locuri și <em>ele</em> decid ce ore vede clientul, iar
+                „Schimbă masa” respectă mărimea. La „Plan de sală”, mărimea mesei nu contează deloc —
+                e doar o notiță pentru tine despre cine unde stă. Vezi doar una dintre ele odată, în
+                funcție de modul de capacitate ales; dacă schimbi modul, cealaltă rămâne salvată și
+                revine când te întorci.
+              </p>
+            </li>
           </ul>
         </div>
 
