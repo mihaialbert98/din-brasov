@@ -5,7 +5,17 @@
  * to load and no autoplay-file issues. Silently no-ops if audio isn't permitted
  * yet (browsers block sound until the first user interaction on the page).
  */
+// Two boards can nudge independently (an open service request AND a pending
+// reservation), so their timers can land together. Without this guard the tones
+// would overlap and smear into noise; a short window keeps them distinct without
+// ever suppressing a genuine, separate alert.
+let lastChimeAt = 0;
+const MIN_GAP_MS = 1000;
+
 export function playChime(): void {
+  const now = Date.now();
+  if (now - lastChimeAt < MIN_GAP_MS) return;
+  lastChimeAt = now;
   try {
     const Ctx = window.AudioContext || (window as any).webkitAudioContext;
     if (!Ctx) return;

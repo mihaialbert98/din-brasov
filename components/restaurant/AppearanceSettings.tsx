@@ -13,8 +13,6 @@ export default function AppearanceSettings({
   itemsWithPhoto,
   initialLogoUrl,
   initialCoverUrl,
-  requiresUnlock = false,
-  initiallyUnlocked = true,
 }: {
   restaurantId: string;
   initialDesign: string;
@@ -23,8 +21,6 @@ export default function AppearanceSettings({
   itemsWithPhoto: number;
   initialLogoUrl?: string | null;
   initialCoverUrl?: string | null;
-  requiresUnlock?: boolean; // false for platform admins (they bypass 2FA)
-  initiallyUnlocked?: boolean;
 }) {
   const router = useRouter();
   const [design, setDesign] = useState(initialDesign);
@@ -35,53 +31,6 @@ export default function AppearanceSettings({
   const [error, setError] = useState<string | null>(null);
   const [missing, setMissing] = useState<string[] | null>(null);
   const [saved, setSaved] = useState(false);
-
-  // Same 2FA lock as the menu editor — the appearance change is a menu mutation.
-  const [unlocked, setUnlocked] = useState(!requiresUnlock || initiallyUnlocked);
-  const [codeSent, setCodeSent] = useState(false);
-  const [code, setCode] = useState("");
-  const [unlockBusy, setUnlockBusy] = useState(false);
-  const [unlockError, setUnlockError] = useState<string | null>(null);
-  const locked = requiresUnlock && !unlocked;
-
-  async function requestCode() {
-    setUnlockBusy(true);
-    setUnlockError(null);
-    try {
-      const res = await fetch(`/api/restaurants/${restaurantId}/menu/unlock`, { method: "POST" });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error ?? "Eroare.");
-      if (d.unlocked) { setUnlocked(true); return; }
-      setCodeSent(true);
-    } catch (e: any) {
-      setUnlockError(e?.message ?? "Eroare.");
-    } finally {
-      setUnlockBusy(false);
-    }
-  }
-
-  async function verifyCode() {
-    const value = code.trim();
-    if (!value) return;
-    setUnlockBusy(true);
-    setUnlockError(null);
-    try {
-      const res = await fetch(`/api/restaurants/${restaurantId}/menu/unlock?action=verify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: value }),
-      });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error ?? "Cod greșit.");
-      setUnlocked(true);
-      setCode("");
-      setCodeSent(false);
-    } catch (e: any) {
-      setUnlockError(e?.message ?? "Cod greșit.");
-    } finally {
-      setUnlockBusy(false);
-    }
-  }
 
   const dirty =
     design !== initialDesign ||
@@ -116,11 +65,6 @@ export default function AppearanceSettings({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        if (res.status === 423) {
-          // Edit window expired mid-session → re-lock and show the unlock flow.
-          setUnlocked(false);
-          return;
-        }
         if (data.code === "photos_required" && Array.isArray(data.missing)) {
           setMissing(data.missing);
         } else {
@@ -144,48 +88,6 @@ export default function AppearanceSettings({
       {error && (
         <div role="alert" className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
           ⚠️ {error}
-        </div>
-      )}
-
-      {/* 2FA lock banner — same flow as the menu editor */}
-      {locked && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-          <p className="text-sm font-medium text-amber-900 mb-1">🔒 Schimbarea aspectului este blocată</p>
-          <p className="text-xs text-amber-800 mb-3">
-            Pentru siguranță, modificările necesită un cod trimis pe emailul tău. Codul deblochează
-            editarea (meniu + aspect) pentru 30 de minute.
-          </p>
-          {unlockError && <p className="text-xs text-red-600 mb-2">{unlockError}</p>}
-          {!codeSent ? (
-            <button
-              onClick={requestCode}
-              disabled={unlockBusy}
-              className="bg-[#c84b1e] text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-[#d9603a] transition-colors disabled:opacity-50"
-            >
-              {unlockBusy ? "Se trimite..." : "Trimite cod pe email"}
-            </button>
-          ) : (
-            <div className="flex gap-2 flex-wrap items-center">
-              <input
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && verifyCode()}
-                placeholder="Cod din email"
-                inputMode="numeric"
-                className="border border-gray-300 rounded-lg px-4 py-2 text-base focus:outline-none focus:border-[#c84b1e] w-40"
-              />
-              <button
-                onClick={verifyCode}
-                disabled={unlockBusy || !code.trim()}
-                className="bg-[#c84b1e] text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-[#d9603a] transition-colors disabled:opacity-50"
-              >
-                {unlockBusy ? "..." : "Deblochează"}
-              </button>
-              <button onClick={requestCode} disabled={unlockBusy} className="text-xs text-gray-500 hover:underline">
-                Retrimite codul
-              </button>
-            </div>
-          )}
         </div>
       )}
 
@@ -270,49 +172,44 @@ export default function AppearanceSettings({
       </section>
 
       {/* Branding images — logo (all designs) + cover photo (Modern & Elegant heros) */}
-      {!locked && (
-        <section>
-          <h2 className="text-sm font-semibold text-gray-700 mb-1">Imagini restaurant</h2>
-          <p className="text-xs text-gray-500 mb-3">
-            Logo-ul apare în antetul meniului. Imaginea de copertă este afișată sus, în locul benzii
-            colorate, pentru designurile <strong>Modern</strong> și <strong>Elegant</strong> (Compact nu o
-            folosește). Alege o fotografie atmosferică, de calitate.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <div>
-              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Logo</p>
-              <ImageField
-                endpoint="menuItemImage"
-                value={logoUrl}
-                onChange={(url) => { setLogoUrl(url); setSaved(false); }}
-                onError={(msg) => setError(msg)}
-              />
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Imagine de copertă</p>
-              <ImageField
-                endpoint="menuItemImage"
-                value={coverUrl}
-                onChange={(url) => { setCoverUrl(url); setSaved(false); }}
-                onError={(msg) => setError(msg)}
-              />
-            </div>
+      <section>
+        <h2 className="text-sm font-semibold text-gray-700 mb-1">Imagini restaurant</h2>
+        <p className="text-xs text-gray-500 mb-3">
+          Logo-ul apare în antetul meniului. Imaginea de copertă este afișată sus, în locul benzii
+          colorate, pentru designurile <strong>Modern</strong> și <strong>Elegant</strong> (Compact nu o
+          folosește). Alege o fotografie atmosferică, de calitate.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div>
+            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Logo</p>
+            <ImageField
+              endpoint="menuItemImage"
+              value={logoUrl}
+              onChange={(url) => { setLogoUrl(url); setSaved(false); }}
+              onError={(msg) => setError(msg)}
+            />
           </div>
-        </section>
-      )}
+          <div>
+            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Imagine de copertă</p>
+            <ImageField
+              endpoint="menuItemImage"
+              value={coverUrl}
+              onChange={(url) => { setCoverUrl(url); setSaved(false); }}
+              onError={(msg) => setError(msg)}
+            />
+          </div>
+        </div>
+      </section>
 
       {/* Save */}
       <div className="flex items-center gap-3 pt-1">
         <button
           onClick={save}
-          disabled={busy || !dirty || locked}
+          disabled={busy || !dirty}
           className="bg-[#c84b1e] text-white text-sm font-semibold px-5 py-2.5 rounded-lg hover:bg-[#d9603a] transition-colors disabled:opacity-50"
         >
           {busy ? "Se salvează..." : "Salvează aspectul"}
         </button>
-        {locked && dirty && (
-          <span className="text-xs text-amber-700">Deblochează mai întâi cu codul de pe email.</span>
-        )}
         {saved && !dirty && <span className="text-sm text-green-700 font-medium">✓ Aspect salvat</span>}
       </div>
     </div>

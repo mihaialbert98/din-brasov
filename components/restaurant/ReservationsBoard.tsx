@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Phone, Mail, Users, Clock, Check, X, CalendarClock, Plus, StickyNote, Pencil } from "lucide-react";
 import { notify } from "@/lib/chime";
+import { useRepeatingChime, reservationsNeedNudge } from "@/lib/useRepeatingChime";
 import { useVisiblePoll } from "@/lib/useVisiblePoll";
 import NotifyPermission from "@/components/restaurant/NotifyPermission";
 
@@ -104,6 +105,12 @@ export default function ReservationsBoard({
 
   // Poll every 20s while visible, 30s when hidden.
   useVisiblePoll(fetchRows, 20000, 30000);
+
+  // Nudge every 15s while a request still needs a decision. ONLY for restaurants
+  // that confirm manually: on auto-confirm nothing is waiting on staff, so a
+  // repeating chime would be pure noise.
+  const pendingCount = rows.filter((r) => r.status === "pending").length;
+  useRepeatingChime(reservationsNeedNudge(manualConfirm, pendingCount));
   useEffect(() => () => { document.title = "Din Brașov"; }, []);
 
   async function setStatus(id: string, status: "confirmed" | "declined" | "cancelled") {

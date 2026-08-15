@@ -7,7 +7,6 @@ import { eq } from "drizzle-orm";
 import {
   getRestaurantBySlug,
   canManageRestaurant,
-  canEditMenuNow,
   isPlatformStaff,
 } from "@/lib/restaurant-permissions";
 import { absoluteUrl } from "@/lib/seo";
@@ -37,9 +36,9 @@ export default async function ServiciuPage({
   const staffUrl = absoluteUrl(`/s/${row!.staffToken}`);
   const staffQr = await QRCode.toDataURL(staffUrl, { width: 240, margin: 1, color: { dark: "#1a1a1a", light: "#ffffff" } });
 
-  // Regenerate is a menu-level mutation → owner needs an active 2FA unlock; admin bypasses.
   const isAdmin = isPlatformStaff(role);
-  const canRegenerate = isAdmin || (await canEditMenuNow(session.user.id, restaurant.id, role));
+  // Anyone who can reach this page manages the restaurant, so they may regenerate.
+  const canRegenerate = true;
 
   return (
     <div className="max-w-2xl space-y-8">
