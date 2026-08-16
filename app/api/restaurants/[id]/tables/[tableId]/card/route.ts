@@ -1,16 +1,22 @@
 /**
- * Renders a table's plain QR code as a PNG (black-on-white, no template/text).
+ * Renders a table's QR code as an SVG, black-on-white, with the table's name printed in
+ * the middle so a stack of printed stickers can be told apart before they go on the tables.
  * PLATFORM STAFF ONLY (admin/moderator) — the QR is printed by the Din Brașov team.
- * A plain QR needs no image compositing or fonts, so it works reliably on serverless.
+ *
+ * SVG rather than a composited PNG: no canvas, no native image library and no font files,
+ * so it stays as serverless-friendly as the plain PNG it replaces, and it prints sharp at
+ * any size. See lib/qr-label.ts for why the label is safe to put there at all.
+ *
+ * The encoded URL is unchanged, so codes already printed keep working.
  */
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
-import QRCode from "qrcode";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { restaurantTables } from "@/lib/db/schema";
 import { isPlatformStaff } from "@/lib/restaurant-permissions";
 import { absoluteUrl } from "@/lib/seo";
+import { qrWithLabel } from "@/lib/qr-label";
 
 export async function GET(
   _req: Request,
@@ -26,24 +32,17 @@ export async function GET(
   }
 
   const [table] = await db
-    .select({ qrToken: restaurantTables.qrToken })
+    .select({ qrToken: restaurantTables.qrToken, label: restaurantTables.label })
     .from(restaurantTables)
     .where(and(eq(restaurantTables.id, tableId), eq(restaurantTables.restaurantId, id)))
     .limit(1);
   if (!table) return NextResponse.json({ error: "Negăsit." }, { status: 404 });
 
-  // High-res, printable, generous quiet zone.
-  const png = await QRCode.toBuffer(absoluteUrl(`/m/${table.qrToken}`), {
-    type: "png",
-    width: 1000,
-    margin: 4,
-    errorCorrectionLevel: "M",
-    color: { dark: "#000000", light: "#ffffff" },
-  });
+  const svg = await qrWithLabel(absoluteUrl(`/m/${table.qrToken}`), table.label);
 
-  return new NextResponse(new Uint8Array(png), {
+  return new NextResponse(svg, {
     headers: {
-      "Content-Type": "image/png",
+      "Content-Type": "image/svg+xml; charset=utf-8",
       "Cache-Control": "no-store",
     },
   });
