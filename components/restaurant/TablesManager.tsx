@@ -75,13 +75,14 @@ export default function TablesManager({
     if (r) { setCacheKey((k) => k + 1); router.refresh(); }
   }
 
-  // The card is the server-composited PNG (QR + name overlaid on the brand template).
+  // The card is an SVG QR with the table's name in the middle — vector, so it prints
+  // sharp at any sticker size.
   const cardUrl = (t: TableData) => `${base}/${t.id}/card`;
 
   function downloadCard(t: TableData) {
     const a = document.createElement("a");
     a.href = cardUrl(t);
-    a.download = `qr-${t.label.replace(/\s+/g, "-").toLowerCase()}.png`;
+    a.download = `qr-${t.label.replace(/\s+/g, "-").toLowerCase()}.svg`;
     document.body.appendChild(a);
     a.click();
     a.remove();
