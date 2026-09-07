@@ -593,7 +593,7 @@ function ManualReservationModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40" onClick={onClose}>
-      <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-gray-900">Adaugă rezervare</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700" aria-label="Închide"><X className="w-5 h-5" aria-hidden /></button>
@@ -674,7 +674,7 @@ function CallGuestModal({
   }[action];
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40" onClick={onClose}>
-      <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl text-center" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl text-center max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain" onClick={(e) => e.stopPropagation()}>
         <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-3">
           <Phone className="w-6 h-6 text-amber-600" aria-hidden />
         </div>
@@ -749,7 +749,7 @@ function EditReservationModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40" onClick={onClose}>
-      <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-1">
           <h3 className="font-semibold text-gray-900">Editează rezervarea</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700" aria-label="Închide"><X className="w-5 h-5" aria-hidden /></button>
@@ -846,7 +846,7 @@ function AssignTablesModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40" onClick={onClose}>
-      <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-1">
           <h3 className="font-semibold text-gray-900">Masa pentru rezervare</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700" aria-label="Închide"><X className="w-5 h-5" aria-hidden /></button>

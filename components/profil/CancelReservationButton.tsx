@@ -47,7 +47,7 @@ export default function CancelReservationButton({
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40" onClick={() => !busy && setOpen(false)}>
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 relative" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 relative max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain" onClick={(e) => e.stopPropagation()}>
             <button onClick={() => setOpen(false)} disabled={busy} className="absolute top-3 right-3 text-gray-400 hover:text-gray-700" aria-label="Închide">
               <X className="w-5 h-5" aria-hidden />
             </button>

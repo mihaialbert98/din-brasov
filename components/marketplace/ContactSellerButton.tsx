@@ -84,7 +84,7 @@ export function ContactSellerButton({
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
           onClick={(e) => e.target === e.currentTarget && setOpen(false)}
         >
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain">
             <h2 className="font-serif text-lg font-semibold text-ink mb-1">
               Trimite un mesaj
             </h2>

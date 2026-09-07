@@ -44,7 +44,7 @@ export function ReportButton({ listingId }: { listingId: string }) {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
           onClick={(e) => e.target === e.currentTarget && setOpen(false)}
         >
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain">
             <h2 className="font-serif text-lg font-semibold text-ink mb-4">Raportează anunț</h2>
 
             {done ? (

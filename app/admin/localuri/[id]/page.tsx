@@ -88,7 +88,7 @@ export default function EditLocalPage() {
     <div className="max-w-2xl">
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-4 max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain">
             <h3 className="text-lg font-bold text-gray-900">Confirmare ștergere</h3>
             <p className="text-gray-600 text-sm">
               Ești sigur că vrei să ștergi <span className="font-semibold">„{name}"</span>? Acțiunea este ireversibilă.
