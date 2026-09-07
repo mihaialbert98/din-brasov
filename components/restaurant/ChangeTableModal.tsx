@@ -78,11 +78,10 @@ export default function ChangeTableModal({
 
   const seatsChosen = tables.filter((t) => selected.includes(t.id)).reduce((s, t) => s + t.seats, 0);
   const enough = seatsChosen >= reservation.partySize;
-  const field = "w-full";
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40" onClick={onClose}>
-      <div className={`bg-white rounded-2xl max-w-md w-full p-5 shadow-xl ${field}`} onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-1">
           <h3 className="font-semibold text-gray-900">Schimbă masa</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700" aria-label="Închide"><X className="w-5 h-5" aria-hidden /></button>

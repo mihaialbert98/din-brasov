@@ -352,7 +352,7 @@ export default function FloorPlanManager({
           untouched — only the note of where those guests were going to sit is lost. */}
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40" onClick={() => setConfirmDelete(null)}>
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-semibold text-gray-900 text-lg">Ștergi masa „{confirmDelete.table.label}”?</h3>
             <p className="text-sm text-gray-600 mt-2">
               {confirmDelete.affected === 1 ? "O rezervare viitoare este" : `${confirmDelete.affected} rezervări viitoare sunt`} atribuite acestei mese.

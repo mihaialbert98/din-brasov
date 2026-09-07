@@ -244,7 +244,7 @@ export function NewsletterBanner() {
         aria-modal="true"
         aria-label="Abonare newsletter"
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-md bg-[#1a1a1a] border-2 border-[#c84b1e] rounded-2xl shadow-2xl p-6 md:p-8 text-white"
+        className="relative w-full max-w-md bg-[#1a1a1a] border-2 border-[#c84b1e] rounded-2xl shadow-2xl p-6 md:p-8 text-white max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain"
       >
         <button
           onClick={dismiss}

@@ -838,7 +838,7 @@ export default function ReservationSettings({
           owner may have meant „pauză” — which is reversible — so offer that first. */}
       {confirmDeleteHour && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40" onClick={() => setConfirmDeleteHour(null)}>
-          <div className="bg-white rounded-2xl w-full max-w-md p-5 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl w-full max-w-md p-5 max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-3 mb-2">
               <h3 className="font-semibold text-gray-900">
                 Ai {confirmDeleteHour.count} {confirmDeleteHour.count === 1 ? "rezervare" : "rezervări"} în acest interval
@@ -891,7 +891,7 @@ export default function ReservationSettings({
       {/* Closing a range that already holds bookings — show them so the owner can call. */}
       {confirmClosure && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40" onClick={() => setConfirmClosure(null)}>
-          <div className="bg-white rounded-2xl w-full max-w-md p-5 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl w-full max-w-md p-5 max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-3 mb-2">
               <h3 className="font-semibold text-gray-900">
                 Ai {confirmClosure.count} {confirmClosure.count === 1 ? "rezervare" : "rezervări"} în această perioadă
@@ -942,7 +942,7 @@ export default function ReservationSettings({
 
       {confirmTables && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40" onClick={() => setConfirmTables(false)}>
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-semibold text-gray-900 text-lg">Treci la „Mese individuale”?</h3>
             <p className="text-sm text-gray-600 mt-2">
               Disponibilitatea va fi calculată după mese. Rezervărilor viitoare făcute în modul „Capacitate
@@ -978,7 +978,7 @@ export default function ReservationSettings({
 
       {confirmDisableAreas && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40" onClick={() => setConfirmDisableAreas(false)}>
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-semibold text-gray-900 text-lg">Dezactivezi zonele (interior & terasă)?</h3>
             <p className="text-sm text-gray-600 mt-2">
               {capacityMode === "tables"

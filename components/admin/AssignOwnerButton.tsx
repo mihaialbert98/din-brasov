@@ -59,7 +59,7 @@ export default function AssignOwnerButton({
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setOpen(false)}>
-          <div className="bg-white rounded-2xl max-w-md w-full p-5" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-1">
               <h3 className="font-semibold text-gray-900">Proprietar — {localName}</h3>
               <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-700" aria-label="Închide">
