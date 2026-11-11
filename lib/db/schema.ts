@@ -869,6 +869,10 @@ export const reservations = pgTable(
     // moves an existing booking's end time (and so can never create a new overlap).
     turnMinutes: integer("turn_minutes"),
     note: text("note"),
+    // „Rezervarea a sosit” — staff toggle on the board. Null = not (yet) arrived; set =
+    // the moment staff marked it. Purely informational: it is NOT a status, so it never
+    // affects availability, table assignment or the no-overlap invariant.
+    arrivedAt: timestamp("arrived_at", { mode: "date" }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   },

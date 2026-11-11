@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { LayoutGrid } from "lucide-react";
+import { ChevronDown, LayoutGrid } from "lucide-react";
 
 type Section = { id: string; label: string };
 type TableStatus = {
@@ -32,6 +32,7 @@ export default function FloorTablePicker({
   value,
   onChange,
   disabled,
+  collapsible = false,
 }: {
   basePath: string;
   date: string;
@@ -42,8 +43,13 @@ export default function FloorTablePicker({
   value: string[];
   onChange: (ids: string[]) => void;
   disabled?: boolean;
+  /** Sections fold into one-line headers, all collapsed to start — for the add/edit
+   *  forms, where a whole room of tables would push the guest fields off-screen. */
+  collapsible?: boolean;
 }) {
   const [sections, setSections] = useState<Section[]>([]);
+  // Sections the user has opened. Starts empty = everything collapsed.
+  const [open, setOpen] = useState<Set<string>>(() => new Set());
   const [tables, setTables] = useState<TableStatus[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -81,6 +87,16 @@ export default function FloorTablePicker({
   const toggle = (id: string) => {
     onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id]);
   };
+  const toggleSection = (id: string) =>
+    setOpen((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+
+  // Folding a lone section would only add a tap, so it needs at least two.
+  const folding = collapsible && buckets.length > 1;
 
   return (
     <div className="mb-3 border border-gray-200 rounded-lg px-3 py-2.5">
@@ -99,11 +115,41 @@ export default function FloorTablePicker({
         )}
       </div>
 
-      <div className="space-y-2">
-        {buckets.map((b) => (
+      <div className={folding ? "divide-y divide-gray-100" : "space-y-2"}>
+        {buckets.map((b) => {
+          const picked = b.tables.filter((t) => value.includes(t.id));
+          const free = b.tables.filter((t) => t.isActive && !t.busy).length;
+          // A picked table that has since been taken by someone else forces its section
+          // open: a collapsed header must never hide a clash that has to be resolved.
+          const clash = picked.some((t) => t.busy);
+          const expanded = !folding || clash || open.has(b.id);
+          const panelId = `floor-section-${b.id}`;
+          return (
           <div key={b.id}>
-            <p className="text-[11px] uppercase tracking-wide text-gray-400 mb-1">{b.label}</p>
-            <div className="flex flex-wrap gap-1.5">
+            {folding ? (
+              <button
+                type="button"
+                onClick={() => toggleSection(b.id)}
+                disabled={clash}
+                aria-expanded={expanded}
+                aria-controls={panelId}
+                className="w-full min-h-[44px] flex items-center gap-2 text-left rounded-lg px-2 -mx-2 hover:bg-gray-50 disabled:hover:bg-transparent"
+              >
+                <ChevronDown className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${expanded ? "" : "-rotate-90"}`} aria-hidden />
+                <span className="text-xs uppercase tracking-wide text-gray-500 font-medium">{b.label}</span>
+                <span className="text-xs text-gray-400 tabular-nums">{free}/{b.tables.length} libere</span>
+                {/* What's chosen stays visible while the section is folded. */}
+                {picked.length > 0 && (
+                  <span className="ml-auto text-xs font-medium text-[#c84b1e] truncate">
+                    {picked.map((t) => t.label).join(", ")}
+                  </span>
+                )}
+              </button>
+            ) : (
+              <p className="text-[11px] uppercase tracking-wide text-gray-400 mb-1">{b.label}</p>
+            )}
+            {expanded && (
+            <div id={panelId} className={`flex flex-wrap gap-1.5 ${folding ? "pb-1.5" : ""}`}>
               {b.tables.map((t) => {
                 const selected = value.includes(t.id);
                 // Busy always wins visually, even when selected, so a clash that appeared
@@ -139,8 +185,10 @@ export default function FloorTablePicker({
                 );
               })}
             </div>
+            )}
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
