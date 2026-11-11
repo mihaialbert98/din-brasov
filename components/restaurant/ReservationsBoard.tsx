@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Phone, Mail, Users, Clock, Check, X, CalendarClock, Plus, StickyNote, Pencil, LayoutGrid } from "lucide-react";
+import { Phone, Mail, Users, Clock, Check, X, CalendarClock, Plus, StickyNote, Pencil, LayoutGrid, UserCheck } from "lucide-react";
 import { notify } from "@/lib/chime";
 import { useRepeatingChime, reservationsNeedNudge } from "@/lib/useRepeatingChime";
 import { useVisiblePoll } from "@/lib/useVisiblePoll";
@@ -29,6 +29,8 @@ interface Reservation {
   clientNote: string | null;
   /** False when the guest has no email and no account → only reachable by phone. */
   notifiableByEmail: boolean;
+  /** „Rezervarea a sosit” — ISO time staff marked it, null = not arrived. */
+  arrivedAt: string | null;
 }
 
 const STATUS_LABEL: Record<Reservation["status"], string> = {
@@ -155,6 +157,22 @@ export default function ReservationsBoard({
         }
       }
     } finally { setBusy(null); }
+  }
+
+  // „Rezervarea a sosit” toggle. Optimistic: the card flips at once (a waiter at the
+  // door shouldn't wait on a round-trip), then the refetch reconciles with the server.
+  async function toggleArrived(r: Reservation) {
+    const arrived = !r.arrivedAt;
+    setBusy(r.id);
+    setRows((prev) => prev.map((x) => (x.id === r.id ? { ...x, arrivedAt: arrived ? new Date().toISOString() : null } : x)));
+    try {
+      await fetch(`${basePath}/reservations/${r.id}/arrived`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ arrived }),
+      });
+    } finally {
+      await fetchRows();
+      setBusy(null);
+    }
   }
 
   // Summary counts.
@@ -333,8 +351,12 @@ export default function ReservationsBoard({
               <div className="grid sm:grid-cols-2 gap-3">
                 {list.map((r) => {
                   const pending = r.status === "pending";
+                  // Only today's confirmed bookings can be marked — a guest can't arrive
+                  // for tomorrow, and hiding it elsewhere avoids a mis-tap on the wrong day.
+                  const canMarkArrived = r.status === "confirmed" && r.date === todayStr();
+                  const arrived = canMarkArrived && !!r.arrivedAt;
                   return (
-                    <div key={r.id} className={`rounded-xl border p-4 ${pending ? "border-amber-300 bg-amber-50/40" : "border-gray-200 bg-white"}`}>
+                    <div key={r.id} className={`rounded-xl border p-4 ${pending ? "border-amber-300 bg-amber-50/40" : arrived ? "border-green-300 bg-green-50/40" : "border-gray-200 bg-white"}`}>
                       <div className="flex items-center gap-2 flex-wrap mb-1.5">
                         <span className="inline-flex items-center gap-1 font-bold text-gray-900 text-lg tabular-nums">
                           <Clock className="w-4 h-4 text-[#c84b1e]" aria-hidden /> {r.time}
@@ -365,8 +387,8 @@ export default function ReservationsBoard({
                             {r.floorTables.join(" + ")}
                           </span>
                         )}
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ml-auto ${STATUS_CLASS[r.status]}`}>
-                          {STATUS_LABEL[r.status]}
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ml-auto ${arrived ? "bg-green-600 text-white" : STATUS_CLASS[r.status]}`}>
+                          {arrived ? "A sosit" : STATUS_LABEL[r.status]}
                         </span>
                       </div>
                       <p className="font-medium text-gray-900">{r.guestName}</p>
@@ -388,6 +410,20 @@ export default function ReservationsBoard({
                         </p>
                       )}
 
+                      {canMarkArrived && (
+                        <button onClick={() => toggleArrived(r)} disabled={busy === r.id} aria-pressed={arrived}
+                          className={`w-full mt-3 min-h-[44px] inline-flex items-center justify-center gap-2 text-sm font-medium px-3 py-2 rounded-lg border transition-colors disabled:opacity-50 ${
+                            arrived ? "bg-green-600 border-green-600 text-white hover:bg-green-700" : "border-green-600 text-green-700 hover:bg-green-50"
+                          }`}>
+                          {arrived ? <Check className="w-4 h-4" aria-hidden /> : <UserCheck className="w-4 h-4" aria-hidden />}
+                          Rezervarea a sosit
+                          {arrived && r.arrivedAt && (
+                            <span className="font-normal opacity-90 tabular-nums">
+                              · {new Date(r.arrivedAt).toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                          )}
+                        </button>
+                      )}
                       {pending && (
                         <div className="flex gap-2 mt-3">
                           <button onClick={() => setStatus(r.id, "confirmed")} disabled={busy === r.id}
@@ -418,7 +454,9 @@ export default function ReservationsBoard({
                               <LayoutGrid className="w-4 h-4" aria-hidden /> Mese
                             </button>
                           )}
-                          {r.status === "confirmed" && (
+                          {/* Hidden once the guest has arrived: cancelling would free the seats
+                              of a party that is sitting at them. Un-mark first if it was a mistake. */}
+                          {r.status === "confirmed" && !arrived && (
                             <button onClick={() => setStatus(r.id, "cancelled")} disabled={busy === r.id}
                               className="inline-flex items-center gap-1 text-sm border border-red-300 text-red-600 px-3 py-2 rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors">
                               <X className="w-4 h-4" aria-hidden /> Anulează rezervarea
@@ -634,6 +672,7 @@ function ManualReservationModal({
             value={floorTableIds}
             onChange={setFloorTableIds}
             disabled={saving}
+            collapsible
           />
         )}
 
@@ -799,6 +838,7 @@ function EditReservationModal({
             value={floorTableIds}
             onChange={setFloorTableIds}
             disabled={saving}
+            collapsible
           />
         )}
 

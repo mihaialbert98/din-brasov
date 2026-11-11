@@ -1327,6 +1327,7 @@ export async function listUpcomingReservations(restaurantId: string) {
       assignedTableIds: reservations.assignedTableIds,
       floorTableIds: reservations.floorTableIds,
       note: reservations.note,
+      arrivedAt: reservations.arrivedAt,
       clientNote: sql<string | null>`coalesce(${cnUser.note}, ${cnPhone.note})`,
       // False only when there's no way to email the guest (no booking email AND no
       // linked account) — the board then prompts staff to phone them on confirm.
@@ -1546,6 +1547,31 @@ export async function setReservationStatus(
   // Scheduled, not fire-and-forget — see lib/after-response.ts.
   await runAfterResponse(() => notifyReservationStatus(res, status));
   return true;
+}
+
+/**
+ * „Rezervarea a sosit” toggle. Marks (or un-marks) a CONFIRMED reservation of this
+ * restaurant as arrived. Deliberately touches only `arrived_at` — never status, tables
+ * or duration — so it cannot affect availability. No email: the guest is already here.
+ * Returns false when the reservation isn't this restaurant's or isn't confirmed.
+ */
+export async function setReservationArrived(
+  restaurantId: string,
+  reservationId: string,
+  arrived: boolean,
+): Promise<boolean> {
+  const updated = await db
+    .update(reservations)
+    .set({ arrivedAt: arrived ? new Date() : null, updatedAt: new Date() })
+    .where(
+      and(
+        eq(reservations.id, reservationId),
+        eq(reservations.restaurantId, restaurantId),
+        eq(reservations.status, "confirmed"),
+      ),
+    )
+    .returning({ id: reservations.id });
+  return updated.length > 0;
 }
 
 /** Resolve a reservation's contact email — the booking email, else the linked account's. */
